@@ -89,7 +89,6 @@ function checkAdminKey(req, res) {
 
   return true;
 }
-}
 
 // ── ROUTES ───────────────────────────────────────────────────────────────────
 
