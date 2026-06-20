@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: agent-ia-myf
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: myf-database
+      mountPath: /data
+      sizeGB: 1
