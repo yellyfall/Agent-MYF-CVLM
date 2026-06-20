@@ -1,5 +1,4 @@
-python3 << 'PYEOF'
-html = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -481,7 +480,7 @@ select:focus{border-color:var(--accent)}
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // En prod (Render) : l'API est sur le même domaine → chemin relatif
 // En local (Laragon) : même chose si index.html est servi par node server.js
-var BASE = "";
+var BASE = window.location.origin;
 var API_KEY = "";
 var ADMIN_KEY = "";
 var ROLE = "";
