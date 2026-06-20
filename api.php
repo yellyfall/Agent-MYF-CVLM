@@ -103,7 +103,8 @@ if ($action === "create_user") {
     $username = trim($body["username"] ?? "");
     $password = trim($body["password"] ?? "");
     $fullname = trim($body["fullname"] ?? "");
-    $expires  = trim($body["expires"] ?? "");  // date YYYY-MM-DD ou vide
+    $expires = $body["expires"] ?? null;
+$   $expires = !empty($expires) ? $expires : null;
 
     if (empty($username) || empty($password)) resp(false, [], "Nom d'utilisateur et mot de passe requis.");
 
@@ -112,13 +113,13 @@ if ($action === "create_user") {
     }
 
     $db["users"][] = [
-        "id"        => uniqid("u_", true),
-        "username"  => $username,
-        "password"  => $password,
-        "fullname"  => $fullname ?: $username,
-        "status"    => "active",
-        "expires"   => $expires,
-        "createdAt" => date("d/m/Y"),
+    "id"        => uniqid("u_", true),
+    "username"  => $username,
+    "password"  => $password,
+    "fullname"  => $fullname ?: $username,
+    "status"    => "active",
+    "expires"   => $expires, // null = illimité
+    "createdAt" => date("d/m/Y"),
     ];
     writeDB($db);
     resp(true, [], "Accès créé avec succès.");
@@ -161,11 +162,17 @@ if ($action === "user_login") {
 
             // Vérification expiration
             if (!empty($u["expires"])) {
-                $expDate = DateTime::createFromFormat("Y-m-d", $u["expires"]);
-                if ($expDate && $expDate < new DateTime()) {
+    		$expDate = DateTime::createFromFormat("Y-m-d", $u["expires"]);
+    
+    		if ($expDate instanceof DateTime) {
+        	    $now = new DateTime();
+                    $expDate->setTime(23, 59, 59);
+
+        	if ($expDate < $now) {
                     resp(false, [], "Votre accès a expiré le " . $expDate->format("d/m/Y") . ". Contactez l'administrateur.");
-                }
-            }
+        	}
+   	    }
+	}
 
             resp(true, [
                 "username" => $u["username"],
