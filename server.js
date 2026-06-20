@@ -76,9 +76,19 @@ function generateId() {
 function checkAdminKey(req, res) {
   const key = req.headers["x-admin-key"] || req.body?.admin_key;
   const stored = getConfig("admin_key");
-  if (!stored) { fail(res, "Aucune clé admin configurée.", 401); return false; }
-  if (key !== stored) { fail(res, "Non autorisé.", 401); return false; }
+
+  if (!stored) {
+    res.status(401).json({ success: false, message: "Aucune clé admin configurée." });
+    return false;
+  }
+
+  if (key !== stored) {
+    res.status(401).json({ success: false, message: "Non autorisé." });
+    return false;
+  }
+
   return true;
+}
 }
 
 // ── ROUTES ───────────────────────────────────────────────────────────────────
