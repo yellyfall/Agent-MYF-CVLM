@@ -3,13 +3,19 @@ services:
     name: agent-ia-myf
     env: node
     plan: free
-    buildCommand: npm install
-    startCommand: node server.js
+
     envVars:
+      - key: NODE_VERSION
+        value: 20.11.1
+
       - key: NODE_ENV
         value: production
       - key: DATA_DIR
         value: /data
+
+    buildCommand: npm install
+    startCommand: node server.js
+
     disk:
       name: myf-database
       mountPath: /data
