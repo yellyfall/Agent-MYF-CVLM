@@ -164,6 +164,52 @@ select:focus{border-color:var(--accent)}
 .abtn.copied{border-color:var(--success);color:var(--success)}
 .outbox{background:#0D0F17;border:1px solid var(--border);border-radius:var(--radius);padding:26px 30px;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.95;color:#CDD2E8;white-space:pre-wrap;word-wrap:break-word;min-height:60px}
 .outbox.cv{border-color:rgba(79,142,247,.2)}
+
+/* ─ LETTRE VISUELLE ─ */
+.letter-render{display:none;flex-direction:column;gap:0;background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;font-family:"Georgia",serif;font-size:13.5px;line-height:1.8}
+.letter-render.show{display:flex}
+.letter-page{padding:52px 60px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box}
+@media(max-width:640px){.letter-page{padding:28px 20px}}
+.letter-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:40px}
+.letter-sender{text-align:right;font-size:12.5px;line-height:1.7;color:#222}
+.letter-sender strong{font-size:14px;font-weight:700;display:block;margin-bottom:3px;color:#111}
+.letter-recipient{text-align:left;font-size:12.5px;line-height:1.7;color:#222}
+.letter-recipient strong{font-size:13.5px;font-weight:700;display:block;margin-bottom:3px;color:#111}
+.letter-date{text-align:right;font-size:12px;color:#555;margin-bottom:24px;font-style:italic}
+.letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}
+.letter-subject span{font-weight:400;font-style:italic;color:#444}
+.letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word}
+.letter-body p{margin-bottom:16px}
+.letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8}
+.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111}
+.letter-toolbar{display:flex;gap:6px;padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap}
+.letter-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;width:fit-content}
+.lv-btn{padding:5px 12px;border:none;background:none;color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s}
+.lv-btn.active{background:var(--surface);color:var(--text)}
+
+/* ─ CV VISUEL ─ */
+.cv-render{display:none;flex-direction:column;background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid rgba(79,142,247,.2);overflow:hidden;font-family:"Arial",sans-serif;font-size:13px;line-height:1.7}
+.cv-render.show{display:flex}
+.cv-page{padding:40px 50px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box}
+@media(max-width:640px){.cv-page{padding:24px 16px}}
+.cv-header-zone{border-bottom:3px solid #1a3a6e;margin-bottom:22px;padding-bottom:18px}
+.cv-name{font-size:22px;font-weight:700;color:#1a3a6e;letter-spacing:-.3px}
+.cv-title{font-size:14px;color:#555;margin-top:2px;font-style:italic}
+.cv-contacts{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:#444}
+.cv-contacts span{display:flex;align-items:center;gap:4px}
+.cv-section{margin-bottom:20px}
+.cv-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#1a3a6e;border-bottom:1px solid #d0daea;padding-bottom:5px;margin-bottom:12px}
+.cv-entry{margin-bottom:12px}
+.cv-entry-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px}
+.cv-entry-title{font-weight:700;font-size:13px;color:#111}
+.cv-entry-date{font-size:11.5px;color:#666;white-space:nowrap}
+.cv-entry-sub{font-size:12px;color:#555;font-style:italic;margin-bottom:4px}
+.cv-entry-desc{font-size:12.5px;color:#333;line-height:1.6;white-space:pre-wrap;word-wrap:break-word}
+.cv-skills-grid{display:flex;flex-wrap:wrap;gap:6px}
+.cv-skill-tag{padding:3px 10px;background:#eef2fa;border:1px solid #c8d6ef;border-radius:12px;font-size:11.5px;color:#1a3a6e;font-weight:500}
+.cv-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px}
+.cv-raw{white-space:pre-wrap;word-wrap:break-word;font-family:"JetBrains Mono",monospace;font-size:12.5px;color:#CDD2E8;padding:20px;background:#0D0F17}
+.cv-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;width:fit-content;margin-bottom:8px}
 .score-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--success);font-weight:600}
 .tcursor{display:inline-block;width:2px;height:1em;background:var(--accent);vertical-align:text-bottom;animation:blink 1s step-end infinite}
 .tcursor.blue{background:var(--accent2)}
@@ -542,23 +588,52 @@ select:focus{border-color:var(--accent)}
         <div class="rhead">
           <div class="card-title">📝 Lettre de motivation personnalisée</div>
           <div class="racts">
-            <button class="abtn" id="cpLm" onclick="cpText('lmOut','cpLm')">Copier</button>
+            <div class="letter-view-toggle">
+              <button class="lv-btn active" id="lvBtnVisual" onclick="switchLetterView('visual')">👁 Aperçu</button>
+              <button class="lv-btn" id="lvBtnRaw" onclick="switchLetterView('raw')">📄 Texte brut</button>
+            </div>
+            <button class="abtn" id="cpLm" onclick="cpLmText()">Copier</button>
             <button class="abtn" onclick="dlTxt('lmOut','lettre_motivation.txt')">⬇ .txt</button>
-            <button class="abtn" onclick="dlDoc('lmOut','lettre_motivation.doc')">📝 .doc</button>
+            <button class="abtn" onclick="dlLetterDoc()">📝 .doc</button>
           </div>
         </div>
-        <div class="outbox" id="lmOut"></div>
+        <!-- Aperçu visuel de la lettre -->
+        <div class="letter-render show" id="letterRender">
+          <div class="letter-page">
+            <div class="letter-header">
+              <div class="letter-recipient" id="lmRecipient"></div>
+              <div class="letter-sender" id="lmSender"></div>
+            </div>
+            <div class="letter-date" id="lmDate"></div>
+            <div class="letter-subject" id="lmSubject"></div>
+            <div class="letter-body" id="lmBody"></div>
+            <div class="letter-closing" id="lmClosing"></div>
+            <div class="letter-signature" id="lmSignature"></div>
+          </div>
+        </div>
+        <!-- Texte brut (caché par défaut) -->
+        <div class="outbox" id="lmOut" style="display:none"></div>
       </div>
+
       <div class="rpanel" id="panel-cv">
         <div class="rhead">
           <div class="card-title">📄 CV optimisé et reformulé</div>
           <div class="racts">
+            <div class="cv-view-toggle">
+              <button class="lv-btn active" id="cvBtnVisual" onclick="switchCVView('visual')">👁 Aperçu</button>
+              <button class="lv-btn" id="cvBtnRaw" onclick="switchCVView('raw')">📄 Texte brut</button>
+            </div>
             <button class="abtn bl" id="cpCv" onclick="cpText('cvOut','cpCv')">Copier</button>
             <button class="abtn bl" onclick="dlTxt('cvOut','cv_optimise.txt')">⬇ .txt</button>
             <button class="abtn bl" onclick="dlDoc('cvOut','cv_optimise.doc')">📝 .doc</button>
           </div>
         </div>
-        <div class="outbox cv" id="cvOut"></div>
+        <!-- Aperçu visuel CV -->
+        <div class="cv-render show" id="cvRender">
+          <div class="cv-page" id="cvPage"></div>
+        </div>
+        <!-- Texte brut CV -->
+        <div class="outbox cv" id="cvOut" style="display:none"></div>
       </div>
     </div>
 
@@ -984,79 +1059,140 @@ async function generateAll(){
   var extra=document.getElementById("extra").value.trim();
   var model=document.getElementById("model").value;
 
+  var langLabel = {
+    "français":"français","anglais":"English","espagnol":"español",
+    "allemand":"Deutsch","italien":"italiano","russe":"русский",
+    "arabe":"العربية","mandarin (chinois simplifié)":"普通话（简体中文）","japonais":"日本語"
+  }[lang] || lang;
+
   var btn=document.getElementById("genBtn");
   btn.classList.add("loading");btn.disabled=true;
   btn.querySelector(".btn-text").textContent="Génération en cours...";
   document.getElementById("errMsg").classList.remove("show");
   document.getElementById("resSection").classList.remove("show");
   document.getElementById("prgSteps").classList.add("show");
-  document.getElementById("lmOut").innerHTML="";
-  document.getElementById("cvOut").innerHTML="";
+  document.getElementById("lmOut").textContent="";
+  document.getElementById("cvOut").textContent="";
   document.getElementById("scoreZone").innerHTML="";
+  // Réinitialiser les rendus visuels
+  document.getElementById("letterRender").classList.remove("show");
+  document.getElementById("cvRender").classList.remove("show");
   ["pi1","pi2","pi3"].forEach(function(id){document.getElementById(id).className="pi";});
 
   try{
-    // LETTRE
+    // ── LETTRE (JSON structuré) ──────────────────────────────────────────────
     document.getElementById("pi1").className="pi act";
     document.getElementById("pi1").innerHTML='<div class="pispin"></div>Génération de la lettre de motivation...';
     document.getElementById("pi2").className="pi act";
     document.getElementById("pi2").innerHTML='<div class="pispin"></div>Rédaction en cours...';
 
-    var langLabel = {
-      "français":"français","anglais":"English","espagnol":"español",
-      "allemand":"Deutsch","italien":"italiano","russe":"русский",
-      "arabe":"العربية","mandarin (chinois simplifié)":"普通话（简体中文）","japonais":"日本語"
-    }[lang] || lang;
+    var sysLM="You are an expert professional cover letter writer.\n"
+      +"CRITICAL LANGUAGE RULE: Write EVERY word exclusively in "+lang+" ("+langLabel+"). No mixing.\n\n"
+      +"You must return a VALID JSON object (no markdown, no text outside JSON) with these exact keys:\n"
+      +"{\n"
+      +"  \"sender_name\": \"full name of candidate\",\n"
+      +"  \"sender_address\": \"street, city, postal code\",\n"
+      +"  \"sender_phone\": \"phone number\",\n"
+      +"  \"sender_email\": \"email\",\n"
+      +"  \"recipient_company\": \"company name\",\n"
+      +"  \"recipient_name\": \"contact person name or empty string\",\n"
+      +"  \"recipient_title\": \"HR director / Hiring manager / etc or empty\",\n"
+      +"  \"recipient_address\": \"company address or empty string\",\n"
+      +"  \"city\": \"candidate city\",\n"
+      +"  \"date\": \"formatted date in "+lang+"\",\n"
+      +"  \"subject\": \"precise subject line\",\n"
+      +"  \"salutation\": \"opening greeting\",\n"
+      +"  \"body\": \"full letter body paragraphs separated by \\n\\n. Length: "+llen+". Tone: "+tones+". Use exact keywords from the job offer. Show concrete achievements.\",\n"
+      +"  \"closing\": \"formal closing sentence\",\n"
+      +"  \"signature\": \"candidate full name\"\n"
+      +"}\n"
+      +(ptype?"Contract type: "+ptype+"\n":"")
+      +(extra?"Extra instructions: "+extra+"\n":"")
+      +"DO NOT invent information not in the CV. Return ONLY the JSON object.";
 
-    var sysLM="You are an expert professional letter writer. "
-      +"CRITICAL LANGUAGE RULE: You MUST write the ENTIRE letter exclusively in "+lang+" ("+langLabel+"). "
-      +"Every single word, including the date, location, subject line, salutation, body, and closing formula, must be in "+lang+". "
-      +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
-      +"RULES:\n- Length: "+llen+"\n- Tone: "+tones+"\n"
-      +(ptype?"- Contract type: "+ptype+"\n":"")
-      +"- Structure: candidate contact info + city + date | company contact if available | precise subject | original opening | motivation for THIS specific role | skills directly matching the job offer with concrete examples | closing with full formal formula\n"
-      +"- Use the EXACT keywords from the job offer\n- Never invent information not in the CV\n"
-      +(extra?"- Extra instructions: "+extra+"\n":"")
-      +"Return ONLY the letter, no comments, no preamble, no markdown.";
-
-    var userLM="SELECTED LANGUAGE: "+lang+" — Write EVERYTHING in "+lang+" ("+langLabel+").\n\n"
-      +"=== MY CV ===\n"+cvText+"\n=== END CV ===\n\n=== JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
-      +"Generate my cover letter entirely in "+lang+".";
+    var userLM="LANGUAGE: "+lang+" ("+langLabel+") — write all fields in "+lang+".\n\n"
+      +"=== CV ===\n"+cvText+"\n=== END CV ===\n\n=== JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
+      +"Return ONLY valid JSON, no markdown.";
 
     document.getElementById("resSection").classList.add("show");
-    document.getElementById("lmOut").innerHTML='<span class="tcursor"></span>';
-    var lmResult=await streamCall(sysLM,userLM,model,function(t){document.getElementById("lmOut").textContent=t;});
-    document.getElementById("lmOut").textContent=lmResult;
+    document.getElementById("lmOut").textContent="";
+
+    var lmRaw = await streamCall(sysLM, userLM, model, function(t){
+      // Pendant le streaming, afficher dans le texte brut
+      document.getElementById("lmOut").textContent = t;
+    });
+
+    // Parser le JSON
+    var lmJson = null;
+    try {
+      var cleaned = lmRaw.replace(/^```[a-z]*\n?/i,"").replace(/```$/,"").trim();
+      lmJson = JSON.parse(cleaned);
+    } catch(e) {
+      // Fallback : afficher tel quel si JSON invalide
+      lmJson = null;
+    }
+
+    if (lmJson) {
+      renderLetter(lmJson);
+      // Reconstruire le texte brut proprement
+      var lmText = buildLetterText(lmJson);
+      document.getElementById("lmOut").textContent = lmText;
+    } else {
+      // fallback : afficher brut
+      document.getElementById("lmOut").textContent = lmRaw;
+      document.getElementById("letterRender").classList.remove("show");
+      document.getElementById("lmOut").style.display = "block";
+    }
+
     document.getElementById("st3").classList.add("active","done");
     document.getElementById("pi1").className="pi done";
     document.getElementById("pi1").innerHTML='<span class="piicon">✓</span> Lettre générée';
     document.getElementById("pi2").className="pi done";
     document.getElementById("pi2").innerHTML='<span class="piicon">✓</span> Lettre terminée';
 
-    // CV OPTIMISE
+    // ── CV (structure-aware) ─────────────────────────────────────────────────
     document.getElementById("pi3").className="pi act";
     document.getElementById("pi3").innerHTML='<div class="pispin"></div>Optimisation du CV pour +90% de correspondance...';
 
+    // Détecter la structure du CV uploadé
+    var cvStructureHint = detectCVStructure(cvText);
+
     var sysCV="You are an expert CV optimizer. "
-      +"CRITICAL LANGUAGE RULE: You MUST rewrite the ENTIRE CV exclusively in "+lang+" ("+langLabel+"). "
-      +"Every section title, every bullet point, every date label, every skill — all in "+lang+". "
+      +"CRITICAL LANGUAGE RULE: Rewrite the ENTIRE CV exclusively in "+lang+" ("+langLabel+"). "
       +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
-      +"METHOD:\n1. Integrate exact keywords from the job offer\n2. Rephrase experiences using the job offer vocabulary\n3. Adapt job titles to match the offer\n4. List the required skills first\n5. NEVER invent experiences or degrees\n6. Keep all contact info, education and dates\n\n"
-      +"Start with: [MATCH RATE ESTIMATE: XX%]\nThen the full rewritten CV.\nReturn ONLY the optimized CV, no comments, no markdown.";
+      +"STRUCTURE RULE: You MUST preserve the exact same section structure as the original CV:\n"
+      +cvStructureHint+"\n"
+      +"Keep the same section order and formatting style as the original. "
+      +"If the original has a photo placeholder, keep it. "
+      +"If the original uses columns, describe them with clear separators.\n\n"
+      +"METHOD:\n"
+      +"1. Keep candidate's real name, contacts, and dates exactly as in the original\n"
+      +"2. Integrate exact keywords from the job offer into descriptions\n"
+      +"3. Rephrase bullet points using job offer vocabulary\n"
+      +"4. Adapt job title to match the offer if relevant\n"
+      +"5. List the required skills from the offer first in the skills section\n"
+      +"6. NEVER invent experiences, degrees, or dates\n\n"
+      +"Start with one line: [MATCH RATE ESTIMATE: XX%]\n"
+      +"Then the full optimized CV maintaining the original structure.\n"
+      +"Return ONLY the CV text, no comments, no markdown symbols.";
 
-    var userCV="SELECTED LANGUAGE: "+lang+" — Rewrite EVERYTHING in "+lang+" ("+langLabel+").\n\n"
+    var userCV="LANGUAGE: "+lang+" ("+langLabel+") — rewrite in "+lang+".\n\n"
       +"=== ORIGINAL CV ===\n"+cvText+"\n=== END CV ===\n\n=== TARGET JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
-      +"Optimize my CV for 90%+ match, written entirely in "+lang+".";
+      +"Optimize for 90%+ match, preserve original structure, write entirely in "+lang+".";
 
-    document.getElementById("cvOut").innerHTML='<span class="tcursor blue"></span>';
-    var cvResult=await streamCall(sysCV,userCV,model,function(t){document.getElementById("cvOut").textContent=t;});
+    document.getElementById("cvOut").textContent="";
+    var cvResult=await streamCall(sysCV,userCV,model,function(t){
+      document.getElementById("cvOut").textContent=t;
+    });
     document.getElementById("cvOut").textContent=cvResult;
+    renderCV(cvResult);
+
     document.getElementById("st4").classList.add("active","done");
     document.getElementById("pi3").className="pi done";
     document.getElementById("pi3").innerHTML='<span class="piicon">✓</span> CV optimisé généré';
 
-    var sm=cvResult.match(/TAUX DE CORRESPONDANCE[^:]*:\s*(\d+)/i);
-    if(sm) document.getElementById("scoreZone").innerHTML='<span class="score-badge">📊 Correspondance : '+sm[1]+'%</span>';
+    var sm=cvResult.match(/MATCH RATE ESTIMATE[^:]*:\s*(\d+)|TAUX DE CORRESPONDANCE[^:]*:\s*(\d+)/i);
+    if(sm) document.getElementById("scoreZone").innerHTML='<span class="score-badge">📊 Correspondance : '+(sm[1]||sm[2])+'%</span>';
 
   }catch(err){
     document.getElementById("prgSteps").classList.remove("show");
@@ -1065,6 +1201,231 @@ async function generateAll(){
   }finally{
     btn.classList.remove("loading");btn.disabled=false;
     btn.querySelector(".btn-text").textContent="✨ Générer la lettre de motivation + CV optimisé";
+  }
+}
+
+// ── DÉTECTION STRUCTURE CV ──────────────────────────────────────────────────────
+function detectCVStructure(cvText) {
+  var lines = cvText.split("\n").filter(function(l){ return l.trim().length > 0; });
+  var sections = [];
+  // Heuristique : lignes courtes en majuscules ou avec des séparateurs sont des titres de section
+  lines.forEach(function(line){
+    var t = line.trim();
+    if (t.length < 50 && (t === t.toUpperCase() || /^[A-ZÀÂÉÈÊÙÎÏÔÛ][^a-z]{2,}$/.test(t) || /^[-=_]{3,}$/.test(t))) {
+      sections.push(t);
+    }
+  });
+  if (sections.length === 0) return "Standard chronological CV structure.";
+  return "The original CV has these sections in this order:\n" + sections.map(function(s,i){ return (i+1)+". "+s; }).join("\n");
+}
+
+// ── RENDU VISUEL LETTRE ────────────────────────────────────────────────────────
+function renderLetter(j) {
+  function e(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
+
+  // Expéditeur (en haut à droite)
+  var senderHtml = "<strong>"+esc(j.sender_name)+"</strong>";
+  if (j.sender_address) senderHtml += "<br>"+esc(j.sender_address);
+  if (j.sender_phone)   senderHtml += "<br>"+esc(j.sender_phone);
+  if (j.sender_email)   senderHtml += "<br>"+esc(j.sender_email);
+  e("lmSender", senderHtml);
+
+  // Destinataire (en haut à gauche)
+  var recipHtml = "";
+  if (j.recipient_company) recipHtml += "<strong>"+esc(j.recipient_company)+"</strong><br>";
+  if (j.recipient_name)    recipHtml += esc(j.recipient_name)+(j.recipient_title?", "+esc(j.recipient_title):"")+"<br>";
+  if (j.recipient_address) recipHtml += esc(j.recipient_address).replace(/,\s*/g,"<br>");
+  e("lmRecipient", recipHtml);
+
+  // Date (en dessous à droite → aligné droite via CSS letter-date)
+  e("lmDate", esc((j.city||"")?j.city+", "+j.date:j.date));
+
+  // Objet
+  e("lmSubject", "Objet : <span>"+esc(j.subject)+"</span>");
+
+  // Corps
+  var bodyHtml = esc(j.salutation)+"<br><br>";
+  bodyHtml += (j.body||"").split(/\n\n+/).map(function(p){ return "<p>"+esc(p)+"</p>"; }).join("");
+  e("lmBody", bodyHtml);
+
+  // Formule de politesse
+  e("lmClosing", esc(j.closing));
+
+  // Signature
+  e("lmSignature", esc(j.signature));
+
+  document.getElementById("letterRender").classList.add("show");
+  document.getElementById("lmOut").style.display = "none";
+  // Activer le vue visuelle
+  switchLetterView("visual");
+}
+
+// Reconstruire le texte brut depuis le JSON
+function buildLetterText(j) {
+  var parts = [];
+  if (j.sender_name)    parts.push(j.sender_name);
+  if (j.sender_address) parts.push(j.sender_address);
+  if (j.sender_phone)   parts.push(j.sender_phone);
+  if (j.sender_email)   parts.push(j.sender_email);
+  parts.push("");
+  if (j.recipient_company) parts.push(j.recipient_company);
+  if (j.recipient_name)    parts.push(j.recipient_name+(j.recipient_title?", "+j.recipient_title:""));
+  if (j.recipient_address) parts.push(j.recipient_address);
+  parts.push("");
+  parts.push((j.city?j.city+", ":"")+j.date);
+  parts.push("");
+  parts.push("Objet : "+j.subject);
+  parts.push("");
+  parts.push(j.salutation);
+  parts.push("");
+  parts.push(j.body);
+  parts.push("");
+  parts.push(j.closing);
+  parts.push("");
+  parts.push(j.signature);
+  return parts.join("\n");
+}
+
+// ── TOGGLE VUE LETTRE ──────────────────────────────────────────────────────────
+function switchLetterView(mode) {
+  document.getElementById("lvBtnVisual").classList.toggle("active", mode==="visual");
+  document.getElementById("lvBtnRaw").classList.toggle("active", mode==="raw");
+  if (mode === "visual") {
+    document.getElementById("letterRender").classList.add("show");
+    document.getElementById("lmOut").style.display = "none";
+  } else {
+    document.getElementById("letterRender").classList.remove("show");
+    document.getElementById("lmOut").style.display = "block";
+  }
+}
+
+function cpLmText() {
+  var text = document.getElementById("lmOut").textContent || "";
+  navigator.clipboard.writeText(text).then(function(){
+    var btn=document.getElementById("cpLm");var orig=btn.textContent;
+    btn.textContent="✓ Copié !";btn.classList.add("copied");
+    setTimeout(function(){btn.textContent=orig;btn.classList.remove("copied");},2000);
+  });
+}
+
+function dlLetterDoc() {
+  var text = document.getElementById("lmOut").textContent || "";
+  var rows = text.split("\n").map(function(l){
+    return l.trim()
+      ?"<p style='margin:0 0 9pt;font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5'>"+l.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</p>"
+      :"<p style='margin:0 0 4pt'>&nbsp;</p>";
+  }).join("");
+  var doc="<html xmlns:o='urn:schemas-microsoft-com:office:office'><head><meta charset='utf-8'><style>@page{margin:2.5cm}body{margin:0}</style></head><body>"+rows+"</body></html>";
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([doc],{type:"application/msword"}));
+  a.download="lettre_motivation.doc";a.click();
+}
+
+// ── RENDU VISUEL CV ────────────────────────────────────────────────────────────
+function renderCV(raw) {
+  // Extraire le taux de correspondance
+  var scoreMatch = raw.match(/\[MATCH RATE ESTIMATE[^:]*:\s*(\d+)%?\]|\[TAUX DE CORRESPONDANCE[^:]*:\s*(\d+)%?\]/i);
+  var score = scoreMatch ? (scoreMatch[1]||scoreMatch[2]) : null;
+  // Supprimer la ligne du taux du texte
+  var text = raw.replace(/^\[.*?%?\]\s*/i,"").trim();
+
+  var lines = text.split("\n");
+  var page = document.getElementById("cvPage");
+  var html = "";
+
+  if (score) {
+    html += '<div class="cv-score">📊 Correspondance : '+score+'%</div>';
+  }
+
+  // Heuristique de rendu : détecter nom, titre, contacts sur les premières lignes
+  var firstLines = lines.slice(0, 8);
+  var nameIdx = -1, titleIdx = -1, contactLines = [];
+
+  firstLines.forEach(function(l, i){
+    var t = l.trim();
+    if (!t) return;
+    if (nameIdx === -1 && t.length < 60 && !/[@+\d{3,}]/.test(t)) { nameIdx = i; return; }
+    if (titleIdx === -1 && nameIdx !== -1 && t.length < 80 && !/[@+]/.test(t) && i < 5) { titleIdx = i; return; }
+    if (/@|[+\d]{7,}|linkedin|github|adresse|email/i.test(t)) contactLines.push(t);
+  });
+
+  // Header CV
+  html += '<div class="cv-header-zone">';
+  if (nameIdx !== -1) html += '<div class="cv-name">'+esc(lines[nameIdx])+'</div>';
+  if (titleIdx !== -1) html += '<div class="cv-title">'+esc(lines[titleIdx])+'</div>';
+  if (contactLines.length) {
+    html += '<div class="cv-contacts">';
+    contactLines.forEach(function(c){ html += '<span>'+esc(c)+'</span>'; });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Reste des sections
+  var startIdx = Math.max(nameIdx, titleIdx, contactLines.length ? 3 : 0) + 1;
+  var remaining = lines.slice(startIdx);
+  var currentSection = null;
+  var currentEntries = [];
+
+  function flushSection() {
+    if (!currentSection && currentEntries.length === 0) return;
+    if (currentSection) {
+      html += '<div class="cv-section">';
+      html += '<div class="cv-section-title">'+esc(currentSection)+'</div>';
+      // Détecter si c'est une section compétences (mots courts séparés par virgule/retour)
+      var allText = currentEntries.join(" ");
+      var isSkills = /compétence|skill|logiciel|outil|langue|technologie|maîtrise/i.test(currentSection)
+        || (currentEntries.length > 2 && allText.length < 400);
+      if (isSkills) {
+        html += '<div class="cv-skills-grid">';
+        currentEntries.join("\n").split(/[,\n•·\-–]/).forEach(function(s){
+          var sk = s.trim(); if (sk.length > 1 && sk.length < 60) html += '<span class="cv-skill-tag">'+esc(sk)+'</span>';
+        });
+        html += '</div>';
+      } else {
+        currentEntries.forEach(function(entry){
+          html += '<div class="cv-entry"><div class="cv-entry-desc">'+esc(entry)+'</div></div>';
+        });
+      }
+      html += '</div>';
+    }
+    currentSection = null;
+    currentEntries = [];
+  }
+
+  remaining.forEach(function(line){
+    var t = line.trim();
+    if (!t) return;
+    // Détecter titre de section : ligne courte en majuscules ou ligne courte standalone
+    var isSectionTitle = (t.length < 50 && (t === t.toUpperCase() || /^[-=_]{3,}$/.test(t)) && t.replace(/[-=_ ]/g,"").length > 2)
+      || (/^[A-ZÀÂÉÈÊÙÎÏÔÛ][^.]{2,35}$/.test(t) && !/^\d/.test(t) && !/@/.test(t) && t.length < 40);
+    if (isSectionTitle) {
+      flushSection();
+      currentSection = t;
+    } else {
+      currentEntries.push(t);
+    }
+  });
+  flushSection();
+
+  page.innerHTML = html;
+  document.getElementById("cvRender").classList.add("show");
+  document.getElementById("cvOut").style.display = "none";
+  switchCVView("visual");
+}
+
+function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+// ── TOGGLE VUE CV ──────────────────────────────────────────────────────────────
+function switchCVView(mode) {
+  document.getElementById("cvBtnVisual").classList.toggle("active", mode==="visual");
+  document.getElementById("cvBtnRaw").classList.toggle("active", mode==="raw");
+  if (mode === "visual") {
+    document.getElementById("cvRender").classList.add("show");
+    document.getElementById("cvOut").style.display = "none";
+  } else {
+    document.getElementById("cvRender").classList.remove("show");
+    document.getElementById("cvOut").style.display = "block";
   }
 }
 
