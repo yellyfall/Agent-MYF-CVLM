@@ -920,7 +920,10 @@ async function streamCall(sysPrompt,userMsg,model,onChunk){
       try{
         var json=JSON.parse(raw);
         var delta=json.choices&&json.choices[0]&&json.choices[0].delta&&json.choices[0].delta.content;
-        if(typeof delta==="string"){full+=delta;onChunk(full);}
+        if(typeof delta==="string"){
+  full += delta;
+  onChunk(cleanAIText(full));
+}
       }catch(e){}
     });
   }
@@ -1197,6 +1200,16 @@ async function sendChat() {
 window.addEventListener("load",function(){
   if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 });
+
+function cleanAIText(text) {
+  return text
+    .replace(/[*#`_~]/g, "")
+    .replace(/[€&+]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+return cleanAIText(full);
+  
 </script>
 </body>
 </html>
