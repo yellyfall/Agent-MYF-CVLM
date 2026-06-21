@@ -212,6 +212,27 @@ select:focus{border-color:var(--accent)}
 .chat-sug{padding:7px 13px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--muted);font-size:11.5px;cursor:pointer;transition:all .2s;font-family:"Inter",sans-serif}
 .chat-sug:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
 
+/* ─ CHAT EXTRAS ─ */
+.chat-pdf-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chat-pdf-btn{padding:5px 11px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;display:flex;align-items:center;gap:5px}
+.chat-pdf-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.chat-pdf-badge{display:none;align-items:center;gap:6px;background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.25);border-radius:var(--radius-sm);padding:4px 10px;font-size:11.5px;color:var(--accent2)}
+.chat-pdf-badge.show{display:flex}
+.chat-pdf-badge button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 0 0 4px}
+.chat-pdf-badge button:hover{color:var(--error)}
+.chat-web-toggle{padding:5px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;display:flex;align-items:center;gap:5px;user-select:none}
+.chat-web-toggle.on{border-color:rgba(52,211,153,.4);color:var(--success);background:rgba(52,211,153,.07)}
+.web-indicator{display:none;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding-left:4px;margin-bottom:2px}
+.web-indicator.show{display:flex}
+.wspin{width:10px;height:10px;border:1.5px solid var(--border);border-top-color:var(--success);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+/* Rendu enrichi des bulles IA */
+.bubble-inner b,.bubble-inner strong{font-weight:700;color:var(--text)}
+.bubble-inner code{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-family:"JetBrains Mono",monospace;font-size:12px}
+.bubble-inner pre{background:#0D0F17;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;overflow-x:auto;margin:6px 0;font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.6;white-space:pre}
+.bubble-inner ul,.bubble-inner ol{padding-left:18px;margin:4px 0;display:flex;flex-direction:column;gap:2px}
+.bubble-inner li{line-height:1.6}
+.bubble-source{font-size:10px;color:var(--muted);padding:3px 4px 0;font-style:italic}
+
 /* ─ NAV ─ */
 .app-nav{display:flex;gap:4px;padding:0 34px;border-bottom:1px solid var(--border);background:var(--surface);margin-top:-1px}
 @media(max-width:600px){.app-nav{padding:0 14px}}
@@ -546,7 +567,19 @@ select:focus{border-color:var(--accent)}
           <option value="mistral-small-latest">mistral-small</option>
           <option value="open-mistral-7b">open-mistral-7b</option>
         </select>
-        <button class="chat-clear" onclick="clearChat()">🗑 Effacer la conversation</button>
+        <button class="chat-web-toggle" id="webToggle" onclick="toggleWeb()" title="Activer la recherche web">🌐 Web</button>
+        <button class="chat-clear" onclick="clearChat()">🗑 Effacer</button>
+      </div>
+
+      <div class="chat-pdf-bar">
+        <label class="chat-pdf-btn" for="chatPdfFile">📎 Joindre un PDF
+          <input type="file" id="chatPdfFile" accept=".pdf" style="display:none" onchange="loadChatPdf(this)">
+        </label>
+        <div class="chat-pdf-badge" id="chatPdfBadge">
+          <span>📄</span><span id="chatPdfName">-</span>
+          <button onclick="clearChatPdf()" title="Retirer le PDF">✕</button>
+        </div>
+        <div class="fload" id="chatPdfLoad" style="display:none"><div class="mspin"></div>Lecture du PDF…</div>
       </div>
 
       <div class="chat-msgs" id="chatMsgs">
@@ -564,6 +597,7 @@ select:focus{border-color:var(--accent)}
           </div>
         </div>
         <div class="chat-typing" id="chatTyping">
+          <div class="web-indicator" id="webIndicator"><div class="wspin"></div>Recherche sur le web…</div>
           <div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d'écrire…</div>
           <div class="typing-dots"><span></span><span></span><span></span></div>
         </div>
@@ -1044,9 +1078,120 @@ function switchNav(tab) {
   });
 }
 
-// ── CHAT ───────────────────────────────────────────────────────────────────────
+// ── CHAT STATE ─────────────────────────────────────────────────────────────────
 var chatHistory = [];
+var chatPdfText = "";
+var chatPdfName = "";
+var webSearchEnabled = false;
 
+// ── TOGGLE WEB SEARCH ──────────────────────────────────────────────────────────
+function toggleWeb() {
+  webSearchEnabled = !webSearchEnabled;
+  var btn = document.getElementById("webToggle");
+  btn.classList.toggle("on", webSearchEnabled);
+  btn.title = webSearchEnabled ? "Recherche web activée (cliquer pour désactiver)" : "Activer la recherche web";
+  btn.textContent = webSearchEnabled ? "🌐 Web ✓" : "🌐 Web";
+}
+
+// ── PDF CHAT ───────────────────────────────────────────────────────────────────
+async function loadChatPdf(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  if (file.size > 10 * 1024 * 1024) { alert("PDF trop volumineux (max 10 Mo)."); return; }
+  var loadEl = document.getElementById("chatPdfLoad");
+  var badge  = document.getElementById("chatPdfBadge");
+  loadEl.style.display = "flex";
+  badge.classList.remove("show");
+  try {
+    var ab = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    var texts = [];
+    for (var i = 1; i <= Math.min(pdf.numPages, 40); i++) {
+      var page = await pdf.getPage(i);
+      var content = await page.getTextContent();
+      texts.push(content.items.map(function(s){ return s.str; }).join(" "));
+    }
+    chatPdfText = texts.join("\n").replace(/\s{3,}/g, " ").trim();
+    chatPdfName = file.name;
+    document.getElementById("chatPdfName").textContent = file.name + " (" + pdf.numPages + " p.)";
+    badge.classList.add("show");
+    if (chatPdfText.length < 50) {
+      chatPdfText = "";
+      alert("Le PDF ne contient pas de texte extractible (PDF scanné). Veuillez coller le texte manuellement.");
+    }
+  } catch(e) {
+    alert("Erreur lors de la lecture du PDF : " + e.message);
+  } finally {
+    loadEl.style.display = "none";
+    input.value = "";
+  }
+}
+
+function clearChatPdf() {
+  chatPdfText = ""; chatPdfName = "";
+  document.getElementById("chatPdfBadge").classList.remove("show");
+  document.getElementById("chatPdfName").textContent = "-";
+}
+
+// ── WEB SEARCH ─────────────────────────────────────────────────────────────────
+// Utilise l'API DuckDuckGo Instant Answer (CORS libre) pour obtenir un résumé
+async function doWebSearch(query) {
+  try {
+    var url = "https://api.duckduckgo.com/?q=" + encodeURIComponent(query) + "&format=json&no_html=1&skip_disambig=1";
+    var res = await fetch(url);
+    var data = await res.json();
+    var snippets = [];
+    if (data.AbstractText) snippets.push(data.AbstractText);
+    if (data.Answer) snippets.push(data.Answer);
+    if (data.RelatedTopics) {
+      data.RelatedTopics.slice(0, 5).forEach(function(t) {
+        if (t.Text) snippets.push(t.Text);
+      });
+    }
+    if (snippets.length === 0) return null;
+    return "Résultats web pour « " + query + " » :\n" + snippets.join("\n");
+  } catch(e) {
+    return null;
+  }
+}
+
+// Détecte si la question nécessite probablement une recherche web
+function needsWeb(msg) {
+  var triggers = ["actualité","aujourd'hui","maintenant","récent","dernier","dernière","2024","2025","2026",
+    "prix","tarif","coût","cours","bourse","météo","résultat","classement","qui est","c'est quoi",
+    "nouvelle","annonce","sortie","disponible","combien coûte","news"];
+  var low = msg.toLowerCase();
+  return triggers.some(function(t){ return low.indexOf(t) !== -1; });
+}
+
+// ── MARKDOWN CLEANER ───────────────────────────────────────────────────────────
+function cleanMarkdown(text) {
+  // Supprimer ### ## # en début de ligne → texte brut
+  text = text.replace(/^#{1,6}\s*/gm, "");
+  // Supprimer *** ou ** autour des mots (gras markdown) → garder le texte
+  text = text.replace(/\*{3}(.+?)\*{3}/gs, "$1");
+  text = text.replace(/\*{2}(.+?)\*{2}/gs, "$1");
+  // Supprimer * simple (italique) mais conserver les tirets de liste
+  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, "$1");
+  // Supprimer _italique_
+  text = text.replace(/(?<![_])_([^_]+)_(?![_])/g, "$1");
+  // Supprimer __gras__
+  text = text.replace(/__(.+?)__/gs, "$1");
+  // Nettoyer ~~barré~~
+  text = text.replace(/~~(.+?)~~/g, "$1");
+  // Conserver les blocs de code (``` ```) tels quels
+  // Nettoyer lignes vides multiples
+  text = text.replace(/\n{3,}/g, "\n\n");
+  // Supprimer > blockquote
+  text = text.replace(/^>\s*/gm, "");
+  // Supprimer separateurs ---
+  text = text.replace(/^---+\s*$/gm, "");
+  // Supprimer [ ] cases à cocher
+  text = text.replace(/^\s*[-*]\s*\[[ x]\]\s*/gm, "- ");
+  return text.trim();
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
 function autoGrow(el) {
   el.style.height = "auto";
   el.style.height = Math.min(el.scrollHeight, 140) + "px";
@@ -1057,16 +1202,19 @@ function chatKey(e) {
 }
 
 function chatSuggest(btn) {
-  document.getElementById("chatInput").value = btn.textContent.replace(/^[\u{1F000}-\u{1FFFF}🌞📝🐍💡🎓⚡]\s*/u, "").trim();
+  var raw = btn.textContent.trim();
+  // Retirer l'emoji de début
+  raw = raw.replace(/^[\u{1F000}-\u{1FFFF}\u2600-\u27BF\uFE00-\uFE0F ]+/u, "").trim();
+  document.getElementById("chatInput").value = raw;
   autoGrow(document.getElementById("chatInput"));
   sendChat();
 }
 
 function clearChat() {
   chatHistory = [];
+  clearChatPdf();
   var msgs = document.getElementById("chatMsgs");
   msgs.innerHTML = "";
-  // Remettre le welcome
   var welcome = document.createElement("div");
   welcome.className = "chat-welcome";
   welcome.id = "chatWelcome";
@@ -1085,12 +1233,14 @@ function clearChat() {
   var typing = document.createElement("div");
   typing.className = "chat-typing";
   typing.id = "chatTyping";
-  typing.innerHTML = '<div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d\'écrire…</div>'
+  typing.innerHTML = '<div class="web-indicator" id="webIndicator"><div class="wspin"></div>Recherche sur le web…</div>'
+    +'<div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d\'écrire…</div>'
     +'<div class="typing-dots"><span></span><span></span><span></span></div>';
   msgs.appendChild(typing);
 }
 
-function addBubble(role, text, streaming) {
+// ── ADD BUBBLE ─────────────────────────────────────────────────────────────────
+function addBubble(role, text, streaming, sourceNote) {
   var welcome = document.getElementById("chatWelcome");
   if (welcome) welcome.remove();
 
@@ -1104,7 +1254,6 @@ function addBubble(role, text, streaming) {
   var inner = document.createElement("div");
   inner.className = "bubble-inner";
   inner.textContent = text || "";
-  if (streaming) inner.innerHTML += '<span class="tcursor"></span>';
 
   var time = document.createElement("div");
   time.className = "bubble-time";
@@ -1117,6 +1266,12 @@ function addBubble(role, text, streaming) {
     bubble.appendChild(icon);
   }
   bubble.appendChild(inner);
+  if (sourceNote) {
+    var src = document.createElement("div");
+    src.className = "bubble-source";
+    src.textContent = sourceNote;
+    bubble.appendChild(src);
+  }
   bubble.appendChild(time);
 
   msgs.insertBefore(bubble, typing);
@@ -1124,6 +1279,7 @@ function addBubble(role, text, streaming) {
   return inner;
 }
 
+// ── SEND CHAT ──────────────────────────────────────────────────────────────────
 async function sendChat() {
   var input = document.getElementById("chatInput");
   var msg = input.value.trim();
@@ -1135,18 +1291,57 @@ async function sendChat() {
   input.style.height = "auto";
   document.getElementById("chatSendBtn").disabled = true;
 
-  addBubble("user", msg);
-  chatHistory.push({ role: "user", content: msg });
+  // Afficher la bulle utilisateur (avec nom du PDF si attaché)
+  var displayMsg = msg;
+  if (chatPdfName) displayMsg += "\n📎 " + chatPdfName;
+  addBubble("user", displayMsg);
 
   var typing = document.getElementById("chatTyping");
   typing.classList.add("show");
   document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight;
 
-  var aiInner = null;
+  // ── Recherche web si activée ou auto-détectée ──────────────────────────────
+  var webContext = "";
+  var webNote = "";
+  var doSearch = webSearchEnabled || needsWeb(msg);
+  if (doSearch) {
+    document.getElementById("webIndicator").classList.add("show");
+    var snippet = await doWebSearch(msg);
+    document.getElementById("webIndicator").classList.remove("show");
+    if (snippet) {
+      webContext = "\n\n[CONTEXTE WEB RÉCUPÉRÉ — utilise ces informations pour enrichir ta réponse si pertinent]\n" + snippet + "\n[FIN DU CONTEXTE WEB]";
+      webNote = "🌐 Enrichi par recherche web";
+    }
+  }
+
+  // ── Contexte PDF si présent ────────────────────────────────────────────────
+  var pdfContext = "";
+  var pdfNote = "";
+  if (chatPdfText) {
+    var extract = chatPdfText.slice(0, 8000);
+    pdfContext = "\n\n[CONTENU DU FICHIER PDF « " + chatPdfName + " » — utilise ces données pour répondre]\n" + extract + "\n[FIN DU PDF]";
+    pdfNote = "📎 Basé sur " + chatPdfName;
+  }
+
+  // ── Système ────────────────────────────────────────────────────────────────
   var sysChat = "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. "
     + "Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. "
     + "Tu es expert en énergie solaire, physique, ingénierie, rédaction professionnelle, programmation, carrière et tous les domaines généraux. "
-    + "Tes réponses sont claires, structurées et adaptées au niveau de la question.";
+    + "IMPORTANT : rédige tes réponses en texte naturel et clair. "
+    + "N'utilise JAMAIS de syntaxe Markdown : pas de #, ##, ###, **, *, __, ___, ---, ni aucun caractère de formatage. "
+    + "Structure tes réponses avec des phrases et des paragraphes normaux. "
+    + "Pour les listes, utilise le tiret simple « - » ou des numéros « 1. 2. 3. ». "
+    + "Pour le code informatique uniquement, tu peux utiliser des blocs de code délimités par ``` ... ```. "
+    + "Tes réponses sont claires, bien organisées et adaptées au niveau de la question."
+    + webContext + pdfContext;
+
+  // Ajouter le message à l'historique (avec note pdf si présent)
+  var histMsg = msg;
+  if (chatPdfText) histMsg = msg + "\n\n(voir le PDF joint dans le contexte système)";
+  chatHistory.push({ role: "user", content: histMsg });
+
+  var aiInner = null;
+  var sourceNote = [webNote, pdfNote].filter(Boolean).join(" · ") || "";
 
   try {
     var res = await fetch("https://api.mistral.ai/v1/chat/completions", {
@@ -1161,12 +1356,12 @@ async function sendChat() {
 
     if (!res.ok) {
       var t = await res.text(); var errMsg = "Erreur Mistral " + res.status;
-      try { var j = JSON.parse(t); errMsg = j.message || j.detail || errMsg; } catch(e) {}
+      try { var j = JSON.parse(t); errMsg = j.message || j.detail || errMsg; } catch(e2) {}
       throw new Error(errMsg);
     }
 
     typing.classList.remove("show");
-    aiInner = addBubble("ai", "", true);
+    aiInner = addBubble("ai", "", true, sourceNote);
 
     var reader = res.body.getReader(), decoder = new TextDecoder(), full = "";
     while (true) {
@@ -1177,17 +1372,26 @@ async function sendChat() {
         try {
           var json = JSON.parse(raw);
           var delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
-          if (typeof delta === "string") { full += delta; aiInner.textContent = full; document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight; }
-        } catch(e) {}
+          if (typeof delta === "string") {
+            full += delta;
+            aiInner.textContent = full;
+            document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight;
+          }
+        } catch(e3) {}
       });
     }
+    // Nettoyage final du Markdown résiduel
+    full = cleanMarkdown(full);
     aiInner.textContent = full;
     chatHistory.push({ role: "assistant", content: full });
 
+    // Effacer le PDF après usage (une seule fois)
+    if (chatPdfText) clearChatPdf();
+
   } catch(err) {
     typing.classList.remove("show");
-    if (aiInner) { aiInner.textContent = "❌ Erreur : " + err.message; }
-    else { addBubble("ai", "❌ Erreur : " + err.message); }
+    if (aiInner) { aiInner.textContent = "Erreur : " + err.message; }
+    else { addBubble("ai", "Erreur : " + err.message); }
   } finally {
     document.getElementById("chatSendBtn").disabled = false;
     input.focus();
@@ -1199,4 +1403,4 @@ window.addEventListener("load",function(){
 });
 </script>
 </body>
-</html>
+</html>"""
