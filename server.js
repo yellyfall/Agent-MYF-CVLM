@@ -267,6 +267,13 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+function cleanText(text) {
+  return text
+    .replace(/\*/g, "")
+    .replace(/#/g, "")
+    .replace(/`/g, "");
+}
+
 // ── DÉMARRAGE ────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Agent IA de MYF — Serveur démarré sur le port ${PORT}`);
