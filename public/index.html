@@ -1,327 +1,1411 @@
-const express = require("express");
-const Database = require("better-sqlite3");
-const bcrypt = require("bcryptjs");
-const fetch = require("node-fetch");
-const path = require("path");
-const fs = require("fs");
-const crypto = require("crypto");
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent IA de MYF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0A0C12;--surface:#13161F;--surface2:#1C2030;--surface3:#232840;
+  --accent:#FF7043;--accent2:#4F8EF7;--accent3:#A78BFA;
+  --accent-dim:rgba(255,112,67,.12);--accent-glow:rgba(255,112,67,.28);
+  --accent2-dim:rgba(79,142,247,.12);--accent2-glow:rgba(79,142,247,.28);
+  --text:#E8EBF4;--muted:#5C6478;--border:rgba(255,255,255,.06);
+  --success:#34D399;--error:#F87171;--warn:#FBBF24;
+  --radius:14px;--radius-sm:9px
+}
+body{background:var(--bg);color:var(--text);font-family:"Inter",sans-serif;min-height:100vh;line-height:1.6}
+.screen{display:none;min-height:100vh}
+.screen.active{display:block}
+#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(255,112,67,.08),transparent 60%)}
 
-// ── BASE DE DONNÉES SQLite ──────────────────────────────────────────────────
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+/* ─ LOGIN ─ */
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 44px;width:100%;max-width:430px;display:flex;flex-direction:column;gap:20px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+@media(max-width:480px){.login-box{padding:26px 20px;margin:14px}}
+.login-logo{display:flex;align-items:center;gap:12px}
+.login-mark{width:44px;height:44px;background:var(--accent);border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;box-shadow:0 6px 16px var(--accent-glow);flex-shrink:0}
+.login-title{font-size:18px;font-weight:800;letter-spacing:-.5px}
+.login-sub{font-size:11px;color:var(--muted);margin-top:-1px}
+.login-tabs{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px}
+.login-tab{flex:1;padding:8px;border:none;background:none;color:var(--muted);font-size:12.5px;font-family:"Inter",sans-serif;border-radius:7px;cursor:pointer;font-weight:600;transition:all .2s}
+.login-tab.active{background:var(--surface3);color:var(--text)}
+.ls{display:none;flex-direction:column;gap:13px}
+.ls.active{display:flex}
+.fl{display:flex;flex-direction:column;gap:5px}
+.fl-label{font-size:11.5px;font-weight:600;color:var(--muted)}
+.fi{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13.5px;padding:11px 13px;outline:none;transition:border-color .2s;width:100%}
+.fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.fi.err{border-color:var(--error)}
+.pw-w{position:relative}
+.pw-w .fi{padding-right:62px}
+.pw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;font-family:"Inter",sans-serif;padding:3px 5px;border-radius:4px}
+.pw-eye:hover{color:var(--text)}
+.lbtn{padding:13px;border:none;border-radius:var(--radius-sm);color:#fff;font-family:"Inter",sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.lbtn.orange{background:var(--accent);box-shadow:0 4px 12px var(--accent-glow)}
+.lbtn.blue{background:var(--accent2);box-shadow:0 4px 12px var(--accent2-glow)}
+.lbtn:hover:not(:disabled){transform:translateY(-1px)}
+.lbtn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.lerr{font-size:12.5px;color:var(--error);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:7px;padding:9px 12px;display:none;line-height:1.5}
+.lerr.show{display:block}
+.lspin{width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none;flex-shrink:0}
+.lspin.show{display:block}
+.info-ban{font-size:11px;color:var(--muted);background:rgba(255,112,67,.06);border:1px solid rgba(255,112,67,.14);border-radius:7px;padding:9px 12px;line-height:1.6}
 
-const DB_PATH = path.join(DATA_DIR, "myf.db");
-const db = new Database(DB_PATH);
+/* ─ HEADER ─ */
+header{padding:14px 34px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:linear-gradient(180deg,rgba(255,112,67,.04),transparent);position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
+@media(max-width:600px){header{padding:12px 14px}}
+.h-mark{width:33px;height:33px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;box-shadow:0 4px 10px var(--accent-glow);flex-shrink:0}
+.h-name{font-size:14.5px;font-weight:700;letter-spacing:-.3px}
+.h-sub{font-size:10px;color:var(--muted)}
+.h-right{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.h-pill{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:11.5px}
+.h-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-admin{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.dot-user{background:var(--accent2);box-shadow:0 0 6px var(--accent2)}
+.h-btn{padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500}
+.h-btn:hover{border-color:var(--error);color:var(--error)}
+.h-btn.adm{border-color:rgba(167,139,250,.3);color:var(--accent3)}
+.h-btn.adm:hover{background:rgba(167,139,250,.1);border-color:var(--accent3)}
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+/* ─ APP WRAP ─ */
+.app-wrap{max-width:1160px;margin:0 auto;padding:26px 22px 80px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:800px){.app-wrap{grid-template-columns:1fr;padding:14px}}
 
-// ── SCHÉMA ──────────────────────────────────────────────────────────────────
-db.exec(`
-  CREATE TABLE IF NOT EXISTS config (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
+/* ─ PIPELINE ─ */
+.pipeline{grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 22px;display:flex;align-items:center}
+.ps{display:flex;align-items:center;gap:7px;flex:1;position:relative}
+.ps:not(:last-child)::after{content:"";position:absolute;left:110px;right:0;top:50%;transform:translateY(-50%);height:1px;background:var(--border);transition:background .4s}
+.ps.active:not(:last-child)::after{background:var(--accent)}
+.pdot{width:27px;height:27px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;transition:all .4s}
+.ps.active .pdot{border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 3px var(--accent-glow)}
+.ps.done .pdot{border-color:var(--success);background:rgba(52,211,153,.1);color:var(--success)}
+.pl{font-size:10.5px;font-weight:500;color:var(--muted)}
+.ps.active .pl,.ps.done .pl{color:var(--text)}
 
-  CREATE TABLE IF NOT EXISTS users (
-    id         TEXT PRIMARY KEY,
-    username   TEXT UNIQUE NOT NULL,
-    password   TEXT NOT NULL,
-    fullname   TEXT NOT NULL DEFAULT '',
-    status     TEXT NOT NULL DEFAULT 'active',
-    expires_at TEXT DEFAULT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    last_login TEXT DEFAULT NULL
-  );
+/* ─ CARDS ─ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:13px}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);display:flex;align-items:center;gap:7px}
+.cbadge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--accent-dim);color:var(--accent);font-weight:600;margin-left:auto}
 
-  CREATE TABLE IF NOT EXISTS sessions (
-    token      TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL,
-    role       TEXT NOT NULL DEFAULT 'user',
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    last_seen  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
-  );
-`);
+/* ─ UPLOAD ─ */
+.uz{border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:17px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--surface2)}
+.uz:hover,.uz.dg{border-color:var(--accent);background:var(--accent-dim)}
+.uz input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.uz-icon{font-size:20px;margin-bottom:3px}
+.uz-text{font-size:12.5px;color:var(--muted)}
+.uz-text strong{color:var(--accent)}
+.uz-hint{font-size:10px;color:var(--muted);margin-top:2px}
+.fbadge{display:none;align-items:center;gap:7px;background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.2);border-radius:7px;padding:6px 10px;font-size:12px;color:var(--success)}
+.fbadge.show{display:flex}
+.fbadge button{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0}
+.fbadge button:hover{color:var(--error)}
+.fload{display:none;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:4px 0}
+.fload.show{display:flex}
+.mspin{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
 
-// ── MIDDLEWARES ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "1mb" }));
-app.use(express.static(path.join(__dirname, "public")));
+/* ─ TABS ─ */
+.tabs{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px}
+.tab{flex:1;padding:7px 8px;border:none;background:none;color:var(--muted);font-size:12px;font-family:"Inter",sans-serif;border-radius:7px;cursor:pointer;transition:all .2s;font-weight:500}
+.tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tab-c{display:none;flex-direction:column;gap:10px}
+.tab-c.active{display:flex}
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, X-Session-Token");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  next();
+textarea,input[type="url"]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13.5px;padding:10px 12px;resize:vertical;transition:border-color .2s;outline:none}
+textarea:focus,input[type="url"]:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+textarea::placeholder,input[type="url"]::placeholder{color:var(--muted)}
+.orow{display:flex;gap:10px;flex-wrap:wrap}
+.og{flex:1;min-width:110px;display:flex;flex-direction:column;gap:5px}
+.ol{font-size:11px;font-weight:600;color:var(--muted)}
+select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13px;padding:7px 10px;outline:none;cursor:pointer;width:100%}
+select:focus{border-color:var(--accent)}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:11px;cursor:pointer;transition:all .2s;font-family:"Inter",sans-serif;user-select:none}
+.chip.on{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
+.div{height:1px;background:var(--border)}
+.info-note{font-size:11px;color:var(--muted);line-height:1.5;background:var(--surface2);border-radius:6px;padding:7px 10px}
+.tip-note{font-size:11px;color:var(--muted);background:rgba(255,112,67,.05);border:1px solid rgba(255,112,67,.12);border-radius:6px;padding:7px 10px;line-height:1.5}
+
+/* ─ GENERATE BTN ─ */
+.gen-btn{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:linear-gradient(135deg,var(--accent),#e8622f);border:none;border-radius:var(--radius);color:#fff;font-family:"Inter",sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px var(--accent-glow)}
+.gen-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 28px var(--accent-glow)}
+.gen-btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+.bspin{width:17px;height:17px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+.gen-btn.loading .bspin{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─ PROGRESS ─ */
+.prg{grid-column:1/-1;display:none;flex-direction:column;gap:7px}
+.prg.show{display:flex}
+.pi{display:flex;align-items:center;gap:9px;padding:9px 13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;color:var(--muted)}
+.pi.act{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
+.pi.done{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.06);color:var(--success)}
+.pispin{width:13px;height:13px;border:2px solid rgba(255,112,67,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+.piicon{width:14px;text-align:center;flex-shrink:0}
+
+/* ─ RESULTS ─ */
+.res{grid-column:1/-1;display:none;flex-direction:column;gap:14px}
+.res.show{display:flex}
+.rtabs{display:flex;gap:4px;background:var(--surface2);border-radius:var(--radius-sm);padding:4px;width:fit-content}
+.rtab{padding:8px 16px;border:none;background:none;color:var(--muted);font-size:13px;font-family:"Inter",sans-serif;border-radius:7px;cursor:pointer;transition:all .2s;font-weight:600;display:flex;align-items:center;gap:6px}
+.rtab.lm.active{background:var(--accent);color:#fff;box-shadow:0 2px 10px var(--accent-glow)}
+.rtab.cv.active{background:var(--accent2);color:#fff;box-shadow:0 2px 10px var(--accent2-glow)}
+.rpanel{display:none;flex-direction:column;gap:12px}
+.rpanel.active{display:flex}
+.rhead{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.racts{display:flex;gap:6px;flex-wrap:wrap}
+.abtn{display:flex;align-items:center;gap:5px;padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:12px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500}
+.abtn:hover{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.abtn.bl:hover{background:var(--accent2-dim);border-color:var(--accent2);color:var(--accent2)}
+.abtn.copied{border-color:var(--success);color:var(--success)}
+.outbox{background:#0D0F17;border:1px solid var(--border);border-radius:var(--radius);padding:26px 30px;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.95;color:#CDD2E8;white-space:pre-wrap;word-wrap:break-word;min-height:60px}
+.outbox.cv{border-color:rgba(79,142,247,.2)}
+.score-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--success);font-weight:600}
+.tcursor{display:inline-block;width:2px;height:1em;background:var(--accent);vertical-align:text-bottom;animation:blink 1s step-end infinite}
+.tcursor.blue{background:var(--accent2)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.errmsg{display:none;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.22);border-radius:var(--radius-sm);padding:13px 16px;color:var(--error);font-size:13px;grid-column:1/-1;line-height:1.6;white-space:pre-wrap}
+.errmsg.show{display:block}
+
+/* ─ CHAT ─ */
+.chat-wrap{max-width:900px;margin:0 auto;padding:22px 22px 80px;display:flex;flex-direction:column;gap:14px;height:calc(100vh - 70px)}
+.chat-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px;scroll-behavior:smooth}
+.chat-msgs::-webkit-scrollbar{width:5px}
+.chat-msgs::-webkit-scrollbar-track{background:transparent}
+.chat-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+.chat-bubble{max-width:80%;display:flex;flex-direction:column;gap:4px}
+.chat-bubble.user{align-self:flex-end;align-items:flex-end}
+.chat-bubble.ai{align-self:flex-start;align-items:flex-start}
+.bubble-inner{padding:12px 16px;border-radius:16px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;word-wrap:break-word}
+.chat-bubble.user .bubble-inner{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.chat-bubble.ai .bubble-inner{background:var(--surface);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
+.bubble-time{font-size:10px;color:var(--muted);padding:0 4px}
+.chat-bubble.ai .bubble-icon{width:28px;height:28px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;margin-bottom:3px;flex-shrink:0}
+.chat-typing{display:none;align-self:flex-start;align-items:flex-start;gap:8px;flex-direction:column}
+.chat-typing.show{display:flex}
+.typing-dots{display:flex;gap:5px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;border-bottom-left-radius:4px}
+.typing-dots span{width:7px;height:7px;background:var(--muted);border-radius:50%;animation:tdot 1.2s ease-in-out infinite}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.chat-input-bar{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:border-color .2s}
+.chat-input-bar:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.chat-input-bar textarea{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:"Inter",sans-serif;font-size:13.5px;resize:none;max-height:140px;line-height:1.6;padding:2px 0}
+.chat-input-bar textarea::placeholder{color:var(--muted)}
+.chat-send{width:38px;height:38px;background:var(--accent);border:none;border-radius:10px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;transition:all .2s;flex-shrink:0;box-shadow:0 3px 10px var(--accent-glow)}
+.chat-send:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 5px 14px var(--accent-glow)}
+.chat-send:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.chat-model-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chat-model-bar .ol{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
+.chat-model-bar select{flex:1;min-width:140px;max-width:220px}
+.chat-clear{padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
+.chat-clear:hover{border-color:var(--error);color:var(--error)}
+.chat-welcome{text-align:center;padding:40px 20px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:14px}
+.chat-welcome-icon{font-size:44px}
+.chat-welcome h3{font-size:17px;font-weight:700;color:var(--text)}
+.chat-welcome p{font-size:13px;line-height:1.7;max-width:420px}
+.chat-suggestions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}
+.chat-sug{padding:7px 13px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--muted);font-size:11.5px;cursor:pointer;transition:all .2s;font-family:"Inter",sans-serif}
+.chat-sug:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+
+/* ─ CHAT EXTRAS ─ */
+.chat-pdf-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chat-pdf-btn{padding:5px 11px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;display:flex;align-items:center;gap:5px}
+.chat-pdf-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.chat-pdf-badge{display:none;align-items:center;gap:6px;background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.25);border-radius:var(--radius-sm);padding:4px 10px;font-size:11.5px;color:var(--accent2)}
+.chat-pdf-badge.show{display:flex}
+.chat-pdf-badge button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 0 0 4px}
+.chat-pdf-badge button:hover{color:var(--error)}
+.chat-web-toggle{padding:5px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;display:flex;align-items:center;gap:5px;user-select:none}
+.chat-web-toggle.on{border-color:rgba(52,211,153,.4);color:var(--success);background:rgba(52,211,153,.07)}
+.web-indicator{display:none;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding-left:4px;margin-bottom:2px}
+.web-indicator.show{display:flex}
+.wspin{width:10px;height:10px;border:1.5px solid var(--border);border-top-color:var(--success);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+/* Rendu enrichi des bulles IA */
+.bubble-inner b,.bubble-inner strong{font-weight:700;color:var(--text)}
+.bubble-inner code{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-family:"JetBrains Mono",monospace;font-size:12px}
+.bubble-inner pre{background:#0D0F17;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;overflow-x:auto;margin:6px 0;font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.6;white-space:pre}
+.bubble-inner ul,.bubble-inner ol{padding-left:18px;margin:4px 0;display:flex;flex-direction:column;gap:2px}
+.bubble-inner li{line-height:1.6}
+.bubble-source{font-size:10px;color:var(--muted);padding:3px 4px 0;font-style:italic}
+
+/* ─ NAV ─ */
+.app-nav{display:flex;gap:4px;padding:0 34px;border-bottom:1px solid var(--border);background:var(--surface);margin-top:-1px}
+@media(max-width:600px){.app-nav{padding:0 14px}}
+.nav-btn{padding:11px 16px;border:none;border-bottom:2px solid transparent;background:none;color:var(--muted);font-family:"Inter",sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.nav-btn:hover{color:var(--text)}
+.nav-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-view{display:none}
+.nav-view.active{display:block}
+
+/* ─ ADMIN MODAL ─ */
+.moverlay{display:none;position:fixed;inset:0;background:rgba(10,12,18,.88);backdrop-filter:blur(6px);z-index:100;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+.moverlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;width:100%;max-width:800px;box-shadow:0 32px 80px rgba(0,0,0,.6)}
+.mhead{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.mtitle{font-size:15px;font-weight:700}
+.mbadge{font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(167,139,250,.15);color:var(--accent3);font-weight:600}
+.mclose{margin-left:auto;background:none;border:1px solid var(--border);border-radius:7px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:"Inter",sans-serif;transition:all .2s}
+.mclose:hover{border-color:var(--error);color:var(--error)}
+.mbody{padding:22px 24px;display:flex;flex-direction:column;gap:20px}
+
+.sec-title{font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sec-count{font-size:10px;padding:1px 7px;border-radius:10px;background:var(--surface2);color:var(--muted)}
+.cform{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;display:flex;flex-direction:column;gap:11px}
+.frow{display:flex;gap:10px;flex-wrap:wrap}
+.fg{flex:1;min-width:130px;display:flex;flex-direction:column;gap:5px}
+.flbl{font-size:11px;font-weight:600;color:var(--muted)}
+.finp{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13px;padding:8px 11px;outline:none;transition:border-color .2s;width:100%}
+.finp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.gbtn{padding:7px 13px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-family:"Inter",sans-serif;font-size:11.5px;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
+.gbtn:hover{border-color:var(--accent2);color:var(--accent2)}
+.cbtn{padding:9px 18px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;font-family:"Inter",sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.cbtn:hover:not(:disabled){background:#e8622f}
+.cbtn:disabled{opacity:.4;cursor:not-allowed}
+.cbtn .cspin{width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:none}
+.cbtn.loading .cspin{display:block}
+.fok{font-size:12px;color:var(--success);background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.2);border-radius:6px;padding:8px 11px;display:none;line-height:1.6}
+.fok.show{display:block}
+.ferr{font-size:12px;color:var(--error);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:6px;padding:8px 11px;display:none}
+.ferr.show{display:block}
+
+.ulist{display:flex;flex-direction:column;gap:7px;max-height:420px;overflow-y:auto;padding-right:2px}
+.ucard{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.uavatar{width:31px;height:31px;border-radius:50%;background:var(--accent2-dim);border:1.5px solid rgba(79,142,247,.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent2);flex-shrink:0}
+.uinfo{flex:1;min-width:100px}
+.uname{font-size:13px;font-weight:600}
+.umeta{font-size:10.5px;color:var(--muted);margin-top:1px}
+.uexp{font-size:10.5px;margin-top:1px}
+.exp-ok{color:var(--success)}.exp-warn{color:var(--warn)}.exp-expired{color:var(--error)}
+.ull{font-size:10.5px;color:var(--muted);margin-top:1px}
+.ustatus{display:flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600}
+.ustatus.active{background:rgba(52,211,153,.1);color:var(--success)}
+.ustatus.paused{background:rgba(251,191,36,.1);color:var(--warn)}
+.ustatus.expired{background:rgba(248,113,113,.1);color:var(--error)}
+.ucreds{font-size:10.5px;color:var(--muted);background:var(--surface);border-radius:5px;padding:4px 8px;font-family:"JetBrains Mono",monospace;cursor:pointer;position:relative}
+.ucreds:hover{color:var(--text)}
+.uacts{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.ubtn{padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--muted);font-size:10.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500}
+.ubtn:hover{background:var(--surface3)}
+.ubtn.pause:hover{border-color:var(--warn);color:var(--warn)}
+.ubtn.resume:hover{border-color:var(--success);color:var(--success)}
+.ubtn.del:hover{border-color:var(--error);color:var(--error)}
+.ubtn.pw:hover{border-color:var(--accent2);color:var(--accent2)}
+.empty-state{text-align:center;padding:28px;color:var(--muted);font-size:13px;line-height:1.7}
+.loading-state{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="loginScreen" class="screen active">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-mark">MYF</div>
+      <div>
+        <div class="login-title">Agent IA de MYF</div>
+        <div class="login-sub">Lettre de motivation + CV optimisé par IA</div>
+      </div>
+    </div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLTab('user')">Utilisateur</button>
+      <button class="login-tab" onclick="switchLTab('admin')">Administrateur</button>
+    </div>
+
+    <!-- USER -->
+    <div class="ls active" id="ls-user">
+      <div class="fl"><div class="fl-label">Nom d'utilisateur</div>
+        <input class="fi" id="uname" type="text" placeholder="Votre identifiant" autocomplete="username">
+      </div>
+      <div class="fl"><div class="fl-label">Mot de passe</div>
+        <div class="pw-w"><input class="fi" id="upw" type="password" placeholder="Votre mot de passe" autocomplete="current-password">
+          <button class="pw-eye" onclick="tpw('upw',this)">Voir</button>
+        </div>
+      </div>
+      <div class="lerr" id="uerr"></div>
+      <button class="lbtn blue" id="uLoginBtn" onclick="loginUser()">
+        <div class="lspin" id="uSpin"></div><span>Se connecter</span>
+      </button>
+    </div>
+
+    <!-- ADMIN -->
+    <div class="ls" id="ls-admin">
+      <div class="info-ban">Connectez-vous.</div>
+      <div class="fl"><div class="fl-label">Admin</div>
+        <div class="pw-w"><input class="fi" id="akey" type="password" placeholder="Admin..." autocomplete="off">
+          <button class="pw-eye" onclick="tpw('akey',this)">Voir</button>
+        </div>
+      </div>
+      <div class="lerr" id="aerr"></div>
+      <button class="lbtn orange" id="aLoginBtn" onclick="loginAdmin()">
+        <div class="lspin" id="aSpin"></div><span>Connexion Administrateur</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADMIN MODAL ══ -->
+<div class="moverlay" id="adminModal">
+  <div class="modal">
+    <div class="mhead">
+      <div class="mtitle">Panneau Administrateur</div>
+      <div class="mbadge">Agent IA de MYF</div>
+      <button class="mclose" onclick="closeModal()">✕ Fermer</button>
+    </div>
+    <div class="mbody">
+
+      <!-- Créer utilisateur -->
+      <div>
+        <div class="sec-title">Créer un nouvel accès utilisateur</div>
+        <div class="cform">
+          <div class="frow">
+            <div class="fg"><div class="flbl">Nom d'utilisateur *</div>
+              <input class="finp" id="nUser" type="text" placeholder="ex: jean.dupont">
+            </div>
+            <div class="fg"><div class="flbl">Mot de passe *</div>
+              <div style="display:flex;gap:6px">
+                <input class="finp" id="nPw" type="text" placeholder="Mot de passe" style="flex:1">
+                <button class="gbtn" onclick="genPw()">🔀 Générer</button>
+              </div>
+            </div>
+          </div>
+          <div class="frow">
+            <div class="fg"><div class="flbl">Nom complet (optionnel)</div>
+              <input class="finp" id="nFull" type="text" placeholder="ex: Jean Dupont">
+            </div>
+            <div class="fg"><div class="flbl">Date d'expiration (optionnel)</div>
+              <input class="finp" id="nExp" type="date">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="cbtn" id="createBtn" onclick="createUser()">
+              <div class="cspin"></div>+ Créer l'accès
+            </button>
+            <div class="ferr" id="cErr" style="flex:1;margin:0"></div>
+          </div>
+          <div class="fok" id="cOk"></div>
+        </div>
+      </div>
+
+      <!-- Liste utilisateurs -->
+      <div>
+        <div class="sec-title">
+          Utilisateurs enregistrés
+          <span class="sec-count" id="uCount">0</span>
+          <button class="gbtn" onclick="loadUsers()" style="margin-left:auto;font-size:11px">↻ Actualiser</button>
+        </div>
+        <div class="ulist" id="uList"><div class="loading-state">Chargement...</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP SCREEN ══ -->
+<div id="appScreen" class="screen">
+  <header>
+    <div class="h-mark">MYF</div>
+    <div><div class="h-name">Agent IA de MYF</div><div class="h-sub">Lettre de motivation + CV optimisé</div></div>
+    <div class="h-right">
+      <div class="h-pill"><div class="h-dot" id="hDot"></div><span id="hUser">-</span></div>
+      <button class="h-btn adm" id="adminBtn" style="display:none" onclick="openModal()">⚙ Admin</button>
+      <button class="h-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <nav class="app-nav">
+    <button class="nav-btn active" onclick="switchNav('cv')" id="nav-cv">✨ CV & Lettre</button>
+    <button class="nav-btn" onclick="switchNav('chat')" id="nav-chat">💬 Chat IA</button>
+  </nav>
+
+  <!-- ══ VUE CV & LETTRE ══ -->
+  <div class="nav-view active" id="view-cv">
+  <div class="app-wrap">
+
+    <div class="pipeline">
+      <div class="ps" id="st1"><div class="pdot">CV</div><div class="pl">CV fourni</div></div>
+      <div class="ps" id="st2"><div class="pdot">OF</div><div class="pl">Offre analysée</div></div>
+      <div class="ps" id="st3"><div class="pdot">LM</div><div class="pl">Lettre générée</div></div>
+      <div class="ps" id="st4"><div class="pdot">CV+</div><div class="pl">CV optimisé</div></div>
+    </div>
+
+    <!-- CV -->
+    <div class="card">
+      <div class="card-title">Votre CV <span class="cbadge">Source</span></div>
+      <div class="uz" id="cvZone">
+        <input type="file" id="cvFile" accept=".txt,.pdf" onchange="uploadCV(this)">
+        <div class="uz-icon">📂</div>
+        <div class="uz-text">Glissez votre CV ou <strong>cliquez</strong></div>
+        <div class="uz-hint">PDF (texte natif) ou TXT</div>
+      </div>
+      <div class="fload" id="cvLoad"><div class="mspin"></div>Extraction du PDF...</div>
+      <div class="fbadge" id="cvBadge"><span>✅</span><span id="cvName">-</span><button onclick="clearCV()">✕</button></div>
+      <div class="div"></div>
+      <div class="ol" style="font-size:11px;color:var(--muted)">Ou collez le texte de votre CV :</div>
+      <textarea id="cvText" rows="7" placeholder="Nom, coordonnées, formations, expériences, compétences, logiciels..."></textarea>
+      <div class="tip-note">💡 Pour les PDF, le texte est extrait automatiquement. Si vide, copiez-collez manuellement.</div>
+    </div>
+
+    <!-- OFFRE -->
+    <div class="card">
+      <div class="card-title">Offre d'emploi <span class="cbadge">Cible</span></div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('text')">Texte</button>
+        <button class="tab" onclick="switchTab('link')">URL</button>
+        <button class="tab" onclick="switchTab('file')">Fichier</button>
+      </div>
+      <div class="tab-c active" id="tab-text">
+        <textarea id="ofText" rows="10" placeholder="Collez ici le contenu de l'offre : intitulé, missions, profil recherché, compétences..."></textarea>
+      </div>
+      <div class="tab-c" id="tab-link">
+        <input type="url" id="ofUrl" placeholder="https://www.linkedin.com/jobs/view/..." oninput="updPipeline()">
+        <div class="info-note">LinkedIn et Indeed bloquent l'accès automatique. Copiez-collez le texte dans l'onglet Texte pour de meilleurs résultats.</div>
+      </div>
+      <div class="tab-c" id="tab-file">
+        <div class="uz" id="ofZone">
+          <input type="file" id="ofFile" accept=".txt,.pdf" onchange="uploadOf(this)">
+          <div class="uz-icon">📎</div>
+          <div class="uz-text">Glissez le fichier de l'offre ou <strong>cliquez</strong></div>
+          <div class="uz-hint">TXT ou PDF</div>
+        </div>
+        <div class="fload" id="ofLoad"><div class="mspin"></div>Extraction du PDF...</div>
+        <div class="fbadge" id="ofBadge"><span>✅</span><span id="ofName">-</span><button onclick="clearOf()">✕</button></div>
+      </div>
+    </div>
+
+    <!-- PARAMS -->
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title">Paramètres de génération</div>
+      <div class="orow">
+        <div class="og"><div class="ol">Langue</div>
+          <select id="lang"><option value="français">Français</option><option value="anglais">Anglais</option><option value="espagnol">Espagnol</option></select></div>
+        <div class="og"><div class="ol">Longueur</div>
+          <select id="llen"><option value="concise (3 paragraphes)">Concise</option><option value="standard (4-5 paragraphes)" selected>Standard</option><option value="détaillée (5-6 paragraphes)">Détaillée</option></select></div>
+        <div class="og"><div class="ol">Type de contrat</div>
+          <select id="ptype"><option value="">Automatique</option><option value="stage">Stage</option><option value="alternance">Alternance</option><option value="CDI">CDI</option><option value="CDD">CDD</option><option value="thèse / doctorat">Thèse / Doctorat</option><option value="post-doctorat">Post-doctorat</option><option value="ingénieur de recherche">Ingénieur de recherche</option><option value="VIE">VIE</option></select></div>
+        <div class="og"><div class="ol">Modèle Mistral</div>
+          <select id="model"><option value="mistral-large-latest">mistral-large</option><option value="mistral-medium-latest" selected>mistral-medium</option><option value="mistral-small-latest">mistral-small</option><option value="open-mistral-7b">open-mistral-7b</option></select></div>
+      </div>
+      <div><div class="ol" style="margin-bottom:7px">Ton de la lettre</div>
+        <div class="chips">
+          <div class="chip on" onclick="tChip(this)">Professionnel</div>
+          <div class="chip" onclick="tChip(this)">Dynamique</div>
+          <div class="chip" onclick="tChip(this)">Académique</div>
+          <div class="chip" onclick="tChip(this)">Enthousiaste</div>
+          <div class="chip" onclick="tChip(this)">Sobre et direct</div>
+          <div class="chip" onclick="tChip(this)">Recherche scientifique</div>
+          <div class="chip" onclick="tChip(this)">Startup / innovant</div>
+        </div>
+      </div>
+      <div><div class="ol" style="margin-bottom:5px">Instructions personnalisées (optionnel)</div>
+        <textarea id="extra" rows="2" placeholder="Ex : Mettre en avant mon projet PV, insister sur PVsyst et Python, mentionner ma mobilité géographique..."></textarea>
+      </div>
+    </div>
+
+    <button class="gen-btn" id="genBtn" onclick="generateAll()">
+      <div class="bspin"></div>
+      <span class="btn-text">✨ Générer la lettre de motivation + CV optimisé</span>
+    </button>
+
+    <div class="errmsg" id="errMsg"></div>
+
+    <div class="prg" id="prgSteps">
+      <div class="pi" id="pi1"><span class="piicon">1</span>Génération de la lettre de motivation...</div>
+      <div class="pi" id="pi2"><span class="piicon">2</span>Rédaction en cours...</div>
+      <div class="pi" id="pi3"><span class="piicon">3</span>Optimisation du CV pour +90% de correspondance...</div>
+    </div>
+
+    <div class="res" id="resSection">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div class="rtabs">
+          <button class="rtab lm active" onclick="switchRTab('lm')">📝 Lettre de motivation</button>
+          <button class="rtab cv" onclick="switchRTab('cv')">📄 CV optimisé <span style="font-size:10px;background:rgba(255,255,255,.15);border-radius:8px;padding:1px 5px">+90%</span></button>
+        </div>
+        <div id="scoreZone"></div>
+      </div>
+      <div class="rpanel active" id="panel-lm">
+        <div class="rhead">
+          <div class="card-title">📝 Lettre de motivation personnalisée</div>
+          <div class="racts">
+            <button class="abtn" id="cpLm" onclick="cpText('lmOut','cpLm')">Copier</button>
+            <button class="abtn" onclick="dlTxt('lmOut','lettre_motivation.txt')">⬇ .txt</button>
+            <button class="abtn" onclick="dlDoc('lmOut','lettre_motivation.doc')">📝 .doc</button>
+          </div>
+        </div>
+        <div class="outbox" id="lmOut"></div>
+      </div>
+      <div class="rpanel" id="panel-cv">
+        <div class="rhead">
+          <div class="card-title">📄 CV optimisé et reformulé</div>
+          <div class="racts">
+            <button class="abtn bl" id="cpCv" onclick="cpText('cvOut','cpCv')">Copier</button>
+            <button class="abtn bl" onclick="dlTxt('cvOut','cv_optimise.txt')">⬇ .txt</button>
+            <button class="abtn bl" onclick="dlDoc('cvOut','cv_optimise.doc')">📝 .doc</button>
+          </div>
+        </div>
+        <div class="outbox cv" id="cvOut"></div>
+      </div>
+    </div>
+
+  </div>
+  </div><!-- /view-cv -->
+
+  <!-- ══ VUE CHAT ══ -->
+  <div class="nav-view" id="view-chat">
+    <div class="chat-wrap">
+
+      <div class="chat-model-bar">
+        <div class="ol">Modèle :</div>
+        <select id="chatModel">
+          <option value="mistral-large-latest">mistral-large</option>
+          <option value="mistral-medium-latest" selected>mistral-medium</option>
+          <option value="mistral-small-latest">mistral-small</option>
+          <option value="open-mistral-7b">open-mistral-7b</option>
+        </select>
+        <button class="chat-web-toggle" id="webToggle" onclick="toggleWeb()" title="Activer la recherche web">🌐 Web</button>
+        <button class="chat-clear" onclick="clearChat()">🗑 Effacer</button>
+      </div>
+
+      <div class="chat-pdf-bar">
+        <label class="chat-pdf-btn" for="chatPdfFile">📎 Joindre un PDF
+          <input type="file" id="chatPdfFile" accept=".pdf" style="display:none" onchange="loadChatPdf(this)">
+        </label>
+        <div class="chat-pdf-badge" id="chatPdfBadge">
+          <span>📄</span><span id="chatPdfName">-</span>
+          <button onclick="clearChatPdf()" title="Retirer le PDF">✕</button>
+        </div>
+        <div class="fload" id="chatPdfLoad" style="display:none"><div class="mspin"></div>Lecture du PDF…</div>
+      </div>
+
+      <div class="chat-msgs" id="chatMsgs">
+        <div class="chat-welcome" id="chatWelcome">
+          <div class="chat-welcome-icon">🤖</div>
+          <h3>Assistant IA MYF</h3>
+          <p>Posez-moi n'importe quelle question : énergie solaire, rédaction, code, carrière, science, langues… Je suis là pour vous aider !</p>
+          <div class="chat-suggestions">
+            <button class="chat-sug" onclick="chatSuggest(this)">🌞 Expliquer le rendement d'une cellule PV</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">📝 Comment rédiger un email professionnel ?</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button>
+          </div>
+        </div>
+        <div class="chat-typing" id="chatTyping">
+          <div class="web-indicator" id="webIndicator"><div class="wspin"></div>Recherche sur le web…</div>
+          <div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d'écrire…</div>
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="chat-input-bar">
+        <textarea id="chatInput" rows="1" placeholder="Posez votre question…" oninput="autoGrow(this)" onkeydown="chatKey(event)"></textarea>
+        <button class="chat-send" id="chatSendBtn" onclick="sendChat()" title="Envoyer">➤</button>
+      </div>
+
+    </div>
+  </div><!-- /view-chat -->
+
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+// En prod (Render) : l'API est sur le même domaine → chemin relatif
+// En local (Laragon) : même chose si index.html est servi par node server.js
+var BASE = window.location.origin;
+var API_KEY = "";
+var ADMIN_KEY = "";
+var ROLE = "";
+
+// ── API CALLS ─────────────────────────────────────────────────────────────────
+async function api(method, endpoint, body, adminKey) {
+  var headers = { "Content-Type": "application/json" };
+  if (adminKey) headers["x-admin-key"] = adminKey;
+  var opts = { method: method, headers: headers };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    var res = await fetch(BASE + "/api" + endpoint, opts);
+    var data = await res.json();
+    return data;
+  } catch(e) {
+    return { success: false, message: "Erreur réseau : " + e.message, data: {} };
+  }
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function tpw(id, btn) {
+  var el = document.getElementById(id);
+  var h = el.type === "password";
+  el.type = h ? "text" : "password";
+  btn.textContent = h ? "Masquer" : "Voir";
+}
+function showLErr(id, msg) { var e=document.getElementById(id); e.textContent=msg; e.classList.add("show"); }
+function hideLErr(id) { document.getElementById(id).classList.remove("show"); }
+
+// ── LOGIN TABS ─────────────────────────────────────────────────────────────────
+function switchLTab(tab) {
+  document.querySelectorAll(".login-tab").forEach(function(t,i){t.classList.toggle("active",["user","admin"][i]===tab);});
+  ["ls-user","ls-admin"].forEach(function(id){document.getElementById(id).classList.remove("active");});
+  document.getElementById("ls-"+tab).classList.add("active");
+}
+
+// ── USER LOGIN ─────────────────────────────────────────────────────────────────
+async function loginUser() {
+  hideLErr("uerr");
+  var username = document.getElementById("uname").value.trim();
+  var password = document.getElementById("upw").value;
+  if (!username || !password) { showLErr("uerr","Remplissez tous les champs."); return; }
+  var btn=document.getElementById("uLoginBtn"), spin=document.getElementById("uSpin");
+  btn.disabled=true; spin.classList.add("show");
+  var res = await api("POST","/login",{username,password});
+  btn.disabled=false; spin.classList.remove("show");
+  if (res.success) {
+    API_KEY = res.data.api_key;
+    ROLE = "user";
+    enterApp(res.data.fullname || res.data.username, "user");
+  } else {
+    showLErr("uerr", res.message || "Erreur de connexion.");
+  }
+}
+
+// ── ADMIN LOGIN ────────────────────────────────────────────────────────────────
+async function loginAdmin() {
+  hideLErr("aerr");
+  var key = document.getElementById("akey").value.trim();
+  if (!key) { showLErr("aerr","Saisissez votre clé API."); return; }
+  var btn=document.getElementById("aLoginBtn"), spin=document.getElementById("aSpin");
+  btn.disabled=true; spin.classList.add("show");
+  var res = await api("POST","/admin/login",{key});
+  btn.disabled=false; spin.classList.remove("show");
+  if (res.success) {
+    API_KEY = key; ADMIN_KEY = key; ROLE = "admin";
+    enterApp("Administrateur MYF","admin");
+  } else {
+    showLErr("aerr", res.message || "Clé invalide.");
+  }
+}
+
+// ── ENTER APP ──────────────────────────────────────────────────────────────────
+function enterApp(name, role) {
+  document.getElementById("loginScreen").classList.remove("active");
+  document.getElementById("appScreen").classList.add("active");
+  document.getElementById("hUser").textContent = name;
+  document.getElementById("hDot").className = "h-dot " + (role==="admin"?"dot-admin":"dot-user");
+  if (role==="admin") document.getElementById("adminBtn").style.display="block";
+}
+
+function logout() {
+  API_KEY=""; ADMIN_KEY=""; ROLE="";
+  document.getElementById("appScreen").classList.remove("active");
+  document.getElementById("loginScreen").classList.add("active");
+  document.getElementById("uname").value="";
+  document.getElementById("upw").value="";
+  document.getElementById("akey").value="";
+  document.getElementById("resSection").classList.remove("show");
+  document.getElementById("prgSteps").classList.remove("show");
+  document.getElementById("errMsg").classList.remove("show");
+  document.getElementById("adminBtn").style.display="none";
+}
+
+// ── ADMIN MODAL ────────────────────────────────────────────────────────────────
+function openModal() { document.getElementById("adminModal").classList.add("show"); loadUsers(); }
+function closeModal() { document.getElementById("adminModal").classList.remove("show"); }
+document.getElementById("adminModal").addEventListener("click",function(e){if(e.target===this)closeModal();});
+
+function genPw() {
+  var c="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!";
+  var pw=""; for(var i=0;i<10;i++) pw+=c[Math.floor(Math.random()*c.length)];
+  document.getElementById("nPw").value=pw;
+}
+
+async function createUser() {
+  var username=document.getElementById("nUser").value.trim();
+  var password=document.getElementById("nPw").value.trim();
+  var fullname=document.getElementById("nFull").value.trim();
+  var expires_at=document.getElementById("nExp").value;
+  document.getElementById("cErr").classList.remove("show");
+  document.getElementById("cOk").classList.remove("show");
+  if (!username||!password){document.getElementById("cErr").textContent="Identifiant et mot de passe requis.";document.getElementById("cErr").classList.add("show");return;}
+  var btn=document.getElementById("createBtn");
+  btn.classList.add("loading");btn.disabled=true;
+  var res=await api("POST","/admin/users",{username,password,fullname,expires_at:expires_at||null},ADMIN_KEY);
+  btn.classList.remove("loading");btn.disabled=false;
+  if (res.success) {
+    var msg="✅ Accès créé !<br><strong>Identifiant :</strong> "+username+"<br><strong>Mot de passe :</strong> "+password;
+    if (expires_at) msg+="<br><strong>Expire le :</strong> "+new Date(expires_at).toLocaleDateString("fr-FR");
+    document.getElementById("cOk").innerHTML=msg;
+    document.getElementById("cOk").classList.add("show");
+    document.getElementById("nUser").value="";
+    document.getElementById("nPw").value="";
+    document.getElementById("nFull").value="";
+    document.getElementById("nExp").value="";
+    loadUsers();
+  } else {
+    document.getElementById("cErr").textContent=res.message;
+    document.getElementById("cErr").classList.add("show");
+  }
+}
+
+async function loadUsers() {
+  var listEl=document.getElementById("uList");
+  listEl.innerHTML='<div class="loading-state">Chargement...</div>';
+  var res=await api("GET","/admin/users",null,ADMIN_KEY);
+  if (!res.success){listEl.innerHTML='<div class="empty-state">Erreur : '+(res.message||"impossible de charger")+'</div>';return;}
+  var users=res.data.users||[];
+  document.getElementById("uCount").textContent=users.length;
+  if (!users.length){listEl.innerHTML='<div class="empty-state">Aucun utilisateur créé.<br>Créez votre premier accès ci-dessus.</div>';return;}
+
+  var now=new Date(); now.setHours(0,0,0,0);
+  listEl.innerHTML=users.map(function(u){
+    var initials=(u.fullname||u.username).split(" ").map(function(w){return w[0]||"";}).join("").toUpperCase().slice(0,2);
+    var isExpired=u.expires_at&&new Date(u.expires_at)<now;
+    var statusClass=isExpired?"expired":u.status;
+    var statusLabel=isExpired?"⛔ Expiré":(u.status==="active"?"● Actif":"⏸ Suspendu");
+
+    var expHtml="";
+    if (u.expires_at){
+      var ed=new Date(u.expires_at);
+      var diff=Math.ceil((ed-now)/86400000);
+      var cls=isExpired?"exp-expired":(diff<=7?"exp-warn":"exp-ok");
+      var lbl=isExpired?"Expiré le "+ed.toLocaleDateString("fr-FR"):(diff===0?"Expire aujourd'hui !":"Expire le "+ed.toLocaleDateString("fr-FR")+" (J-"+diff+")");
+      expHtml='<div class="uexp '+cls+'">'+lbl+'</div>';
+    }
+    var lastLogin=u.last_login?'<div class="ull">Dernière connexion : '+u.last_login+'</div>':'<div class="ull">Jamais connecté</div>';
+    var pBtn=(u.status==="active"&&!isExpired)
+      ?'<button class="ubtn pause" onclick="updUser(\''+u.id+'\',\'pause\')">Suspendre</button>'
+      :(!isExpired?'<button class="ubtn resume" onclick="updUser(\''+u.id+'\',\'resume\')">Réactiver</button>':'');
+
+    return '<div class="ucard">'
+      +'<div class="uavatar">'+initials+'</div>'
+      +'<div class="uinfo"><div class="uname">'+(u.fullname||u.username)+'</div>'
+      +'<div class="umeta">@'+u.username+' · Créé le '+u.created_at+'</div>'
+      +expHtml+lastLogin+'</div>'
+      +'<span class="ustatus '+statusClass+'">'+statusLabel+'</span>'
+      +'<div class="uacts">'
+      +pBtn
+      +'<button class="ubtn pw" onclick="resetPw(\''+u.id+'\',\''+u.username+'\')">Réinit. mdp</button>'
+      +'<button class="ubtn" onclick="setExp(\''+u.id+'\',\''+u.username+'\',\''+  (u.expires_at||'')+'\')">Expiration</button>'
+      +'<button class="ubtn del" onclick="delUser(\''+u.id+'\',\''+u.username+'\')">Supprimer</button>'
+      +'</div></div>';
+  }).join("");
+}
+
+async function updUser(id,op){
+  var res=await api("PATCH","/admin/users/"+id,{op},ADMIN_KEY);
+  if (res.success) loadUsers(); else alert("Erreur : "+res.message);
+}
+
+async function delUser(id,username){
+  if (!confirm("Supprimer définitivement l'accès de @"+username+" ?")) return;
+  var res=await api("DELETE","/admin/users/"+id,null,ADMIN_KEY);
+  if (res.success) loadUsers(); else alert("Erreur : "+res.message);
+}
+
+async function resetPw(id,username){
+  var newPw=prompt("Nouveau mot de passe pour @"+username+" :");
+  if (!newPw) return;
+  var res=await api("PATCH","/admin/users/"+id,{op:"reset_password",new_password:newPw},ADMIN_KEY);
+  if (res.success) { alert("Mot de passe réinitialisé. Nouveau mdp : "+newPw); loadUsers(); }
+  else alert("Erreur : "+res.message);
+}
+
+async function setExp(id,username,currentExp){
+  var val=prompt("Date d'expiration pour @"+username+"\n(AAAA-MM-JJ, laisser vide pour aucune expiration) :",currentExp||"");
+  if (val===null) return;
+  var res=await api("PATCH","/admin/users/"+id,{op:"set_expiry",expires_at:val||null},ADMIN_KEY);
+  if (res.success) loadUsers(); else alert("Erreur : "+res.message);
+}
+
+// Touche Entrée
+document.getElementById("upw").addEventListener("keydown",function(e){if(e.key==="Enter")loginUser();});
+document.getElementById("uname").addEventListener("keydown",function(e){if(e.key==="Enter")loginUser();});
+document.getElementById("akey").addEventListener("keydown",function(e){if(e.key==="Enter")loginAdmin();});
+
+// ── APP ────────────────────────────────────────────────────────────────────────
+var curTab="text", cvData=null, ofData=null;
+
+function switchTab(tab){
+  curTab=tab;
+  document.querySelectorAll(".tab").forEach(function(t,i){t.classList.toggle("active",["text","link","file"][i]===tab);});
+  document.querySelectorAll(".tab-c").forEach(function(c){c.classList.remove("active");});
+  document.getElementById("tab-"+tab).classList.add("active");
+  updPipeline();
+}
+function switchRTab(tab){
+  document.querySelectorAll(".rtab").forEach(function(t){t.classList.remove("active");});
+  document.querySelectorAll(".rpanel").forEach(function(p){p.classList.remove("active");});
+  document.querySelector(".rtab."+tab).classList.add("active");
+  document.getElementById("panel-"+tab).classList.add("active");
+}
+function tChip(el){el.classList.toggle("on");}
+function getTones(){
+  var a=Array.from(document.querySelectorAll(".chip.on")).map(function(c){return c.textContent;});
+  return a.length?a.join(", "):"professionnel";
+}
+function updPipeline(){
+  var cvOk=cvData||document.getElementById("cvText").value.trim().length>20;
+  var ofOk=(curTab==="text"&&document.getElementById("ofText").value.trim().length>20)
+    ||(curTab==="link"&&document.getElementById("ofUrl").value.trim().length>10)
+    ||(curTab==="file"&&!!ofData);
+  document.getElementById("st1").classList.toggle("active",cvOk);
+  document.getElementById("st2").classList.toggle("active",ofOk);
+}
+document.getElementById("cvText").addEventListener("input",updPipeline);
+document.getElementById("ofText").addEventListener("input",updPipeline);
+
+// PDF
+async function extractPDF(file){
+  if(!window.pdfjsLib)throw new Error("PDF.js non chargé.");
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  return new Promise(function(res,rej){
+    var r=new FileReader();
+    r.onload=async function(e){
+      try{
+        var pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(e.target.result)}).promise;
+        var txt="";
+        for(var i=1;i<=pdf.numPages;i++){
+          var p=await pdf.getPage(i);
+          var c=await p.getTextContent();
+          txt+=c.items.map(function(it){return it.str;}).join(" ")+"\n";
+        }
+        res({content:txt.trim(),name:file.name});
+      }catch(err){rej(new Error("PDF : "+err.message));}
+    };
+    r.onerror=function(){rej(new Error("Lecture impossible"));};
+    r.readAsArrayBuffer(file);
+  });
+}
+async function readTxt(file){
+  return new Promise(function(res,rej){
+    var r=new FileReader();
+    r.onload=function(e){res({content:e.target.result,name:file.name});};
+    r.onerror=function(){rej(new Error("Lecture impossible"));};
+    r.readAsText(file,"UTF-8");
+  });
+}
+async function readAny(file){return file.type==="application/pdf"?extractPDF(file):readTxt(file);}
+
+async function uploadCV(input){
+  var file=input.files[0]; if(!file)return;
+  document.getElementById("cvLoad").classList.add("show");
+  document.getElementById("cvBadge").classList.remove("show");
+  try{cvData=await readAny(file);document.getElementById("cvName").textContent=file.name;document.getElementById("cvBadge").classList.add("show");updPipeline();}
+  catch(e){showErr("Erreur CV : "+e.message);}
+  finally{document.getElementById("cvLoad").classList.remove("show");}
+}
+async function uploadOf(input){
+  var file=input.files[0]; if(!file)return;
+  document.getElementById("ofLoad").classList.add("show");
+  document.getElementById("ofBadge").classList.remove("show");
+  try{ofData=await readAny(file);document.getElementById("ofName").textContent=file.name;document.getElementById("ofBadge").classList.add("show");updPipeline();}
+  catch(e){showErr("Erreur offre : "+e.message);}
+  finally{document.getElementById("ofLoad").classList.remove("show");}
+}
+function clearCV(){cvData=null;document.getElementById("cvFile").value="";document.getElementById("cvBadge").classList.remove("show");updPipeline();}
+function clearOf(){ofData=null;document.getElementById("ofFile").value="";document.getElementById("ofBadge").classList.remove("show");updPipeline();}
+
+["cvZone","ofZone"].forEach(function(id){
+  var z=document.getElementById(id);
+  z.addEventListener("dragover",function(e){e.preventDefault();z.classList.add("dg");});
+  z.addEventListener("dragleave",function(){z.classList.remove("dg");});
+  z.addEventListener("drop",async function(e){
+    e.preventDefault();z.classList.remove("dg");
+    var file=e.dataTransfer.files[0]; if(!file)return;
+    if(id==="cvZone")await uploadCV({files:[file]});
+    else await uploadOf({files:[file]});
+  });
 });
 
-// ── HELPERS ─────────────────────────────────────────────────────────────────
-function ok(res, data = {}, message = "") {
-  return res.json({ success: true, message, data });
+function getCVText(){
+  var m=document.getElementById("cvText").value.trim();
+  if(cvData&&cvData.content)return cvData.content+(m?"\n\n--- Infos complémentaires ---\n"+m:"");
+  return m;
 }
-function fail(res, message, status = 400) {
-  return res.status(status).json({ success: false, message, data: {} });
-}
-
-function getConfig(key) {
-  const row = db.prepare("SELECT value FROM config WHERE key = ?").get(key);
-  return row ? row.value : null;
-}
-function setConfig(key, value) {
-  db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)").run(key, value);
+function getOfText(){
+  if(curTab==="text")return document.getElementById("ofText").value.trim();
+  if(curTab==="link")return "URL offre : "+document.getElementById("ofUrl").value.trim();
+  if(curTab==="file"&&ofData)return ofData.content;
+  return "";
 }
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-function generateToken() {
-  return crypto.randomBytes(40).toString("hex");
-}
-
-// Crée une session persistante en base et retourne le token
-function createSession(userId, role) {
-  const token = generateToken();
-  db.prepare(
-    "INSERT INTO sessions (token, user_id, role) VALUES (?, ?, ?)"
-  ).run(token, userId, role);
-  return token;
-}
-
-// Vérifie un token de session et met à jour last_seen
-function verifySession(token) {
-  if (!token) return null;
-  const session = db.prepare("SELECT * FROM sessions WHERE token = ?").get(token);
-  if (!session) return null;
-  db.prepare("UPDATE sessions SET last_seen = datetime('now','localtime') WHERE token = ?").run(token);
-  return session;
-}
-
-// Supprime les vieilles sessions (> 90 jours sans activité) — nettoyage léger
-function cleanOldSessions() {
-  db.prepare(
-    "DELETE FROM sessions WHERE last_seen < datetime('now', '-90 days')"
-  ).run();
-}
-
-function checkAdminKey(req, res) {
-  const key = req.headers["x-admin-key"] || req.body?.admin_key;
-  const stored = getConfig("admin_key");
-  if (!stored) {
-    res.status(401).json({ success: false, message: "Aucune clé admin configurée." });
-    return false;
+// STREAM
+async function streamCall(sysPrompt,userMsg,model,onChunk){
+  var res=await fetch("https://api.mistral.ai/v1/chat/completions",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
+    body:JSON.stringify({model:model,messages:[{role:"system",content:sysPrompt},{role:"user",content:userMsg}],max_tokens:3000,temperature:0.7,stream:true})
+  });
+  if(!res.ok){
+    var t=await res.text(); var msg="Erreur Mistral "+res.status;
+    try{var j=JSON.parse(t);msg=j.message||j.detail||msg;if(typeof msg==="object")msg=JSON.stringify(msg);}catch(e){}
+    throw new Error(msg);
   }
-  if (key !== stored) {
-    res.status(401).json({ success: false, message: "Non autorisé." });
-    return false;
-  }
-  return true;
-}
-
-// ── ROUTES ───────────────────────────────────────────────────────────────────
-
-// ── Santé
-app.get("/api/health", (req, res) => {
-  const configured = !!getConfig("admin_key");
-  return ok(res, { configured, version: "2.0.0" });
-});
-
-// ── Session : vérifier et restaurer automatiquement
-app.post("/api/session/verify", (req, res) => {
-  const { token } = req.body;
-  if (!token) return fail(res, "Token manquant.", 400);
-
-  const session = verifySession(token);
-  if (!session) return fail(res, "Session expirée ou invalide.", 401);
-
-  const adminKey = getConfig("admin_key");
-  if (!adminKey) return fail(res, "Serveur non configuré.", 503);
-
-  // Session admin
-  if (session.role === "admin") {
-    return ok(res, {
-      role: "admin",
-      fullname: "Administrateur MYF",
-      api_key: adminKey,
+  var reader=res.body.getReader(),decoder=new TextDecoder(),full="";
+  while(true){
+    var result=await reader.read(); if(result.done)break;
+    decoder.decode(result.value,{stream:true}).split("\n").forEach(function(line){
+      if(!line.startsWith("data: "))return;
+      var raw=line.slice(6).trim(); if(raw==="[DONE]")return;
+      try{
+        var json=JSON.parse(raw);
+        var delta=json.choices&&json.choices[0]&&json.choices[0].delta&&json.choices[0].delta.content;
+        if(typeof delta==="string"){full+=delta;onChunk(full);}
+      }catch(e){}
     });
   }
+  return full;
+}
 
-  // Session utilisateur — vérifier qu'il est toujours actif
-  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(session.user_id);
-  if (!user) {
-    db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
-    return fail(res, "Compte introuvable.", 404);
-  }
-  if (user.status === "paused") {
-    return fail(res, "Votre accès est suspendu.", 403);
-  }
-  if (user.expires_at) {
-    const expDate = new Date(user.expires_at);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    if (expDate < now) return fail(res, "Accès expiré.", 403);
-  }
+// GENERATE
+async function generateAll(){
+  var cvText=getCVText(); var ofText=getOfText();
+  if(!cvText){showErr("Veuillez fournir votre CV.");return;}
+  if(!ofText){showErr("Veuillez fournir l'offre d'emploi.");return;}
 
-  return ok(res, {
-    role: "user",
-    username: user.username,
-    fullname: user.fullname || user.username,
-    api_key: adminKey,
+  var lang=document.getElementById("lang").value;
+  var llen=document.getElementById("llen").value;
+  var ptype=document.getElementById("ptype").value;
+  var tones=getTones();
+  var extra=document.getElementById("extra").value.trim();
+  var model=document.getElementById("model").value;
+
+  var btn=document.getElementById("genBtn");
+  btn.classList.add("loading");btn.disabled=true;
+  btn.querySelector(".btn-text").textContent="Génération en cours...";
+  document.getElementById("errMsg").classList.remove("show");
+  document.getElementById("resSection").classList.remove("show");
+  document.getElementById("prgSteps").classList.add("show");
+  document.getElementById("lmOut").innerHTML="";
+  document.getElementById("cvOut").innerHTML="";
+  document.getElementById("scoreZone").innerHTML="";
+  ["pi1","pi2","pi3"].forEach(function(id){document.getElementById(id).className="pi";});
+
+  try{
+    // LETTRE
+    document.getElementById("pi1").className="pi act";
+    document.getElementById("pi1").innerHTML='<div class="pispin"></div>Génération de la lettre de motivation...';
+    document.getElementById("pi2").className="pi act";
+    document.getElementById("pi2").innerHTML='<div class="pispin"></div>Rédaction en cours...';
+
+    var sysLM="Tu es un expert en rédaction de lettres de motivation professionnelles en "+lang+".\n"
+      +"RÈGLES :\n- Longueur : "+llen+"\n- Ton : "+tones+"\n"
+      +(ptype?"- Type de contrat : "+ptype+"\n":"")
+      +"- Structure : coordonnées candidat + ville + date | coordonnées entreprise si dispo | objet précis | accroche originale | motivation pour CE poste | compétences en lien DIRECT avec l'offre avec exemples concrets | conclusion + formule de politesse complète\n"
+      +"- Utiliser les mots-clés EXACTS de l'offre\n- Ne jamais inventer d'infos absentes du CV\n"
+      +(extra?"- Instructions : "+extra+"\n":"")
+      +"Retourne UNIQUEMENT la lettre, sans commentaire.";
+
+    var userLM="=== MON CV ===\n"+cvText+"\n=== FIN CV ===\n\n=== OFFRE D'EMPLOI ===\n"+ofText+"\n=== FIN OFFRE ===\n\nGénère ma lettre de motivation.";
+
+    document.getElementById("resSection").classList.add("show");
+    document.getElementById("lmOut").innerHTML='<span class="tcursor"></span>';
+    var lmResult=await streamCall(sysLM,userLM,model,function(t){document.getElementById("lmOut").textContent=t;});
+    document.getElementById("lmOut").textContent=lmResult;
+    document.getElementById("st3").classList.add("active","done");
+    document.getElementById("pi1").className="pi done";
+    document.getElementById("pi1").innerHTML='<span class="piicon">✓</span> Lettre générée';
+    document.getElementById("pi2").className="pi done";
+    document.getElementById("pi2").innerHTML='<span class="piicon">✓</span> Lettre terminée';
+
+    // CV OPTIMISE
+    document.getElementById("pi3").className="pi act";
+    document.getElementById("pi3").innerHTML='<div class="pispin"></div>Optimisation du CV pour +90% de correspondance...';
+
+    var sysCV="Tu es un expert en optimisation de CV en "+lang+".\n"
+      +"Réécris le CV pour correspondre à PLUS DE 90% avec l'offre.\n\n"
+      +"MÉTHODE :\n1. Intégrer les mots-clés exacts de l'offre\n2. Reformuler les expériences avec le vocabulaire de l'offre\n3. Adapter les intitulés de poste\n4. Mettre les compétences demandées en premier\n5. Ne JAMAIS inventer d'expériences ou diplômes\n6. Conserver toutes les infos de contact, formations et dates\n\n"
+      +"Commence par : [TAUX DE CORRESPONDANCE ESTIMÉ : XX%]\nPuis le CV complet reformulé.\nRetourne UNIQUEMENT le CV optimisé.";
+
+    var userCV="=== CV ORIGINAL ===\n"+cvText+"\n=== FIN CV ===\n\n=== OFFRE CIBLÉE ===\n"+ofText+"\n=== FIN OFFRE ===\n\nOptimise mon CV pour +90% de correspondance.";
+
+    document.getElementById("cvOut").innerHTML='<span class="tcursor blue"></span>';
+    var cvResult=await streamCall(sysCV,userCV,model,function(t){document.getElementById("cvOut").textContent=t;});
+    document.getElementById("cvOut").textContent=cvResult;
+    document.getElementById("st4").classList.add("active","done");
+    document.getElementById("pi3").className="pi done";
+    document.getElementById("pi3").innerHTML='<span class="piicon">✓</span> CV optimisé généré';
+
+    var sm=cvResult.match(/TAUX DE CORRESPONDANCE[^:]*:\s*(\d+)/i);
+    if(sm) document.getElementById("scoreZone").innerHTML='<span class="score-badge">📊 Correspondance : '+sm[1]+'%</span>';
+
+  }catch(err){
+    document.getElementById("prgSteps").classList.remove("show");
+    document.getElementById("resSection").classList.remove("show");
+    showErr("Erreur : "+(err.message||"Inconnue")+"\n\nConseils :\n- Vérifiez votre quota sur console.mistral.ai\n- Essayez mistral-small");
+  }finally{
+    btn.classList.remove("loading");btn.disabled=false;
+    btn.querySelector(".btn-text").textContent="✨ Générer la lettre de motivation + CV optimisé";
+  }
+}
+
+function showErr(msg){var d=document.getElementById("errMsg");d.textContent=msg;d.classList.add("show");d.scrollIntoView({behavior:"smooth",block:"center"});}
+
+function cpText(id,btnId){
+  navigator.clipboard.writeText(document.getElementById(id).textContent).then(function(){
+    var btn=document.getElementById(btnId);var orig=btn.textContent;
+    btn.textContent="✓ Copié !";btn.classList.add("copied");
+    setTimeout(function(){btn.textContent=orig;btn.classList.remove("copied");},2000);
   });
-});
+}
+function dlTxt(id,fn){
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([document.getElementById(id).textContent],{type:"text/plain;charset=utf-8"}));
+  a.download=fn;a.click();
+}
+function dlDoc(id,fn){
+  var text=document.getElementById(id).textContent;
+  var rows=text.split("\n").map(function(l){
+    return l.trim()
+      ?"<p style='margin:0 0 9pt;font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5'>"+l.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</p>"
+      :"<p style='margin:0 0 4pt'>&nbsp;</p>";
+  }).join("");
+  var doc="<html xmlns:o='urn:schemas-microsoft-com:office:office'><head><meta charset='utf-8'><style>@page{margin:2.5cm}body{margin:0}</style></head><body>"+rows+"</body></html>";
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([doc],{type:"application/msword"}));
+  a.download=fn;a.click();
+}
 
-// ── Session : déconnexion explicite
-app.post("/api/session/logout", (req, res) => {
-  const { token } = req.body;
-  if (token) db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
-  return ok(res, {}, "Déconnecté.");
-});
+// ── NAVIGATION ─────────────────────────────────────────────────────────────────
+function switchNav(tab) {
+  ["cv","chat"].forEach(function(t) {
+    document.getElementById("nav-"+t).classList.toggle("active", t===tab);
+    document.getElementById("view-"+t).classList.toggle("active", t===tab);
+  });
+}
 
-// ── Admin : connexion
-app.post("/api/admin/login", async (req, res) => {
-  const { key } = req.body;
-  if (!key) return fail(res, "Clé API manquante.");
+// ── CHAT STATE ─────────────────────────────────────────────────────────────────
+var chatHistory = [];
+var chatPdfText = "";
+var chatPdfName = "";
+var webSearchEnabled = false;
 
-  const stored = getConfig("admin_key");
+// ── TOGGLE WEB SEARCH ──────────────────────────────────────────────────────────
+function toggleWeb() {
+  webSearchEnabled = !webSearchEnabled;
+  var btn = document.getElementById("webToggle");
+  btn.classList.toggle("on", webSearchEnabled);
+  btn.title = webSearchEnabled ? "Recherche web activée (cliquer pour désactiver)" : "Activer la recherche web";
+  btn.textContent = webSearchEnabled ? "🌐 Web ✓" : "🌐 Web";
+}
 
-  if (!stored) {
-    // Première connexion : vérifier la clé auprès de Mistral et la stocker
-    try {
-      const response = await fetch("https://api.mistral.ai/v1/models", {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const msg = errData.message || errData.detail || `Clé invalide (HTTP ${response.status})`;
-        return fail(res, typeof msg === "string" ? msg : JSON.stringify(msg));
-      }
-    } catch (e) {
-      return fail(res, "Impossible de joindre api.mistral.ai : " + e.message);
+// ── PDF CHAT ───────────────────────────────────────────────────────────────────
+async function loadChatPdf(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  if (file.size > 10 * 1024 * 1024) { alert("PDF trop volumineux (max 10 Mo)."); return; }
+  var loadEl = document.getElementById("chatPdfLoad");
+  var badge  = document.getElementById("chatPdfBadge");
+  loadEl.style.display = "flex";
+  badge.classList.remove("show");
+  try {
+    var ab = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    var texts = [];
+    for (var i = 1; i <= Math.min(pdf.numPages, 40); i++) {
+      var page = await pdf.getPage(i);
+      var content = await page.getTextContent();
+      texts.push(content.items.map(function(s){ return s.str; }).join(" "));
     }
-    setConfig("admin_key", key);
-  } else if (key !== stored) {
-    return fail(res, "Clé API incorrecte.", 401);
+    chatPdfText = texts.join("\n").replace(/\s{3,}/g, " ").trim();
+    chatPdfName = file.name;
+    document.getElementById("chatPdfName").textContent = file.name + " (" + pdf.numPages + " p.)";
+    badge.classList.add("show");
+    if (chatPdfText.length < 50) {
+      chatPdfText = "";
+      alert("Le PDF ne contient pas de texte extractible (PDF scanné). Veuillez coller le texte manuellement.");
+    }
+  } catch(e) {
+    alert("Erreur lors de la lecture du PDF : " + e.message);
+  } finally {
+    loadEl.style.display = "none";
+    input.value = "";
+  }
+}
+
+function clearChatPdf() {
+  chatPdfText = ""; chatPdfName = "";
+  document.getElementById("chatPdfBadge").classList.remove("show");
+  document.getElementById("chatPdfName").textContent = "-";
+}
+
+// ── WEB SEARCH ─────────────────────────────────────────────────────────────────
+// Utilise l'API DuckDuckGo Instant Answer (CORS libre) pour obtenir un résumé
+async function doWebSearch(query) {
+  try {
+    var url = "https://api.duckduckgo.com/?q=" + encodeURIComponent(query) + "&format=json&no_html=1&skip_disambig=1";
+    var res = await fetch(url);
+    var data = await res.json();
+    var snippets = [];
+    if (data.AbstractText) snippets.push(data.AbstractText);
+    if (data.Answer) snippets.push(data.Answer);
+    if (data.RelatedTopics) {
+      data.RelatedTopics.slice(0, 5).forEach(function(t) {
+        if (t.Text) snippets.push(t.Text);
+      });
+    }
+    if (snippets.length === 0) return null;
+    return "Résultats web pour « " + query + " » :\n" + snippets.join("\n");
+  } catch(e) {
+    return null;
+  }
+}
+
+// Détecte si la question nécessite probablement une recherche web
+function needsWeb(msg) {
+  var triggers = ["actualité","aujourd'hui","maintenant","récent","dernier","dernière","2024","2025","2026",
+    "prix","tarif","coût","cours","bourse","météo","résultat","classement","qui est","c'est quoi",
+    "nouvelle","annonce","sortie","disponible","combien coûte","news"];
+  var low = msg.toLowerCase();
+  return triggers.some(function(t){ return low.indexOf(t) !== -1; });
+}
+
+// ── MARKDOWN CLEANER ───────────────────────────────────────────────────────────
+function cleanMarkdown(text) {
+  // Supprimer ### ## # en début de ligne → texte brut
+  text = text.replace(/^#{1,6}\s*/gm, "");
+  // Supprimer *** ou ** autour des mots (gras markdown) → garder le texte
+  text = text.replace(/\*{3}(.+?)\*{3}/gs, "$1");
+  text = text.replace(/\*{2}(.+?)\*{2}/gs, "$1");
+  // Supprimer * simple (italique) mais conserver les tirets de liste
+  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, "$1");
+  // Supprimer _italique_
+  text = text.replace(/(?<![_])_([^_]+)_(?![_])/g, "$1");
+  // Supprimer __gras__
+  text = text.replace(/__(.+?)__/gs, "$1");
+  // Nettoyer ~~barré~~
+  text = text.replace(/~~(.+?)~~/g, "$1");
+  // Conserver les blocs de code (``` ```) tels quels
+  // Nettoyer lignes vides multiples
+  text = text.replace(/\n{3,}/g, "\n\n");
+  // Supprimer > blockquote
+  text = text.replace(/^>\s*/gm, "");
+  // Supprimer separateurs ---
+  text = text.replace(/^---+\s*$/gm, "");
+  // Supprimer [ ] cases à cocher
+  text = text.replace(/^\s*[-*]\s*\[[ x]\]\s*/gm, "- ");
+  return text.trim();
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 140) + "px";
+}
+
+function chatKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function chatSuggest(btn) {
+  var raw = btn.textContent.trim();
+  // Retirer l'emoji de début
+  raw = raw.replace(/^[\u{1F000}-\u{1FFFF}\u2600-\u27BF\uFE00-\uFE0F ]+/u, "").trim();
+  document.getElementById("chatInput").value = raw;
+  autoGrow(document.getElementById("chatInput"));
+  sendChat();
+}
+
+function clearChat() {
+  chatHistory = [];
+  clearChatPdf();
+  var msgs = document.getElementById("chatMsgs");
+  msgs.innerHTML = "";
+  var welcome = document.createElement("div");
+  welcome.className = "chat-welcome";
+  welcome.id = "chatWelcome";
+  welcome.innerHTML = '<div class="chat-welcome-icon">🤖</div>'
+    +'<h3>Assistant IA MYF</h3>'
+    +'<p>Posez-moi n\'importe quelle question : énergie solaire, rédaction, code, carrière, science, langues… Je suis là pour vous aider !</p>'
+    +'<div class="chat-suggestions">'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">🌞 Expliquer le rendement d\'une cellule PV</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">📝 Comment rédiger un email professionnel ?</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button>'
+    +'</div>';
+  msgs.appendChild(welcome);
+  var typing = document.createElement("div");
+  typing.className = "chat-typing";
+  typing.id = "chatTyping";
+  typing.innerHTML = '<div class="web-indicator" id="webIndicator"><div class="wspin"></div>Recherche sur le web…</div>'
+    +'<div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d\'écrire…</div>'
+    +'<div class="typing-dots"><span></span><span></span><span></span></div>';
+  msgs.appendChild(typing);
+}
+
+// ── ADD BUBBLE ─────────────────────────────────────────────────────────────────
+function addBubble(role, text, streaming, sourceNote) {
+  var welcome = document.getElementById("chatWelcome");
+  if (welcome) welcome.remove();
+
+  var msgs = document.getElementById("chatMsgs");
+  var typing = document.getElementById("chatTyping");
+
+  var bubble = document.createElement("div");
+  bubble.className = "chat-bubble " + role;
+
+  var now = new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+  var inner = document.createElement("div");
+  inner.className = "bubble-inner";
+  inner.textContent = text || "";
+
+  var time = document.createElement("div");
+  time.className = "bubble-time";
+  time.textContent = now;
+
+  if (role === "ai") {
+    var icon = document.createElement("div");
+    icon.style.cssText = "font-size:18px;margin-bottom:3px";
+    icon.textContent = "🤖";
+    bubble.appendChild(icon);
+  }
+  bubble.appendChild(inner);
+  if (sourceNote) {
+    var src = document.createElement("div");
+    src.className = "bubble-source";
+    src.textContent = sourceNote;
+    bubble.appendChild(src);
+  }
+  bubble.appendChild(time);
+
+  msgs.insertBefore(bubble, typing);
+  msgs.scrollTop = msgs.scrollHeight;
+  return inner;
+}
+
+// ── SEND CHAT ──────────────────────────────────────────────────────────────────
+async function sendChat() {
+  var input = document.getElementById("chatInput");
+  var msg = input.value.trim();
+  if (!msg) return;
+  if (!API_KEY) { alert("Vous devez être connecté pour utiliser le chat."); return; }
+
+  var model = document.getElementById("chatModel").value;
+  input.value = "";
+  input.style.height = "auto";
+  document.getElementById("chatSendBtn").disabled = true;
+
+  // Afficher la bulle utilisateur (avec nom du PDF si attaché)
+  var displayMsg = msg;
+  if (chatPdfName) displayMsg += "\n📎 " + chatPdfName;
+  addBubble("user", displayMsg);
+
+  var typing = document.getElementById("chatTyping");
+  typing.classList.add("show");
+  document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight;
+
+  // ── Recherche web si activée ou auto-détectée ──────────────────────────────
+  var webContext = "";
+  var webNote = "";
+  var doSearch = webSearchEnabled || needsWeb(msg);
+  if (doSearch) {
+    document.getElementById("webIndicator").classList.add("show");
+    var snippet = await doWebSearch(msg);
+    document.getElementById("webIndicator").classList.remove("show");
+    if (snippet) {
+      webContext = "\n\n[CONTEXTE WEB RÉCUPÉRÉ — utilise ces informations pour enrichir ta réponse si pertinent]\n" + snippet + "\n[FIN DU CONTEXTE WEB]";
+      webNote = "🌐 Enrichi par recherche web";
+    }
   }
 
-  const token = createSession("admin", "admin");
-  return ok(res, { role: "admin", token });
-});
-
-// ── Admin : liste des utilisateurs
-app.get("/api/admin/users", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-  const users = db
-    .prepare("SELECT id, username, fullname, status, expires_at, created_at, last_login FROM users ORDER BY created_at DESC")
-    .all();
-  return ok(res, { users });
-});
-
-// ── Admin : créer un utilisateur
-app.post("/api/admin/users", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { username, password, fullname, expires_at } = req.body;
-  if (!username || !password) return fail(res, "Nom d'utilisateur et mot de passe requis.");
-
-  const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
-  if (existing) return fail(res, "Ce nom d'utilisateur existe déjà.");
-
-  const hashed = bcrypt.hashSync(password, 10);
-  const id = generateId();
-
-  db.prepare(
-    "INSERT INTO users (id, username, password, fullname, status, expires_at) VALUES (?, ?, ?, ?, 'active', ?)"
-  ).run(id, username.trim(), hashed, fullname || username.trim(), expires_at || null);
-
-  return ok(res, { id }, "Utilisateur créé avec succès.");
-});
-
-// ── Admin : modifier un utilisateur
-app.patch("/api/admin/users/:id", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { id } = req.params;
-  const { op, expires_at, new_password } = req.body;
-
-  const user = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
-  if (!user) return fail(res, "Utilisateur introuvable.", 404);
-
-  if (op === "pause") {
-    db.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(id);
-    // Invalider les sessions actives de cet utilisateur
-    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
-  } else if (op === "resume") {
-    db.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(id);
-  } else if (op === "set_expiry") {
-    db.prepare("UPDATE users SET expires_at = ? WHERE id = ?").run(expires_at || null, id);
-  } else if (op === "reset_password") {
-    if (!new_password) return fail(res, "Nouveau mot de passe requis.");
-    const hashed = bcrypt.hashSync(new_password, 10);
-    db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashed, id);
-  } else {
-    return fail(res, "Opération inconnue.");
+  // ── Contexte PDF si présent ────────────────────────────────────────────────
+  var pdfContext = "";
+  var pdfNote = "";
+  if (chatPdfText) {
+    var extract = chatPdfText.slice(0, 8000);
+    pdfContext = "\n\n[CONTENU DU FICHIER PDF « " + chatPdfName + " » — utilise ces données pour répondre]\n" + extract + "\n[FIN DU PDF]";
+    pdfNote = "📎 Basé sur " + chatPdfName;
   }
 
-  return ok(res, {}, "Mise à jour effectuée.");
-});
+  // ── Système ────────────────────────────────────────────────────────────────
+  var sysChat = "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. "
+    + "Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. "
+    + "Tu es expert en énergie solaire, physique, ingénierie, rédaction professionnelle, programmation, carrière et tous les domaines généraux. "
+    + "IMPORTANT : rédige tes réponses en texte naturel et clair. "
+    + "N'utilise JAMAIS de syntaxe Markdown : pas de #, ##, ###, **, *, __, ___, ---, ni aucun caractère de formatage. "
+    + "Structure tes réponses avec des phrases et des paragraphes normaux. "
+    + "Pour les listes, utilise le tiret simple « - » ou des numéros « 1. 2. 3. ». "
+    + "Pour le code informatique uniquement, tu peux utiliser des blocs de code délimités par ``` ... ```. "
+    + "Tes réponses sont claires, bien organisées et adaptées au niveau de la question."
+    + webContext + pdfContext;
 
-// ── Admin : supprimer un utilisateur
-app.delete("/api/admin/users/:id", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-  const { id } = req.params;
-  db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
-  db.prepare("DELETE FROM users WHERE id = ?").run(id);
-  return ok(res, {}, "Utilisateur supprimé.");
-});
+  // Ajouter le message à l'historique (avec note pdf si présent)
+  var histMsg = msg;
+  if (chatPdfText) histMsg = msg + "\n\n(voir le PDF joint dans le contexte système)";
+  chatHistory.push({ role: "user", content: histMsg });
 
-// ── Utilisateur : connexion
-app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return fail(res, "Identifiants manquants.");
+  var aiInner = null;
+  var sourceNote = [webNote, pdfNote].filter(Boolean).join(" · ") || "";
 
-  const adminKey = getConfig("admin_key");
-  if (!adminKey) return fail(res, "L'administrateur n'a pas encore configuré son accès.", 503);
+  try {
+    var res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: "system", content: sysChat }].concat(chatHistory),
+        max_tokens: 2000, temperature: 0.7, stream: true
+      })
+    });
 
-  const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username.trim());
-  if (!user || !bcrypt.compareSync(password, user.password))
-    return fail(res, "Nom d'utilisateur ou mot de passe incorrect.", 401);
+    if (!res.ok) {
+      var t = await res.text(); var errMsg = "Erreur Mistral " + res.status;
+      try { var j = JSON.parse(t); errMsg = j.message || j.detail || errMsg; } catch(e2) {}
+      throw new Error(errMsg);
+    }
 
-  if (user.status === "paused")
-    return fail(res, "Votre accès est temporairement suspendu. Contactez l'administrateur.", 403);
+    typing.classList.remove("show");
+    aiInner = addBubble("ai", "", true, sourceNote);
 
-  if (user.expires_at) {
-    const expDate = new Date(user.expires_at);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    if (expDate < now)
-      return fail(res, `Votre accès a expiré le ${expDate.toLocaleDateString("fr-FR")}.`, 403);
+    var reader = res.body.getReader(), decoder = new TextDecoder(), full = "";
+    while (true) {
+      var result = await reader.read(); if (result.done) break;
+      decoder.decode(result.value, { stream: true }).split("\n").forEach(function(line) {
+        if (!line.startsWith("data: ")) return;
+        var raw = line.slice(6).trim(); if (raw === "[DONE]") return;
+        try {
+          var json = JSON.parse(raw);
+          var delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
+          if (typeof delta === "string") {
+            full += delta;
+            aiInner.textContent = full;
+            document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight;
+          }
+        } catch(e3) {}
+      });
+    }
+    // Nettoyage final du Markdown résiduel
+    full = cleanMarkdown(full);
+    aiInner.textContent = full;
+    chatHistory.push({ role: "assistant", content: full });
+
+    // Effacer le PDF après usage (une seule fois)
+    if (chatPdfText) clearChatPdf();
+
+  } catch(err) {
+    typing.classList.remove("show");
+    if (aiInner) { aiInner.textContent = "Erreur : " + err.message; }
+    else { addBubble("ai", "Erreur : " + err.message); }
+  } finally {
+    document.getElementById("chatSendBtn").disabled = false;
+    input.focus();
   }
+}
 
-  db.prepare("UPDATE users SET last_login = datetime('now','localtime') WHERE id = ?").run(user.id);
-
-  const token = createSession(user.id, "user");
-
-  return ok(res, {
-    username: user.username,
-    fullname: user.fullname || user.username,
-    role: "user",
-    api_key: adminKey,
-    token,
-  });
+window.addEventListener("load",function(){
+  if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 });
+</script>
+</body>
+</html>"""
 
-// ── Fallback SPA
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// ── DÉMARRAGE ────────────────────────────────────────────────────────────────
-cleanOldSessions();
-
-app.listen(PORT, () => {
-  console.log(`✅ Agent IA de MYF — Serveur démarré sur le port ${PORT}`);
-  console.log(`📂 Base de données : ${DB_PATH}`);
-});
+with open("/home/claude/myf-agent/public/index.html", "w", encoding="utf-8") as f:
+    f.write(html)
+print("HTML done:", len(html))
+PYEOF
