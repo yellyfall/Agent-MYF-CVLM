@@ -1221,46 +1221,86 @@ function detectCVStructure(cvText) {
 
 // ── RENDU VISUEL LETTRE ────────────────────────────────────────────────────────
 function renderLetter(j) {
-  function e(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
-  function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
+  function e(id, html) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
 
-  // Expéditeur (en haut à droite)
-  var senderHtml = "<strong>"+esc(j.sender_name)+"</strong>";
-  if (j.sender_address) senderHtml += "<br>"+esc(j.sender_address);
-  if (j.sender_phone)   senderHtml += "<br>"+esc(j.sender_phone);
-  if (j.sender_email)   senderHtml += "<br>"+esc(j.sender_email);
+  function esc(s) {
+    return (s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br>");
+  }
+
+  // ── EXPÉDITEUR (HAUT GAUCHE)
+  var senderHtml = "<strong>" + esc(j.sender_name) + "</strong>";
+
+  if (j.sender_address)
+    senderHtml += "<br>" + esc(j.sender_address);
+
+  if (j.sender_phone)
+    senderHtml += "<br>" + esc(j.sender_phone);
+
+  if (j.sender_email)
+    senderHtml += "<br>" + esc(j.sender_email);
+
   e("lmSender", senderHtml);
 
-  // Destinataire (en haut à gauche)
+  // ── DESTINATAIRE (HAUT DROITE)
   var recipHtml = "";
-  if (j.recipient_company) recipHtml += "<strong>"+esc(j.recipient_company)+"</strong><br>";
-  if (j.recipient_name)    recipHtml += esc(j.recipient_name)+(j.recipient_title?", "+esc(j.recipient_title):"")+"<br>";
-  if (j.recipient_address) recipHtml += esc(j.recipient_address).replace(/,\s*/g,"<br>");
+
+  if (j.recipient_company)
+    recipHtml += "<strong>" + esc(j.recipient_company) + "</strong><br>";
+
+  if (j.recipient_name)
+    recipHtml += esc(j.recipient_name) +
+      (j.recipient_title ? ", " + esc(j.recipient_title) : "") +
+      "<br>";
+
+  if (j.recipient_address)
+    recipHtml += esc(j.recipient_address).replace(/,\s*/g, "<br>");
+
   e("lmRecipient", recipHtml);
 
-  // Date (en dessous à droite → aligné droite via CSS letter-date)
-  e("lmDate", esc((j.city||"")?j.city+", "+j.date:j.date));
+  // ── DATE (SOUS LE DESTINATAIRE À DROITE)
+  var dateText = "";
 
-  // Objet
-  e("lmSubject", "Objet : <span>"+esc(j.subject)+"</span>");
+  if (j.city && j.date)
+    dateText = esc(j.city + ", le " + j.date);
+  else
+    dateText = esc(j.date || "");
 
-  // Corps
-  var bodyHtml = esc(j.salutation)+"<br><br>";
-  bodyHtml += (j.body||"").split(/\n\n+/).map(function(p){ return "<p>"+esc(p)+"</p>"; }).join("");
+  e("lmDate", dateText);
+
+  // ── OBJET
+  e("lmSubject", "Objet : <span>" + esc(j.subject) + "</span>");
+
+  // ── CORPS
+  var bodyHtml = esc(j.salutation) + "<br><br>";
+
+  bodyHtml += (j.body || "")
+    .split(/\n\n+/)
+    .map(function (p) {
+      return "<p>" + esc(p) + "</p>";
+    })
+    .join("");
+
   e("lmBody", bodyHtml);
 
-  // Formule de politesse
+  // ── FORMULE DE POLITESSE
   e("lmClosing", esc(j.closing));
 
-  // Signature
+  // ── SIGNATURE
   e("lmSignature", esc(j.signature));
 
   document.getElementById("letterRender").classList.add("show");
   document.getElementById("lmOut").style.display = "none";
-  // Activer le vue visuelle
+
+  // Vue visuelle
   switchLetterView("visual");
 }
-
 // Reconstruire le texte brut depuis le JSON
 function buildLetterText(j) {
   var parts = [];
