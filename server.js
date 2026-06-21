@@ -267,16 +267,6 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-function cleanAIText(text) {
-  return text
-    .replace(/[*#`_~]/g, "")
-    .replace(/[€&+]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-};
-
-messageBox.innerText = cleanAIText(response);
-
 // ── DÉMARRAGE ────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Agent IA de MYF — Serveur démarré sur le port ${PORT}`);
