@@ -920,10 +920,7 @@ async function streamCall(sysPrompt,userMsg,model,onChunk){
       try{
         var json=JSON.parse(raw);
         var delta=json.choices&&json.choices[0]&&json.choices[0].delta&&json.choices[0].delta.content;
-        if(typeof delta==="string"){
-  full += delta;
-  onChunk(cleanAIText(full));
-}
+        if(typeof delta==="string"){full+=delta;onChunk(full);}
       }catch(e){}
     });
   }
@@ -1196,20 +1193,18 @@ async function sendChat() {
     input.focus();
   }
 }
-
-window.addEventListener("load",function(){
-  if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-});
-
-function cleanAIText(text) {
+  function cleanAIText(text) {
   return text
     .replace(/[*#`_~]/g, "")
     .replace(/[€&+]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
-return cleanAIText(full);
-  
+  return cleanAIText(full);
+
+window.addEventListener("load",function(){
+  if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+});
 </script>
 </body>
 </html>
