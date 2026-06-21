@@ -171,6 +171,56 @@ select:focus{border-color:var(--accent)}
 .errmsg{display:none;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.22);border-radius:var(--radius-sm);padding:13px 16px;color:var(--error);font-size:13px;grid-column:1/-1;line-height:1.6;white-space:pre-wrap}
 .errmsg.show{display:block}
 
+/* ─ CHAT ─ */
+.chat-wrap{max-width:900px;margin:0 auto;padding:22px 22px 80px;display:flex;flex-direction:column;gap:14px;height:calc(100vh - 70px)}
+.chat-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px;scroll-behavior:smooth}
+.chat-msgs::-webkit-scrollbar{width:5px}
+.chat-msgs::-webkit-scrollbar-track{background:transparent}
+.chat-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+.chat-bubble{max-width:80%;display:flex;flex-direction:column;gap:4px}
+.chat-bubble.user{align-self:flex-end;align-items:flex-end}
+.chat-bubble.ai{align-self:flex-start;align-items:flex-start}
+.bubble-inner{padding:12px 16px;border-radius:16px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;word-wrap:break-word}
+.chat-bubble.user .bubble-inner{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.chat-bubble.ai .bubble-inner{background:var(--surface);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
+.bubble-time{font-size:10px;color:var(--muted);padding:0 4px}
+.chat-bubble.ai .bubble-icon{width:28px;height:28px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;margin-bottom:3px;flex-shrink:0}
+.chat-typing{display:none;align-self:flex-start;align-items:flex-start;gap:8px;flex-direction:column}
+.chat-typing.show{display:flex}
+.typing-dots{display:flex;gap:5px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;border-bottom-left-radius:4px}
+.typing-dots span{width:7px;height:7px;background:var(--muted);border-radius:50%;animation:tdot 1.2s ease-in-out infinite}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.chat-input-bar{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:border-color .2s}
+.chat-input-bar:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.chat-input-bar textarea{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:"Inter",sans-serif;font-size:13.5px;resize:none;max-height:140px;line-height:1.6;padding:2px 0}
+.chat-input-bar textarea::placeholder{color:var(--muted)}
+.chat-send{width:38px;height:38px;background:var(--accent);border:none;border-radius:10px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;transition:all .2s;flex-shrink:0;box-shadow:0 3px 10px var(--accent-glow)}
+.chat-send:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 5px 14px var(--accent-glow)}
+.chat-send:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.chat-model-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chat-model-bar .ol{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
+.chat-model-bar select{flex:1;min-width:140px;max-width:220px}
+.chat-clear{padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
+.chat-clear:hover{border-color:var(--error);color:var(--error)}
+.chat-welcome{text-align:center;padding:40px 20px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:14px}
+.chat-welcome-icon{font-size:44px}
+.chat-welcome h3{font-size:17px;font-weight:700;color:var(--text)}
+.chat-welcome p{font-size:13px;line-height:1.7;max-width:420px}
+.chat-suggestions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}
+.chat-sug{padding:7px 13px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--muted);font-size:11.5px;cursor:pointer;transition:all .2s;font-family:"Inter",sans-serif}
+.chat-sug:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+
+/* ─ NAV ─ */
+.app-nav{display:flex;gap:4px;padding:0 34px;border-bottom:1px solid var(--border);background:var(--surface);margin-top:-1px}
+@media(max-width:600px){.app-nav{padding:0 14px}}
+.nav-btn{padding:11px 16px;border:none;border-bottom:2px solid transparent;background:none;color:var(--muted);font-family:"Inter",sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.nav-btn:hover{color:var(--text)}
+.nav-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-view{display:none}
+.nav-view.active{display:block}
+
 /* ─ ADMIN MODAL ─ */
 .moverlay{display:none;position:fixed;inset:0;background:rgba(10,12,18,.88);backdrop-filter:blur(6px);z-index:100;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
 .moverlay.show{display:flex}
@@ -347,6 +397,13 @@ select:focus{border-color:var(--accent)}
     </div>
   </header>
 
+  <nav class="app-nav">
+    <button class="nav-btn active" onclick="switchNav('cv')" id="nav-cv">✨ CV & Lettre</button>
+    <button class="nav-btn" onclick="switchNav('chat')" id="nav-chat">💬 Chat IA</button>
+  </nav>
+
+  <!-- ══ VUE CV & LETTRE ══ -->
+  <div class="nav-view active" id="view-cv">
   <div class="app-wrap">
 
     <div class="pipeline">
@@ -475,6 +532,51 @@ select:focus{border-color:var(--accent)}
     </div>
 
   </div>
+  </div><!-- /view-cv -->
+
+  <!-- ══ VUE CHAT ══ -->
+  <div class="nav-view" id="view-chat">
+    <div class="chat-wrap">
+
+      <div class="chat-model-bar">
+        <div class="ol">Modèle :</div>
+        <select id="chatModel">
+          <option value="mistral-large-latest">mistral-large</option>
+          <option value="mistral-medium-latest" selected>mistral-medium</option>
+          <option value="mistral-small-latest">mistral-small</option>
+          <option value="open-mistral-7b">open-mistral-7b</option>
+        </select>
+        <button class="chat-clear" onclick="clearChat()">🗑 Effacer la conversation</button>
+      </div>
+
+      <div class="chat-msgs" id="chatMsgs">
+        <div class="chat-welcome" id="chatWelcome">
+          <div class="chat-welcome-icon">🤖</div>
+          <h3>Assistant IA MYF</h3>
+          <p>Posez-moi n'importe quelle question : énergie solaire, rédaction, code, carrière, science, langues… Je suis là pour vous aider !</p>
+          <div class="chat-suggestions">
+            <button class="chat-sug" onclick="chatSuggest(this)">🌞 Expliquer le rendement d'une cellule PV</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">📝 Comment rédiger un email professionnel ?</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button>
+          </div>
+        </div>
+        <div class="chat-typing" id="chatTyping">
+          <div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d'écrire…</div>
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="chat-input-bar">
+        <textarea id="chatInput" rows="1" placeholder="Posez votre question…" oninput="autoGrow(this)" onkeydown="chatKey(event)"></textarea>
+        <button class="chat-send" id="chatSendBtn" onclick="sendChat()" title="Envoyer">➤</button>
+      </div>
+
+    </div>
+  </div><!-- /view-chat -->
+
 </div>
 
 <script>
@@ -932,6 +1034,164 @@ function dlDoc(id,fn){
   var a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([doc],{type:"application/msword"}));
   a.download=fn;a.click();
+}
+
+// ── NAVIGATION ─────────────────────────────────────────────────────────────────
+function switchNav(tab) {
+  ["cv","chat"].forEach(function(t) {
+    document.getElementById("nav-"+t).classList.toggle("active", t===tab);
+    document.getElementById("view-"+t).classList.toggle("active", t===tab);
+  });
+}
+
+// ── CHAT ───────────────────────────────────────────────────────────────────────
+var chatHistory = [];
+
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 140) + "px";
+}
+
+function chatKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function chatSuggest(btn) {
+  document.getElementById("chatInput").value = btn.textContent.replace(/^[\u{1F000}-\u{1FFFF}🌞📝🐍💡🎓⚡]\s*/u, "").trim();
+  autoGrow(document.getElementById("chatInput"));
+  sendChat();
+}
+
+function clearChat() {
+  chatHistory = [];
+  var msgs = document.getElementById("chatMsgs");
+  msgs.innerHTML = "";
+  // Remettre le welcome
+  var welcome = document.createElement("div");
+  welcome.className = "chat-welcome";
+  welcome.id = "chatWelcome";
+  welcome.innerHTML = '<div class="chat-welcome-icon">🤖</div>'
+    +'<h3>Assistant IA MYF</h3>'
+    +'<p>Posez-moi n\'importe quelle question : énergie solaire, rédaction, code, carrière, science, langues… Je suis là pour vous aider !</p>'
+    +'<div class="chat-suggestions">'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">🌞 Expliquer le rendement d\'une cellule PV</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">📝 Comment rédiger un email professionnel ?</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button>'
+    +'</div>';
+  msgs.appendChild(welcome);
+  var typing = document.createElement("div");
+  typing.className = "chat-typing";
+  typing.id = "chatTyping";
+  typing.innerHTML = '<div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d\'écrire…</div>'
+    +'<div class="typing-dots"><span></span><span></span><span></span></div>';
+  msgs.appendChild(typing);
+}
+
+function addBubble(role, text, streaming) {
+  var welcome = document.getElementById("chatWelcome");
+  if (welcome) welcome.remove();
+
+  var msgs = document.getElementById("chatMsgs");
+  var typing = document.getElementById("chatTyping");
+
+  var bubble = document.createElement("div");
+  bubble.className = "chat-bubble " + role;
+
+  var now = new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+  var inner = document.createElement("div");
+  inner.className = "bubble-inner";
+  inner.textContent = text || "";
+  if (streaming) inner.innerHTML += '<span class="tcursor"></span>';
+
+  var time = document.createElement("div");
+  time.className = "bubble-time";
+  time.textContent = now;
+
+  if (role === "ai") {
+    var icon = document.createElement("div");
+    icon.style.cssText = "font-size:18px;margin-bottom:3px";
+    icon.textContent = "🤖";
+    bubble.appendChild(icon);
+  }
+  bubble.appendChild(inner);
+  bubble.appendChild(time);
+
+  msgs.insertBefore(bubble, typing);
+  msgs.scrollTop = msgs.scrollHeight;
+  return inner;
+}
+
+async function sendChat() {
+  var input = document.getElementById("chatInput");
+  var msg = input.value.trim();
+  if (!msg) return;
+  if (!API_KEY) { alert("Vous devez être connecté pour utiliser le chat."); return; }
+
+  var model = document.getElementById("chatModel").value;
+  input.value = "";
+  input.style.height = "auto";
+  document.getElementById("chatSendBtn").disabled = true;
+
+  addBubble("user", msg);
+  chatHistory.push({ role: "user", content: msg });
+
+  var typing = document.getElementById("chatTyping");
+  typing.classList.add("show");
+  document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight;
+
+  var aiInner = null;
+  var sysChat = "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. "
+    + "Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. "
+    + "Tu es expert en énergie solaire, physique, ingénierie, rédaction professionnelle, programmation, carrière et tous les domaines généraux. "
+    + "Tes réponses sont claires, structurées et adaptées au niveau de la question.";
+
+  try {
+    var res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: "system", content: sysChat }].concat(chatHistory),
+        max_tokens: 2000, temperature: 0.7, stream: true
+      })
+    });
+
+    if (!res.ok) {
+      var t = await res.text(); var errMsg = "Erreur Mistral " + res.status;
+      try { var j = JSON.parse(t); errMsg = j.message || j.detail || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+
+    typing.classList.remove("show");
+    aiInner = addBubble("ai", "", true);
+
+    var reader = res.body.getReader(), decoder = new TextDecoder(), full = "";
+    while (true) {
+      var result = await reader.read(); if (result.done) break;
+      decoder.decode(result.value, { stream: true }).split("\n").forEach(function(line) {
+        if (!line.startsWith("data: ")) return;
+        var raw = line.slice(6).trim(); if (raw === "[DONE]") return;
+        try {
+          var json = JSON.parse(raw);
+          var delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
+          if (typeof delta === "string") { full += delta; aiInner.textContent = full; document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight; }
+        } catch(e) {}
+      });
+    }
+    aiInner.textContent = full;
+    chatHistory.push({ role: "assistant", content: full });
+
+  } catch(err) {
+    typing.classList.remove("show");
+    if (aiInner) { aiInner.textContent = "❌ Erreur : " + err.message; }
+    else { addBubble("ai", "❌ Erreur : " + err.message); }
+  } finally {
+    document.getElementById("chatSendBtn").disabled = false;
+    input.focus();
+  }
 }
 
 window.addEventListener("load",function(){
