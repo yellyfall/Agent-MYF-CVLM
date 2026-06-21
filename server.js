@@ -273,7 +273,7 @@ function cleanAIText(text) {
     .replace(/[€&+]/g, "")
     .replace(/\s+/g, " ")
     .trim();
-}
+};
 
 messageBox.innerText = cleanAIText(response);
 
