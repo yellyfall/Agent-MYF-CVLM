@@ -483,7 +483,17 @@ select:focus{border-color:var(--accent)}
       <div class="card-title">Paramètres de génération</div>
       <div class="orow">
         <div class="og"><div class="ol">Langue</div>
-          <select id="lang"><option value="français">Français</option><option value="anglais">Anglais</option><option value="espagnol">Espagnol</option></select></div>
+          <select id="lang">
+            <option value="français">🇫🇷 Français</option>
+            <option value="anglais">🇬🇧 Anglais</option>
+            <option value="espagnol">🇪🇸 Espagnol</option>
+            <option value="allemand">🇩🇪 Allemand</option>
+            <option value="italien">🇮🇹 Italien</option>
+            <option value="russe">🇷🇺 Russe</option>
+            <option value="arabe">🇸🇦 Arabe</option>
+            <option value="mandarin (chinois simplifié)">🇨🇳 Mandarin</option>
+            <option value="japonais">🇯🇵 Japonais</option>
+          </select></div>
         <div class="og"><div class="ol">Longueur</div>
           <select id="llen"><option value="concise (3 paragraphes)">Concise</option><option value="standard (4-5 paragraphes)" selected>Standard</option><option value="détaillée (5-6 paragraphes)">Détaillée</option></select></div>
         <div class="og"><div class="ol">Type de contrat</div>
@@ -597,7 +607,7 @@ select:focus{border-color:var(--accent)}
           </div>
         </div>
         <div class="chat-typing" id="chatTyping">
-          <div class="web-indicator" id="webIndicator"><div class="wspin"></div>Recherche sur le web…</div>
+          <div class="web-indicator" id="webIndicator"><div class="wspin"></div><span>Lecture du lien…</span></div>
           <div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d'écrire…</div>
           <div class="typing-dots"><span></span><span></span><span></span></div>
         </div>
@@ -992,15 +1002,26 @@ async function generateAll(){
     document.getElementById("pi2").className="pi act";
     document.getElementById("pi2").innerHTML='<div class="pispin"></div>Rédaction en cours...';
 
-    var sysLM="Tu es un expert en rédaction de lettres de motivation professionnelles en "+lang+".\n"
-      +"RÈGLES :\n- Longueur : "+llen+"\n- Ton : "+tones+"\n"
-      +(ptype?"- Type de contrat : "+ptype+"\n":"")
-      +"- Structure : coordonnées candidat + ville + date | coordonnées entreprise si dispo | objet précis | accroche originale | motivation pour CE poste | compétences en lien DIRECT avec l'offre avec exemples concrets | conclusion + formule de politesse complète\n"
-      +"- Utiliser les mots-clés EXACTS de l'offre\n- Ne jamais inventer d'infos absentes du CV\n"
-      +(extra?"- Instructions : "+extra+"\n":"")
-      +"Retourne UNIQUEMENT la lettre, sans commentaire.";
+    var langLabel = {
+      "français":"français","anglais":"English","espagnol":"español",
+      "allemand":"Deutsch","italien":"italiano","russe":"русский",
+      "arabe":"العربية","mandarin (chinois simplifié)":"普通话（简体中文）","japonais":"日本語"
+    }[lang] || lang;
 
-    var userLM="=== MON CV ===\n"+cvText+"\n=== FIN CV ===\n\n=== OFFRE D'EMPLOI ===\n"+ofText+"\n=== FIN OFFRE ===\n\nGénère ma lettre de motivation.";
+    var sysLM="You are an expert professional letter writer. "
+      +"CRITICAL LANGUAGE RULE: You MUST write the ENTIRE letter exclusively in "+lang+" ("+langLabel+"). "
+      +"Every single word, including the date, location, subject line, salutation, body, and closing formula, must be in "+lang+". "
+      +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
+      +"RULES:\n- Length: "+llen+"\n- Tone: "+tones+"\n"
+      +(ptype?"- Contract type: "+ptype+"\n":"")
+      +"- Structure: candidate contact info + city + date | company contact if available | precise subject | original opening | motivation for THIS specific role | skills directly matching the job offer with concrete examples | closing with full formal formula\n"
+      +"- Use the EXACT keywords from the job offer\n- Never invent information not in the CV\n"
+      +(extra?"- Extra instructions: "+extra+"\n":"")
+      +"Return ONLY the letter, no comments, no preamble, no markdown.";
+
+    var userLM="SELECTED LANGUAGE: "+lang+" — Write EVERYTHING in "+lang+" ("+langLabel+").\n\n"
+      +"=== MY CV ===\n"+cvText+"\n=== END CV ===\n\n=== JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
+      +"Generate my cover letter entirely in "+lang+".";
 
     document.getElementById("resSection").classList.add("show");
     document.getElementById("lmOut").innerHTML='<span class="tcursor"></span>';
@@ -1016,12 +1037,16 @@ async function generateAll(){
     document.getElementById("pi3").className="pi act";
     document.getElementById("pi3").innerHTML='<div class="pispin"></div>Optimisation du CV pour +90% de correspondance...';
 
-    var sysCV="Tu es un expert en optimisation de CV en "+lang+".\n"
-      +"Réécris le CV pour correspondre à PLUS DE 90% avec l'offre.\n\n"
-      +"MÉTHODE :\n1. Intégrer les mots-clés exacts de l'offre\n2. Reformuler les expériences avec le vocabulaire de l'offre\n3. Adapter les intitulés de poste\n4. Mettre les compétences demandées en premier\n5. Ne JAMAIS inventer d'expériences ou diplômes\n6. Conserver toutes les infos de contact, formations et dates\n\n"
-      +"Commence par : [TAUX DE CORRESPONDANCE ESTIMÉ : XX%]\nPuis le CV complet reformulé.\nRetourne UNIQUEMENT le CV optimisé.";
+    var sysCV="You are an expert CV optimizer. "
+      +"CRITICAL LANGUAGE RULE: You MUST rewrite the ENTIRE CV exclusively in "+lang+" ("+langLabel+"). "
+      +"Every section title, every bullet point, every date label, every skill — all in "+lang+". "
+      +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
+      +"METHOD:\n1. Integrate exact keywords from the job offer\n2. Rephrase experiences using the job offer vocabulary\n3. Adapt job titles to match the offer\n4. List the required skills first\n5. NEVER invent experiences or degrees\n6. Keep all contact info, education and dates\n\n"
+      +"Start with: [MATCH RATE ESTIMATE: XX%]\nThen the full rewritten CV.\nReturn ONLY the optimized CV, no comments, no markdown.";
 
-    var userCV="=== CV ORIGINAL ===\n"+cvText+"\n=== FIN CV ===\n\n=== OFFRE CIBLÉE ===\n"+ofText+"\n=== FIN OFFRE ===\n\nOptimise mon CV pour +90% de correspondance.";
+    var userCV="SELECTED LANGUAGE: "+lang+" — Rewrite EVERYTHING in "+lang+" ("+langLabel+").\n\n"
+      +"=== ORIGINAL CV ===\n"+cvText+"\n=== END CV ===\n\n=== TARGET JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
+      +"Optimize my CV for 90%+ match, written entirely in "+lang+".";
 
     document.getElementById("cvOut").innerHTML='<span class="tcursor blue"></span>';
     var cvResult=await streamCall(sysCV,userCV,model,function(t){document.getElementById("cvOut").textContent=t;});
@@ -1133,7 +1158,34 @@ function clearChatPdf() {
   document.getElementById("chatPdfName").textContent = "-";
 }
 
-// ── WEB SEARCH ─────────────────────────────────────────────────────────────────
+// ── URL FETCH DANS LE CHAT ─────────────────────────────────────────────────────
+// Détecte les URLs dans le message de l'utilisateur
+function extractUrls(text) {
+  var re = /https?:\/\/[^\s"'<>)]+/g;
+  return text.match(re) || [];
+}
+
+// Récupère le contenu d'une URL via allOrigins (proxy public CORS-free)
+async function fetchUrlContent(url) {
+  try {
+    // allorigins.win : proxy qui contourne le CORS
+    var proxyUrl = "https://api.allorigins.win/get?url=" + encodeURIComponent(url);
+    var res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    var data = await res.json();
+    var html = data.contents || "";
+    // Nettoyer le HTML : supprimer balises, scripts, styles
+    html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+    html = html.replace(/<style[\s\S]*?<\/style>/gi, "");
+    html = html.replace(/<[^>]+>/g, " ");
+    html = html.replace(/\s{2,}/g, " ").trim();
+    // Limiter à 6000 caractères
+    if (html.length > 6000) html = html.slice(0, 6000) + "… [contenu tronqué]";
+    return html || null;
+  } catch(e) {
+    return null;
+  }
+}
 // Utilise l'API DuckDuckGo Instant Answer (CORS libre) pour obtenir un résumé
 async function doWebSearch(query) {
   try {
@@ -1233,7 +1285,7 @@ function clearChat() {
   var typing = document.createElement("div");
   typing.className = "chat-typing";
   typing.id = "chatTyping";
-  typing.innerHTML = '<div class="web-indicator" id="webIndicator"><div class="wspin"></div>Recherche sur le web…</div>'
+  typing.innerHTML = '<div class="web-indicator" id="webIndicator"><div class="wspin"></div><span>Lecture du lien…</span></div>'
     +'<div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d\'écrire…</div>'
     +'<div class="typing-dots"><span></span><span></span><span></span></div>';
   msgs.appendChild(typing);
@@ -1300,11 +1352,31 @@ async function sendChat() {
   typing.classList.add("show");
   document.getElementById("chatMsgs").scrollTop = document.getElementById("chatMsgs").scrollHeight;
 
+  // ── Lecture des URLs fournies dans le message ──────────────────────────────
+  var urlContext = "";
+  var urlNote = "";
+  var urls = extractUrls(msg);
+  if (urls.length > 0) {
+    document.getElementById("webIndicator").classList.add("show");
+    document.getElementById("webIndicator").querySelector("span:last-child") && null;
+    var urlTexts = [];
+    for (var u = 0; u < Math.min(urls.length, 2); u++) {
+      var urlContent = await fetchUrlContent(urls[u]);
+      if (urlContent) urlTexts.push("[CONTENU DE " + urls[u] + "]\n" + urlContent + "\n[FIN]");
+    }
+    document.getElementById("webIndicator").classList.remove("show");
+    if (urlTexts.length > 0) {
+      urlContext = "\n\n" + urlTexts.join("\n\n");
+      urlNote = "🔗 " + urls.length + " lien(s) lu(s)";
+    }
+  }
+
   // ── Recherche web si activée ou auto-détectée ──────────────────────────────
   var webContext = "";
   var webNote = "";
   var doSearch = webSearchEnabled || needsWeb(msg);
   if (doSearch) {
+    document.getElementById("webIndicator").querySelector("span").textContent = "Recherche sur le web…";
     document.getElementById("webIndicator").classList.add("show");
     var snippet = await doWebSearch(msg);
     document.getElementById("webIndicator").classList.remove("show");
@@ -1333,7 +1405,7 @@ async function sendChat() {
     + "Pour les listes, utilise le tiret simple « - » ou des numéros « 1. 2. 3. ». "
     + "Pour le code informatique uniquement, tu peux utiliser des blocs de code délimités par ``` ... ```. "
     + "Tes réponses sont claires, bien organisées et adaptées au niveau de la question."
-    + webContext + pdfContext;
+    + urlContext + webContext + pdfContext;
 
   // Ajouter le message à l'historique (avec note pdf si présent)
   var histMsg = msg;
@@ -1341,7 +1413,7 @@ async function sendChat() {
   chatHistory.push({ role: "user", content: histMsg });
 
   var aiInner = null;
-  var sourceNote = [webNote, pdfNote].filter(Boolean).join(" · ") || "";
+  var sourceNote = [urlNote, webNote, pdfNote].filter(Boolean).join(" · ") || "";
 
   try {
     var res = await fetch("https://api.mistral.ai/v1/chat/completions", {
