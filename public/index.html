@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agent IA de MYF</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -469,6 +470,13 @@ select:focus{border-color:var(--accent)}
 .ubtn.pw:hover{border-color:var(--accent2);color:var(--accent2)}
 .empty-state{text-align:center;padding:28px;color:var(--muted);font-size:13px;line-height:1.7}
 .loading-state{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+
+/* ─ EXPORT PDF / CV CONSERVÉ ─ */
+.pdf-export-temp{position:fixed;left:-99999px;top:0;background:#fff;color:#111;z-index:-1}
+.cv-preserve-page{background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid rgba(79,142,247,.2);overflow:hidden;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.55}
+.cv-preserve-inner{padding:40px 50px;max-width:780px;margin:0 auto;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box}
+.cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px;font-family:Arial,Helvetica,sans-serif}
+@media(max-width:640px){.cv-preserve-inner{padding:24px 16px}}
 </style>
 </head>
 <body>
@@ -757,6 +765,7 @@ select:focus{border-color:var(--accent)}
             <button class="abtn" id="cpLm" onclick="cpLmText()">Copier</button>
             <button class="abtn" onclick="dlTxt('lmOut','lettre_motivation.txt')">⬇ .txt</button>
             <button class="abtn" onclick="dlLetterDoc()">📝 .doc</button>
+            <button class="abtn" onclick="dlLetterPdf()">⬇ PDF</button>
           </div>
         </div>
         <!-- Aperçu visuel de la lettre -->
@@ -805,6 +814,7 @@ select:focus{border-color:var(--accent)}
             <button class="abtn bl" id="cpCv" onclick="cpText('cvOut','cpCv')">Copier</button>
             <button class="abtn bl" onclick="dlTxt('cvOut','cv_optimise.txt')">⬇ .txt</button>
             <button class="abtn bl" onclick="dlDoc('cvOut','cv_optimise.doc')">📝 .doc</button>
+            <button class="abtn bl" onclick="dlCVPdf()">⬇ PDF</button>
           </div>
         </div>
         <!-- Aperçu visuel CV -->
@@ -1456,7 +1466,6 @@ async function generateAll(){
   document.getElementById("lmOut").textContent="";
   document.getElementById("cvOut").textContent="";
   document.getElementById("scoreZone").innerHTML="";
-  LAST_LETTER_JSON = null;
   // Réinitialiser les rendus visuels
   document.getElementById("letterRender").classList.remove("show");
   document.getElementById("cvRender").classList.remove("show");
@@ -1539,25 +1548,27 @@ async function generateAll(){
     var sysCV="You are an expert CV optimizer. "
       +"CRITICAL LANGUAGE RULE: Rewrite the ENTIRE CV exclusively in "+lang+" ("+langLabel+"). "
       +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
-      +"STRUCTURE RULE: You MUST preserve the exact same section structure as the original CV:\n"
-      +cvStructureHint+"\n"
-      +"Keep the same section order and formatting style as the original. "
-      +"If the original has a photo placeholder, keep it. "
-      +"If the original uses columns, describe them with clear separators.\n\n"
+      +"ABSOLUTE LAYOUT RULE: You must keep the original CV layout as a text template. "
+      +"Do NOT redesign the CV. Do NOT reorder sections. Do NOT create a new CV format. "
+      +"Keep the same headings, same section order, same blocks, same line-break logic, same separators, same contact area, same dates and same candidate identity. "
+      +"Only improve wording inside existing skills, profile and experience descriptions. "
+      +"Do not add a new section unless the original CV already has that section.\n\n"
+      +"Detected original structure:\n"
+      +cvStructureHint+"\n\n"
       +"METHOD:\n"
-      +"1. Keep candidate's real name, contacts, and dates exactly as in the original\n"
-      +"2. Integrate exact keywords from the job offer into descriptions\n"
-      +"3. Rephrase bullet points using job offer vocabulary\n"
-      +"4. Adapt job title to match the offer if relevant\n"
-      +"5. List the required skills from the offer first in the skills section\n"
-      +"6. NEVER invent experiences, degrees, or dates\n\n"
+      +"1. Keep candidate's real name, contacts, diplomas, employers, dates and locations exactly as in the original.\n"
+      +"2. Optimize only the content of skills, profile/summary and experience bullet points.\n"
+      +"3. Integrate exact keywords from the job offer naturally, without inventing experience.\n"
+      +"4. Preserve the original bullets/separators as much as possible.\n"
+      +"5. Do not shorten or expand the CV too much; keep a similar length and density.\n"
+      +"6. NEVER invent experiences, degrees, certifications, dates, employers or software not supported by the CV.\n\n"
       +"Start with one line: [MATCH RATE ESTIMATE: XX%]\n"
-      +"Then the full optimized CV maintaining the original structure.\n"
+      +"Then return the optimized CV using the same text layout as the original.\n"
       +"Return ONLY the CV text, no comments, no markdown symbols.";
 
     var userCV="LANGUAGE: "+lang+" ("+langLabel+") — rewrite in "+lang+".\n\n"
       +"=== ORIGINAL CV ===\n"+cvText+"\n=== END CV ===\n\n=== TARGET JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
-      +"Optimize for 90%+ match, preserve original structure, write entirely in "+lang+".";
+      +"Optimize for 90%+ match, preserve the original layout/text template as much as possible, write entirely in "+lang+".";
 
     document.getElementById("cvOut").textContent="";
     var cvResult=await streamCall(sysCV,userCV,model,function(t){
@@ -1783,90 +1794,27 @@ function dlLetterDoc() {
 }
 
 // ── RENDU VISUEL CV ────────────────────────────────────────────────────────────
-function renderCV(raw) {
-  // Extraire le taux de correspondance
-  var scoreMatch = raw.match(/\[MATCH RATE ESTIMATE[^:]*:\s*(\d+)%?\]|\[TAUX DE CORRESPONDANCE[^:]*:\s*(\d+)%?\]/i);
-  var score = scoreMatch ? (scoreMatch[1]||scoreMatch[2]) : null;
-  // Supprimer la ligne du taux du texte
-  var text = raw.replace(/^\[.*?%?\]\s*/i,"").trim();
+function stripCVScoreLine(raw) {
+  return String(raw || "").replace(/^\s*\[(MATCH RATE ESTIMATE|TAUX DE CORRESPONDANCE)[^\]]*\]\s*/i, "").trim();
+}
 
-  var lines = text.split("\n");
+function getCVScore(raw) {
+  var scoreMatch = String(raw || "").match(/\[(?:MATCH RATE ESTIMATE|TAUX DE CORRESPONDANCE)[^:\]]*:\s*(\d{1,3})%?\]/i);
+  return scoreMatch ? Math.max(0, Math.min(100, parseInt(scoreMatch[1], 10))) : null;
+}
+
+function renderCV(raw) {
+  // Objectif : ne plus recomposer le CV en sections automatiques.
+  // On garde le rendu au plus proche du texte retourné par l'IA afin de préserver la mise en page textuelle originale.
+  var score = getCVScore(raw);
+  var text = stripCVScoreLine(raw);
   var page = document.getElementById("cvPage");
   var html = "";
 
-  if (score) {
-    html += '<div class="cv-score">📊 Correspondance : '+score+'%</div>';
-  }
-
-  // Heuristique de rendu : détecter nom, titre, contacts sur les premières lignes
-  var firstLines = lines.slice(0, 8);
-  var nameIdx = -1, titleIdx = -1, contactLines = [];
-
-  firstLines.forEach(function(l, i){
-    var t = l.trim();
-    if (!t) return;
-    if (nameIdx === -1 && t.length < 60 && !/[@+\d{3,}]/.test(t)) { nameIdx = i; return; }
-    if (titleIdx === -1 && nameIdx !== -1 && t.length < 80 && !/[@+]/.test(t) && i < 5) { titleIdx = i; return; }
-    if (/@|[+\d]{7,}|linkedin|github|adresse|email/i.test(t)) contactLines.push(t);
-  });
-
-  // Header CV
-  html += '<div class="cv-header-zone">';
-  if (nameIdx !== -1) html += '<div class="cv-name">'+esc(lines[nameIdx])+'</div>';
-  if (titleIdx !== -1) html += '<div class="cv-title">'+esc(lines[titleIdx])+'</div>';
-  if (contactLines.length) {
-    html += '<div class="cv-contacts">';
-    contactLines.forEach(function(c){ html += '<span>'+esc(c)+'</span>'; });
-    html += '</div>';
-  }
-  html += '</div>';
-
-  // Reste des sections
-  var startIdx = Math.max(nameIdx, titleIdx, contactLines.length ? 3 : 0) + 1;
-  var remaining = lines.slice(startIdx);
-  var currentSection = null;
-  var currentEntries = [];
-
-  function flushSection() {
-    if (!currentSection && currentEntries.length === 0) return;
-    if (currentSection) {
-      html += '<div class="cv-section">';
-      html += '<div class="cv-section-title">'+esc(currentSection)+'</div>';
-      // Détecter si c'est une section compétences (mots courts séparés par virgule/retour)
-      var allText = currentEntries.join(" ");
-      var isSkills = /compétence|skill|logiciel|outil|langue|technologie|maîtrise/i.test(currentSection)
-        || (currentEntries.length > 2 && allText.length < 400);
-      if (isSkills) {
-        html += '<div class="cv-skills-grid">';
-        currentEntries.join("\n").split(/[,\n•·\-–]/).forEach(function(s){
-          var sk = s.trim(); if (sk.length > 1 && sk.length < 60) html += '<span class="cv-skill-tag">'+esc(sk)+'</span>';
-        });
-        html += '</div>';
-      } else {
-        currentEntries.forEach(function(entry){
-          html += '<div class="cv-entry"><div class="cv-entry-desc">'+esc(entry)+'</div></div>';
-        });
-      }
-      html += '</div>';
-    }
-    currentSection = null;
-    currentEntries = [];
-  }
-
-  remaining.forEach(function(line){
-    var t = line.trim();
-    if (!t) return;
-    // Détecter titre de section : ligne courte en majuscules ou ligne courte standalone
-    var isSectionTitle = (t.length < 50 && (t === t.toUpperCase() || /^[-=_]{3,}$/.test(t)) && t.replace(/[-=_ ]/g,"").length > 2)
-      || (/^[A-ZÀÂÉÈÊÙÎÏÔÛ][^.]{2,35}$/.test(t) && !/^\d/.test(t) && !/@/.test(t) && t.length < 40);
-    if (isSectionTitle) {
-      flushSection();
-      currentSection = t;
-    } else {
-      currentEntries.push(t);
-    }
-  });
-  flushSection();
+  html += '<div class="cv-preserve-page"><div class="cv-preserve-inner">';
+  if (score !== null) html += '<div class="cv-preserve-score">📊 Correspondance : '+score+'%</div>\n';
+  html += esc(text);
+  html += '</div></div>';
 
   page.innerHTML = html;
   document.getElementById("cvRender").classList.add("show");
