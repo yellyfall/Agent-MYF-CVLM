@@ -602,6 +602,11 @@ select:focus{border-color:var(--accent)}
         <div class="iface-name">Recruteur</div>
         <div class="iface-desc">Comparer un CV avec une offre et obtenir un score de compatibilité.</div>
       </button>
+      <button type="button" class="iface-card chat-choice" onclick="selectInterface('chat')">
+        <div class="iface-icon">💬</div>
+        <div class="iface-name">Chat IA</div>
+        <div class="iface-desc">Discuter avec l’IA, analyser des fichiers, chercher sur le web et générer des images ou documents.</div>
+      </button>
     </div>
     <div class="theme-bar" style="justify-content:center" aria-label="Choix du thème">
       <span class="theme-label">Thème</span>
@@ -682,11 +687,6 @@ select:focus{border-color:var(--accent)}
       <button class="h-btn" onclick="logout()">Déconnexion</button>
     </div>
   </header>
-
-  <nav class="app-nav">
-    <button class="nav-btn active" onclick="switchNav('cv')" id="nav-cv">✨ CV & Lettre</button>
-    <button class="nav-btn" onclick="switchNav('chat')" id="nav-chat">💬 Chat IA</button>
-  </nav>
 
   <!-- ══ VUE CV & LETTRE ══ -->
   <div class="nav-view active" id="view-cv">
@@ -878,8 +878,20 @@ select:focus{border-color:var(--accent)}
   </div>
   </div><!-- /view-cv -->
 
-  <!-- ══ VUE CHAT ══ -->
-  <div class="nav-view" id="view-chat">
+</div>
+<!-- ══ CHAT IA SCREEN ══ -->
+<div id="chatScreen" class="screen">
+  <header>
+    <div class="h-mark">MYF</div>
+    <div><div class="h-name">Chat IA MYF</div><div class="h-sub">Assistant IA, fichiers, web, images et documents</div></div>
+    <div class="h-right">
+      <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
+      <div class="h-pill"><div class="h-dot dot-user" id="chatHDot"></div><span id="chatHUser">-</span></div>
+      <button class="h-btn adm" id="chatAdminBtn" style="display:none" onclick="openModal()">⚙ Admin</button>
+      <button class="h-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+  <!-- ══ CHAT IA AUTONOME ══ -->
     <div class="chat-wrap">
 
       <div class="chat-model-bar">
@@ -921,7 +933,7 @@ select:focus{border-color:var(--accent)}
             <button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>
             <button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>
             <button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>
-            <button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button><button class="chat-sug" onclick="chatSuggest(this)">🎨 Génère une image d’une centrale photovoltaïque futuriste</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button><button class="chat-sug" onclick="chatSuggest(this)">🎨 Génère une image d’une centrale photovoltaïque futuriste</button><button class="chat-sug" onclick="chatSuggest(this)">📐 Fais le schéma unifilaire d’une installation PV 100 kWc en autoconsommation</button><button class="chat-sug" onclick="chatSuggest(this)">🖼 Modifie l’image jointe en retirant le fond</button><button class="chat-sug" onclick="chatSuggest(this)">📐 Fais le schéma unifilaire d’une installation PV 100 kWc en autoconsommation</button><button class="chat-sug" onclick="chatSuggest(this)">🖼 Modifie l’image jointe en retirant le fond</button>
           </div>
         </div>
         <div class="chat-typing" id="chatTyping">
@@ -937,7 +949,6 @@ select:focus{border-color:var(--accent)}
       </div>
 
     </div>
-  </div><!-- /view-chat -->
 
 </div>
 <!-- ══ RECRUITER SCREEN ══ -->
@@ -1169,6 +1180,7 @@ function enterApp(name, role) {
   document.getElementById("loginScreen").classList.remove("active");
   document.getElementById("appScreen").classList.remove("active");
   document.getElementById("recScreen").classList.remove("active");
+  if (document.getElementById("chatScreen")) document.getElementById("chatScreen").classList.remove("active");
   document.getElementById("ifaceScreen").classList.add("active");
   syncUserHeader(name, role);
 }
@@ -1177,18 +1189,21 @@ function selectInterface(type) {
   document.getElementById("ifaceScreen").classList.remove("active");
   document.getElementById("appScreen").classList.toggle("active", type === "candidate");
   document.getElementById("recScreen").classList.toggle("active", type === "recruiter");
+  if (document.getElementById("chatScreen")) document.getElementById("chatScreen").classList.toggle("active", type === "chat");
   syncUserHeader(CURRENT_NAME || "Utilisateur", ROLE);
 }
 
 function backToIface() {
   document.getElementById("appScreen").classList.remove("active");
   document.getElementById("recScreen").classList.remove("active");
+  if (document.getElementById("chatScreen")) document.getElementById("chatScreen").classList.remove("active");
   document.getElementById("ifaceScreen").classList.add("active");
 }
 function logout() {
   API_KEY=""; ADMIN_KEY=""; ROLE=""; CURRENT_NAME="";
   document.getElementById("appScreen").classList.remove("active");
   document.getElementById("recScreen").classList.remove("active");
+  if (document.getElementById("chatScreen")) document.getElementById("chatScreen").classList.remove("active");
   document.getElementById("ifaceScreen").classList.remove("active");
   document.getElementById("loginScreen").classList.add("active");
   document.getElementById("uname").value="";
@@ -1199,6 +1214,7 @@ function logout() {
   document.getElementById("errMsg").classList.remove("show");
   document.getElementById("adminBtn").style.display="none";
   document.getElementById("recAdminBtn").style.display="none";
+  if (document.getElementById("chatAdminBtn")) document.getElementById("chatAdminBtn").style.display="none";
 }
 
 // ── ADMIN MODAL ────────────────────────────────────────────────────────────────
@@ -2389,10 +2405,11 @@ async function analyzeRecruiterMatch() {
   }
 }
 function switchNav(tab) {
-  ["cv","chat"].forEach(function(t) {
-    document.getElementById("nav-"+t).classList.toggle("active", t===tab);
-    document.getElementById("view-"+t).classList.toggle("active", t===tab);
-  });
+  // Le Chat IA est maintenant une interface autonome.
+  // Cette fonction reste uniquement pour compatibilité avec d'anciennes actions.
+  if (tab === "chat") { selectInterface("chat"); return; }
+  var view = document.getElementById("view-cv");
+  if (view) view.classList.add("active");
 }
 
 // ── CHAT STATE ─────────────────────────────────────────────────────────────────
@@ -2402,6 +2419,8 @@ var chatPdfText = "";
 var chatPdfName = "";
 var chatFileKind = "";
 var chatFileMime = "";
+var chatImageDataUrl = "";
+var chatImageObjectUrl = "";
 var webSearchEnabled = false;
 
 // ── TOGGLE WEB SEARCH ──────────────────────────────────────────────────────────
@@ -2486,6 +2505,14 @@ async function extractPlainTextFromFile(file){
   var text=await file.text();
   return {text:String(text||"").trim(), label:"texte"};
 }
+async function readFileAsDataUrl(file){
+  return await new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onload=function(e){ resolve(String(e.target.result||"")); };
+    reader.onerror=function(){ reject(new Error("Lecture image impossible")); };
+    reader.readAsDataURL(file);
+  });
+}
 async function extractAttachedFileText(file){
   var ext=getFileExt(file.name), type=file.type||"";
   if(ext==="pdf" || type==="application/pdf") return await extractPdfTextFromFile(file);
@@ -2494,7 +2521,7 @@ async function extractAttachedFileText(file){
   if(ext==="xlsx" || ext==="xls" || /spreadsheet|excel/i.test(type)) return await extractXlsxTextFromFile(file);
   if(isTextLikeFile(ext,type)) return await extractPlainTextFromFile(file);
   if(isImageFile(ext,type)){
-    return {text:"[IMAGE JOINTE]\nNom : "+file.name+"\nType : "+(type||ext.toUpperCase())+"\nTaille : "+formatFileSize(file.size)+"\nRemarque : l'image est bien jointe au chat. L'IA peut utiliser ces métadonnées. Pour une analyse visuelle complète du contenu de l'image, il faudra ajouter un endpoint vision/multimodal côté backend.", label:"image"};
+    return {text:"[IMAGE JOINTE]\nNom : "+file.name+"\nType : "+(type||ext.toUpperCase())+"\nTaille : "+formatFileSize(file.size)+"\nRemarque : l'image est jointe au chat. Vous pouvez demander à l'IA de la modifier, de la transformer, de générer un croquis ou de créer une nouvelle image inspirée de celle-ci. Pour une vraie retouche IA, le backend doit exposer un endpoint /api/edit-image.", label:"image"};
   }
   if(ext==="doc" || ext==="ppt"){
     return {text:"[FICHIER BINAIRE JOINT]\nNom : "+file.name+"\nType : "+(ext||type)+"\nTaille : "+formatFileSize(file.size)+"\nRemarque : les anciens formats .doc/.ppt ne sont pas extractibles proprement côté navigateur. Convertissez-les idéalement en .docx/.pptx pour que l'IA puisse lire leur contenu.", label:"format ancien"};
@@ -2505,6 +2532,9 @@ async function loadChatFile(input){
   if(!input.files || !input.files[0]) return;
   var file=input.files[0];
   if(file.size>25*1024*1024){alert("Fichier trop volumineux (max 25 Mo).");input.value="";return;}
+  if(chatImageObjectUrl){ try{ URL.revokeObjectURL(chatImageObjectUrl); }catch(e){} chatImageObjectUrl=""; }
+  chatImageDataUrl="";
+  var fileIsImage=isImageFile(getFileExt(file.name), file.type||"");
   var loadEl=document.getElementById("chatPdfLoad");
   var loadText=document.getElementById("chatPdfLoadText");
   var badge=document.getElementById("chatPdfBadge");
@@ -2517,14 +2547,19 @@ async function loadChatFile(input){
     chatPdfName=file.name;
     chatFileKind=extracted.label||getFileExt(file.name)||"fichier";
     chatFileMime=file.type||"";
+    if(fileIsImage){
+      chatImageDataUrl=await readFileAsDataUrl(file);
+      try{ chatImageObjectUrl=URL.createObjectURL(file); }catch(e){ chatImageObjectUrl=""; }
+    }
     var shortName=file.name.length>42?file.name.slice(0,24)+"…"+file.name.slice(-14):file.name;
-    document.getElementById("chatPdfName").textContent=shortName+" · "+formatFileSize(file.size)+" · "+chatFileKind;
+    document.getElementById("chatPdfName").textContent=shortName+" · "+formatFileSize(file.size)+" · "+chatFileKind+(fileIsImage?" · prête pour modification":"");
     badge.classList.add("show");
     if(!chatPdfText || chatPdfText.length<20){
       chatPdfText="[FICHIER JOINT]\nNom : "+file.name+"\nType : "+(file.type||getFileExt(file.name)||"inconnu")+"\nTaille : "+formatFileSize(file.size)+"\nContenu textuel non extractible automatiquement.";
     }
   }catch(e){
-    chatPdfText="";chatPdfName="";chatFileKind="";chatFileMime="";
+    chatPdfText="";chatPdfName="";chatFileKind="";chatFileMime="";chatImageDataUrl="";
+    if(chatImageObjectUrl){ try{ URL.revokeObjectURL(chatImageObjectUrl); }catch(err){} chatImageObjectUrl=""; }
     alert("Erreur lors de la lecture du fichier : "+e.message);
   }finally{
     loadEl.style.display="none";
@@ -2532,7 +2567,8 @@ async function loadChatFile(input){
   }
 }
 function clearChatFile(){
-  chatPdfText=""; chatPdfName=""; chatFileKind=""; chatFileMime="";
+  chatPdfText=""; chatPdfName=""; chatFileKind=""; chatFileMime=""; chatImageDataUrl="";
+  if(chatImageObjectUrl){ try{ URL.revokeObjectURL(chatImageObjectUrl); }catch(e){} chatImageObjectUrl=""; }
   document.getElementById("chatPdfBadge").classList.remove("show");
   document.getElementById("chatPdfName").textContent="-";
 }
@@ -2600,28 +2636,26 @@ function needsWeb(msg) {
 
 // ── MARKDOWN CLEANER ───────────────────────────────────────────────────────────
 function cleanMarkdown(text) {
-  // Supprimer ### ## # en début de ligne → texte brut
+  text = String(text || "");
+  var codeBlocks = [];
+  text = text.replace(/```[\s\S]*?```/g, function(m){ codeBlocks.push(m); return "§§CODEBLOCK" + (codeBlocks.length-1) + "§§"; });
   text = text.replace(/^#{1,6}\s*/gm, "");
-  // Supprimer *** ou ** autour des mots (gras markdown) → garder le texte
+  text = text.replace(/^\s*\*{3,}\s*$/gm, "");
   text = text.replace(/\*{3}(.+?)\*{3}/gs, "$1");
   text = text.replace(/\*{2}(.+?)\*{2}/gs, "$1");
-  // Supprimer * simple (italique) mais conserver les tirets de liste
   text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, "$1");
-  // Supprimer _italique_
-  text = text.replace(/(?<![_])_([^_]+)_(?![_])/g, "$1");
-  // Supprimer __gras__
   text = text.replace(/__(.+?)__/gs, "$1");
-  // Nettoyer ~~barré~~
+  text = text.replace(/(?<![_])_([^_]+)_(?![_])/g, "$1");
   text = text.replace(/~~(.+?)~~/g, "$1");
-  // Conserver les blocs de code (``` ```) tels quels
-  // Nettoyer lignes vides multiples
-  text = text.replace(/\n{3,}/g, "\n\n");
-  // Supprimer > blockquote
   text = text.replace(/^>\s*/gm, "");
-  // Supprimer separateurs ---
   text = text.replace(/^---+\s*$/gm, "");
-  // Supprimer [ ] cases à cocher
-  text = text.replace(/^\s*[-*]\s*\[[ x]\]\s*/gm, "- ");
+  text = text.replace(/^\s*[-*]\s*\[[ x]\]\s*/gmi, "- ");
+  text = text.replace(/^\s*\*\s+/gm, "- ");
+  text = text.replace(/(^|\s)\*\*(?=\S)|(?<=\S)\*\*(?=\s|$)/g, "$1");
+  text = text.replace(/(^|\s)\*{1,3}(?=\S)|(?<=\S)\*{1,3}(?=\s|$)/g, "$1");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  text = text.replace(/[ \t]{2,}/g, " ");
+  text = text.replace(/§§CODEBLOCK(\d+)§§/g, function(_,i){ return codeBlocks[Number(i)] || ""; });
   return text.trim();
 }
 
@@ -3106,22 +3140,50 @@ async function streamMistralChat(model, sysChat, messages, onDelta){
 // Nouvelle version du chat : web + météo + URL + fichiers téléchargeables.
 
 // ── IMAGE IA VIA BACKEND MISTRAL ───────────────────────────────────────────────
+function isSketchLikeRequest(msg){
+  var low=String(msg||"").toLowerCase();
+  return /(schéma|schema|croquis|diagramme|unifilaire|synoptique|plan technique|plan électrique|plan electrique|reaction chimique|réaction chimique|mécanisme réactionnel|mecanisme reactionnel|molecule|molécule)/i.test(low);
+}
+
 function isImageGenerationRequest(msg){
   var low = String(msg || "").toLowerCase();
-  var hasImageWord = /(image|photo|illustration|dessin|visuel|logo|affiche|poster|bannière|banniere|banner|avatar|icône|icone)/i.test(low);
-  var hasCreateVerb = /(génère|genere|générer|generer|crée|cree|créer|creer|fais|fabrique|dessine|produis|conçois|concois|imagine|make|create|generate|draw)/i.test(low);
-  if (!hasImageWord || !hasCreateVerb) return false;
+  var hasImageWord = /(image|photo|illustration|dessin|visuel|logo|affiche|poster|bannière|banniere|banner|avatar|icône|icone|schéma|schema|croquis|diagramme|unifilaire|synoptique|plan|reaction chimique|réaction chimique|molecule|molécule)/i.test(low);
+  var hasCreateVerb = /(génère|genere|générer|generer|crée|cree|créer|creer|fais|fabrique|dessine|produis|conçois|concois|imagine|make|create|generate|draw|réalise|realise)/i.test(low);
+  if (!(hasImageWord && hasCreateVerb) && !isSketchLikeRequest(low)) return false;
   if (/(analyse|analyser|décris|decris|identifier|identifie|c'est quoi|quelle est)/i.test(low) && !hasCreateVerb) return false;
   return true;
+}
+
+function isImageEditRequest(msg){
+  var low=String(msg||"").toLowerCase();
+  var editVerb=/(modifie|modifier|retouche|retoucher|édite|edite|éditer|editer|change|changer|supprime|enlève|enleve|ajoute|ajouter|remplace|transforme|transformer|améliore|ameliore|corrige|recadre|détoure|detoure|floute|colorise)/i.test(low);
+  return !!chatImageDataUrl && editVerb;
 }
 
 function imagePromptFromMessage(msg){
   var prompt = String(msg || "").trim();
   prompt = prompt.replace(/^(peux-tu|peux tu|stp|s'il te plaît|s'il te plait|merci)\s+/i, "");
-  prompt = prompt.replace(/^(génère|genere|générer|generer|crée|cree|créer|creer|fais|fabrique|dessine|produis|conçois|concois|imagine)\s+(moi\s+)?(une?|des?)?\s*/i, "");
-  prompt = prompt.replace(/^(image|photo|illustration|dessin|visuel)\s*[:\-]\s*/i, "");
+  prompt = prompt.replace(/^(génère|genere|générer|generer|crée|cree|créer|creer|fais|fabrique|dessine|produis|conçois|concois|imagine|réalise|realise)\s+(moi\s+)?(une?|des?)?\s*/i, "");
+  prompt = prompt.replace(/^(image|photo|illustration|dessin|visuel|schéma|schema|croquis|diagramme)\s*[:\-]\s*/i, "");
   prompt = prompt.trim();
   return prompt || msg;
+}
+
+function enhanceImagePrompt(prompt, mode){
+  var p=String(prompt||"").trim();
+  if(isSketchLikeRequest(p)){
+    p += "\n\nRender this as a clean, legible technical sketch or schematic on a white background, with crisp black lines, readable labels, balanced spacing, and a professional engineering/scientific style.";
+  }
+  if(/(pv|photovolta|solaire)/i.test(p) && /(unifilaire|schéma|schema|diagramme|synoptique)/i.test(p)){
+    p += "\nInclude a professional one-line photovoltaic diagram with standard components relevant to a 100 kWc self-consumption PV installation in France when applicable: PV strings, combiner/protection if needed, inverter(s), AC/DC disconnects, protections, main low-voltage board, utility connection, meter, grounding and clear power labels. Respect good PV engineering conventions and legible symbols. This is a schematic draft to be validated by a qualified engineer.";
+  }
+  if(/(réaction chimique|reaction chimique|mécanisme réactionnel|mecanisme reactionnel|chimique|molécule|molecule)/i.test(p)){
+    p += "\nRender it as a scientific chemistry sketch with clean structures, reaction arrows, reagents, products, catalysts or conditions when mentioned, and textbook-style readability.";
+  }
+  if(mode==="edit"){
+    p = "Edit the uploaded image according to this instruction: " + p + "\nPreserve the main subject unless the instruction says otherwise.";
+  }
+  return p;
 }
 
 function promptImageGeneration(){
@@ -3140,7 +3202,6 @@ function promptImageGeneration(){
 async function generateImageFromBackend(prompt, options){
   var modelEl = document.getElementById("chatModel");
   var model = options && options.model ? options.model : (modelEl ? modelEl.value : "mistral-medium-latest");
-
   var response = await fetch(BASE + "/api/generate-image", {
     method: "POST",
     headers: {
@@ -3148,7 +3209,7 @@ async function generateImageFromBackend(prompt, options){
       "x-admin-key": API_KEY
     },
     body: JSON.stringify({
-      prompt: prompt,
+      prompt: enhanceImagePrompt(prompt, "generate"),
       model: model,
       output_format: "png",
       size: "auto",
@@ -3156,7 +3217,6 @@ async function generateImageFromBackend(prompt, options){
       background: "auto"
     })
   });
-
   var data = await response.json().catch(function(){ return null; });
   if (!response.ok || !data || !data.success) {
     throw new Error((data && data.message) || ("Erreur image HTTP " + response.status));
@@ -3164,14 +3224,40 @@ async function generateImageFromBackend(prompt, options){
   return data.data || {};
 }
 
-function addGeneratedImageBubble(imageData, prompt){
+async function editImageWithBackend(prompt, options){
+  var modelEl = document.getElementById("chatModel");
+  var model = options && options.model ? options.model : (modelEl ? modelEl.value : "mistral-medium-latest");
+  var response = await fetch(BASE + "/api/edit-image", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": API_KEY
+    },
+    body: JSON.stringify({
+      prompt: enhanceImagePrompt(prompt, "edit"),
+      model: model,
+      image_name: chatPdfName || "image-jointe.png",
+      image_data_url: chatImageDataUrl
+    })
+  });
+  var data = await response.json().catch(function(){ return null; });
+  if (response.status === 404) {
+    throw new Error("Le backend n'expose pas encore l'endpoint /api/edit-image. La partie HTML est prête, mais il faut ajouter cet endpoint dans server.js pour la vraie retouche d'image.");
+  }
+  if (!response.ok || !data || !data.success) {
+    throw new Error((data && data.message) || ("Erreur édition image HTTP " + response.status));
+  }
+  return data.data || {};
+}
+
+function addGeneratedImageBubble(imageData, prompt, mode){
   var msgs = document.getElementById("chatMsgs");
   var typing = document.getElementById("chatTyping");
   if (!msgs || !typing) return;
 
   var imageUrl = imageData.image_url || imageData.download_url;
   if (!imageUrl) {
-    addBubble("ai", "Image générée, mais aucune URL exploitable n'a été retournée.");
+    addBubble("ai", (mode==="edit"?"Image modifiée":"Image générée") + ", mais aucune URL exploitable n'a été retournée.");
     return;
   }
 
@@ -3182,43 +3268,40 @@ function addGeneratedImageBubble(imageData, prompt){
 
   var card = document.createElement("div");
   card.className = "artifact-card generated-image-card";
-
   var title = document.createElement("div");
   title.className = "artifact-card-title";
-  title.textContent = "🎨 Image IA générée";
-
+  title.textContent = mode==="edit" ? "🖼️ Image modifiée par l’IA" : "🎨 Image IA générée";
   var desc = document.createElement("div");
   desc.className = "artifact-card-desc";
-  desc.textContent = "Prompt : " + normalizeSpaces(prompt).slice(0, 280);
-
+  desc.textContent = (mode==="edit" ? "Instruction : " : "Prompt : ") + normalizeSpaces(prompt).slice(0, 320);
   var img = document.createElement("img");
   img.src = absoluteUrl;
-  img.alt = prompt || "Image générée par l'IA";
-
+  img.alt = prompt || (mode==="edit" ? "Image modifiée par l'IA" : "Image générée par l'IA");
   var actions = document.createElement("div");
   actions.className = "generated-image-actions";
-
   var open = document.createElement("a");
   open.className = "artifact-download";
   open.href = absoluteUrl;
   open.target = "_blank";
   open.rel = "noopener";
   open.textContent = "👁 Ouvrir l'image";
-
   var download = document.createElement("a");
   download.className = "artifact-download";
   download.href = absoluteUrl;
-  download.download = imageData.filename || "image-myf-ia.png";
+  download.download = imageData.filename || (mode==="edit" ? "image-modifiee-myf-ia.png" : "image-myf-ia.png");
   download.textContent = "⬇ Télécharger l'image";
-
   actions.appendChild(open);
   actions.appendChild(download);
-
   card.appendChild(title);
   card.appendChild(desc);
+  if(chatImageObjectUrl && mode==="edit"){
+    var note=document.createElement("div");
+    note.className="artifact-card-desc";
+    note.textContent="Image source : " + (chatPdfName || "image jointe");
+    card.appendChild(note);
+  }
   card.appendChild(img);
   card.appendChild(actions);
-
   msgs.insertBefore(card, typing);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -3229,14 +3312,36 @@ async function sendChat() {
   var displayMsg=msg; if(chatPdfName) displayMsg+="\n📎 "+chatPdfName; addBubble("user",displayMsg);
   var typing=document.getElementById("chatTyping"); typing.classList.add("show"); document.getElementById("chatMsgs").scrollTop=document.getElementById("chatMsgs").scrollHeight;
 
+  if (isImageEditRequest(msg)) {
+    try {
+      var editPrompt = imagePromptFromMessage(msg);
+      setWebStatus("Modification de l’image avec l’IA…");
+      var edited = await editImageWithBackend(editPrompt);
+      hideWebStatus();
+      typing.classList.remove("show");
+      addGeneratedImageBubble(edited, editPrompt, "edit");
+      chatHistory.push({ role: "user", content: msg });
+      chatHistory.push({ role: "assistant", content: "Image modifiée : " + (edited.image_url || edited.download_url || "") });
+      if (chatPdfText) clearChatPdf();
+    } catch (imgEditErr) {
+      hideWebStatus();
+      typing.classList.remove("show");
+      addBubble("ai", "Erreur modification image : " + imgEditErr.message);
+    } finally {
+      document.getElementById("chatSendBtn").disabled = false;
+      input.focus();
+    }
+    return;
+  }
+
   if (isImageGenerationRequest(msg)) {
     try {
       var imagePrompt = imagePromptFromMessage(msg);
-      setWebStatus("Génération de l’image IA avec Mistral…");
+      setWebStatus(isSketchLikeRequest(imagePrompt)?"Génération du croquis/schéma avec l’IA…":"Génération de l’image IA avec Mistral…");
       var imageData = await generateImageFromBackend(imagePrompt);
       hideWebStatus();
       typing.classList.remove("show");
-      addGeneratedImageBubble(imageData, imagePrompt);
+      addGeneratedImageBubble(imageData, imagePrompt, "generate");
       chatHistory.push({ role: "user", content: msg });
       chatHistory.push({ role: "assistant", content: "Image IA générée : " + (imageData.image_url || imageData.download_url || "") });
       if (chatPdfText) clearChatPdf();
@@ -3256,10 +3361,10 @@ async function sendChat() {
     if(urls.length){setWebStatus("Lecture du lien…"); var urlTexts=[]; for(var u=0;u<Math.min(urls.length,3);u++){var uc=await fetchUrlContent(urls[u]); if(uc) urlTexts.push("[CONTENU DE "+urls[u]+"]\n"+uc.slice(0,7000)+"\n[FIN]");} hideWebStatus(); if(urlTexts.length){urlContext="\n\n"+urlTexts.join("\n\n"); urlNote="🔗 "+urlTexts.length+" lien(s) lu(s)";}}
     var weatherContext="", weatherNote=""; if(extractWeatherLocation(msg)){setWebStatus("Récupération météo…"); var wc=await getWeatherContext(msg); hideWebStatus(); if(wc){weatherContext="\n\n[CONTEXTE MÉTÉO EN TEMPS RÉEL]\n"+wc+"\n[FIN MÉTÉO]"; weatherNote="🌦️ Météo temps réel";}}
     var webContext="", webNote=""; if(webSearchEnabled||needsWeb(msg)){setWebStatus(isNewsLikeQuery(msg)?"Recherche d’actualités…":"Recherche sur le web…"); var sn=await doWebSearch(msg); hideWebStatus(); if(sn){webContext="\n\n[CONTEXTE WEB RÉCUPÉRÉ — synthétise et cite les sources/URL quand elles sont présentes]\n"+sn.slice(0,9000)+"\n[FIN WEB]"; webNote="🌐 Recherche web";}}
-    var pdfContext="", pdfNote=""; if(chatPdfText){var extract=chatPdfText.slice(0,8000); pdfContext="\n\n[CONTENU DU FICHIER JOINT « "+chatPdfName+" »]\n"+extract+"\n[FIN FICHIER]"; pdfNote="📎 Basé sur le fichier "+chatPdfName;}
+    var pdfContext="", pdfNote=""; if(chatPdfText){var extract=chatPdfText.slice(0,8000); pdfContext="\n\n[CONTENU DU FICHIER JOINT « "+chatPdfName+" »]\n"+extract+"\n[FIN PDF]"; pdfNote="📎 Basé sur le fichier "+chatPdfName;}
     var artifactType=detectArtifactRequest(msg);
     var artifactRule=artifactType ? ("L'utilisateur demande un fichier téléchargeable de type "+artifactType+". Génère un contenu complet, propre et directement exploitable. Pour les fichiers de code ou données, mets idéalement le contenu dans un seul bloc de code adapté au format demandé. ") : "";
-    var sysChat="Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. IMPORTANT : quand un contexte web, météo, URL ou fichier joint est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. Pour les nouveautés ou actualités, fais une synthèse courte avec les points clés, les dates/sources disponibles et ce qu'il faut retenir. N'invente pas de sources. "+artifactRule+"Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. "+urlContext+weatherContext+webContext+pdfContext;
+    var sysChat="Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. IMPORTANT : quand un contexte web, météo, URL ou fichier joint est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. Pour les nouveautés ou actualités, fais une synthèse courte avec les points clés, les dates/sources disponibles et ce qu'il faut retenir. N'invente pas de sources. N'utilise pas de caractères superflus de style markdown comme **, ***, __ ou ## dans tes réponses finales. "+artifactRule+"Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. "+urlContext+weatherContext+webContext+pdfContext;
     var histMsg=msg; if(chatPdfText) histMsg=msg+"\n\n(voir le fichier joint dans le contexte système)"; chatHistory.push({role:"user",content:histMsg});
     var sourceNote=[urlNote,weatherNote,webNote,pdfNote].filter(Boolean).join(" · ");
     var aiInner=null; typing.classList.remove("show"); aiInner=addBubble("ai","",true,sourceNote);
