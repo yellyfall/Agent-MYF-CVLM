@@ -7,6 +7,8 @@
 <title>Agent IA de MYF</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -482,6 +484,35 @@ select:focus{border-color:var(--accent)}
 .cv-preserve-inner{padding:40px 50px;max-width:780px;margin:0 auto;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box}
 .cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px;font-family:Arial,Helvetica,sans-serif}
 @media(max-width:640px){.cv-preserve-inner{padding:24px 16px}}
+
+
+/* ─ CHAT ARTIFACTS / FICHIERS TÉLÉCHARGEABLES ─ */
+.artifact-card{max-width:80%;align-self:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 22px rgba(0,0,0,.16)}
+.artifact-card-title{font-size:13px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px}
+.artifact-card-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
+.artifact-download{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:max-content;padding:8px 13px;background:var(--accent2);color:#fff;border-radius:var(--radius-sm);font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 4px 14px var(--accent2-glow)}
+.artifact-download:hover{transform:translateY(-1px)}
+
+/* ─ CV PROFESSIONNEL OPTIMISÉ ─ */
+.cv-pro{background:#fff;color:#1a1a1a;border-radius:0;font-family:Arial,Helvetica,sans-serif;line-height:1.55;display:grid;grid-template-columns:34% 66%;min-height:980px;overflow:hidden}
+.cv-pro-side{background:#16365f;color:#fff;padding:34px 24px;display:flex;flex-direction:column;gap:20px}
+.cv-pro-main{padding:34px 36px;background:#fff;color:#222;display:flex;flex-direction:column;gap:18px}
+.cv-pro-name{font-size:25px;font-weight:800;line-height:1.15;letter-spacing:-.4px;text-transform:uppercase;margin-bottom:2px}
+.cv-pro-title{font-size:13px;line-height:1.45;color:#dce8f7;font-style:italic}
+.cv-pro-contact{font-size:11.5px;line-height:1.7;color:#f5f7fb;white-space:pre-wrap;word-break:break-word}
+.cv-pro-side-section{border-top:1px solid rgba(255,255,255,.28);padding-top:14px;break-inside:avoid;page-break-inside:avoid}
+.cv-pro-side-title{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:800;margin-bottom:9px;color:#fff}
+.cv-pro-side-content{font-size:11.5px;line-height:1.65;white-space:pre-wrap;color:#eef5ff}
+.cv-pro-section{break-inside:auto;page-break-inside:auto}
+.cv-pro-section-title{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:#16365f;font-weight:800;border-bottom:2px solid #16365f;padding-bottom:5px;margin-bottom:10px}
+.cv-pro-section-content{font-size:12.4px;color:#2a2a2a;white-space:pre-wrap;line-height:1.62}
+.cv-pro-section-content .cv-pro-line{display:block;margin:0 0 5px}
+.cv-pro-section-content .cv-pro-bullet{display:block;margin:0 0 5px;padding-left:12px;position:relative}
+.cv-pro-section-content .cv-pro-bullet:before{content:'•';position:absolute;left:0;color:#16365f;font-weight:700}
+.cv-pro-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:5px 12px;font-size:12px;color:#2d7a4f;font-weight:800;margin-bottom:2px;align-self:flex-start}
+@media(max-width:720px){.cv-pro{grid-template-columns:1fr}.cv-pro-side{padding:26px 20px}.cv-pro-main{padding:26px 20px}}
+@media print{.cv-pro{min-height:0;grid-template-columns:34% 66%;break-inside:auto}.cv-pro-section,.cv-pro-side-section{break-inside:avoid;page-break-inside:avoid}.artifact-card{display:none}}
+
 </style>
 </head>
 <body>
@@ -1566,27 +1597,27 @@ async function generateAll(){
     var sysCV="You are an expert CV optimizer. "
       +"CRITICAL LANGUAGE RULE: Rewrite the ENTIRE CV exclusively in "+lang+" ("+langLabel+"). "
       +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
-      +"ABSOLUTE LAYOUT RULE: You must keep the original CV layout as a text template. "
-      +"Do NOT redesign the CV. Do NOT reorder sections. Do NOT create a new CV format. "
-      +"Keep the same headings, same section order, same blocks, same line-break logic, same separators, same contact area, same dates and same candidate identity. "
-      +"Only improve wording inside existing skills, profile and experience descriptions. "
-      +"Do not add a new section unless the original CV already has that section.\n\n"
+      +"PROFESSIONAL CV RULE: Return a clean, structured CV text that can be rendered as a modern professional CV. "
+      +"Use clear standard sections such as PROFILE, SKILLS, PROFESSIONAL EXPERIENCE, EDUCATION, TOOLS/SOFTWARE, LANGUAGES, and PROJECTS only when the information exists in the original CV. "
+      +"The visual application will create an attractive layout, so your role is to provide clear content with stable headings and concise bullet points.\n\n"
+      +"DATA INTEGRITY RULE: Keep candidate's real name, contacts, diplomas, employers, dates and locations exactly as in the original. "
+      +"NEVER invent experiences, degrees, certifications, dates, employers, tools or software not supported by the CV.\n\n"
       +"Detected original structure:\n"
       +cvStructureHint+"\n\n"
       +"METHOD:\n"
-      +"1. Keep candidate's real name, contacts, diplomas, employers, dates and locations exactly as in the original.\n"
-      +"2. Optimize only the content of skills, profile/summary and experience bullet points.\n"
-      +"3. Integrate exact keywords from the job offer naturally, without inventing experience.\n"
-      +"4. Preserve the original bullets/separators as much as possible.\n"
-      +"5. Do not shorten or expand the CV too much; keep a similar length and density.\n"
-      +"6. NEVER invent experiences, degrees, certifications, dates, employers or software not supported by the CV.\n\n"
+      +"1. Keep the candidate identity and contact details at the top.\n"
+      +"2. Improve wording inside profile, skills and experience bullet points using exact keywords from the job offer.\n"
+      +"3. Make bullet points strong, concrete and professional.\n"
+      +"4. Separate sections clearly with uppercase headings.\n"
+      +"5. Keep a similar length and density so the CV remains readable and professional.\n"
+      +"6. Do not add unsupported achievements or numbers.\n\n"
       +"Start with one line: [MATCH RATE ESTIMATE: XX%]\n"
-      +"Then return the optimized CV using the same text layout as the original.\n"
+      +"Then return the full optimized CV with clear section headings and bullet points.\n"
       +"Return ONLY the CV text, no comments, no markdown symbols.";
 
     var userCV="LANGUAGE: "+lang+" ("+langLabel+") — rewrite in "+lang+".\n\n"
       +"=== ORIGINAL CV ===\n"+cvText+"\n=== END CV ===\n\n=== TARGET JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
-      +"Optimize for 90%+ match, preserve the original layout/text template as much as possible, write entirely in "+lang+".";
+      +"Optimize for 90%+ match, return a professional structured CV with clear headings and bullet points, write entirely in "+lang+".";
 
     document.getElementById("cvOut").textContent="";
     var cvResult=await streamCall(sysCV,userCV,model,function(t){
@@ -2711,6 +2742,283 @@ async function sendChat() {
     document.getElementById("chatSendBtn").disabled = false;
     input.focus();
   }
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXTENSION V9 : Web avancé, météo, URL, génération de fichiers et CV pro
+// ═══════════════════════════════════════════════════════════════════════════════
+function safeTxt(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function normalizeSpaces(s){return String(s||"").replace(/\s+/g," ").trim();}
+function getWebIndicatorSpan(){return document.querySelector("#webIndicator span");}
+function setWebStatus(txt){var sp=getWebIndicatorSpan(); if(sp) sp.textContent=txt; var wi=document.getElementById("webIndicator"); if(wi) wi.classList.add("show");}
+function hideWebStatus(){var wi=document.getElementById("webIndicator"); if(wi) wi.classList.remove("show");}
+
+function weatherCodeLabel(code){
+  var m={0:"ciel clair",1:"principalement clair",2:"partiellement nuageux",3:"couvert",45:"brouillard",48:"brouillard givrant",51:"bruine faible",53:"bruine modérée",55:"bruine dense",61:"pluie faible",63:"pluie modérée",65:"forte pluie",71:"neige faible",73:"neige modérée",75:"forte neige",80:"averses faibles",81:"averses modérées",82:"averses fortes",95:"orage",96:"orage avec grêle",99:"orage violent avec grêle"};
+  return m[code] || "conditions météo code "+code;
+}
+
+function extractWeatherLocation(msg){
+  var t=String(msg||"").toLowerCase();
+  var patterns=[/m[eé]t[eé]o\s+(?:à|a|de|pour|sur)\s+([^?.,;!]+)/i, /temps\s+(?:à|a|de|pour|sur)\s+([^?.,;!]+)/i, /(?:il fait quel temps|quelle m[eé]t[eé]o)\s+(?:à|a|de|pour|sur)?\s*([^?.,;!]*)/i];
+  for(var i=0;i<patterns.length;i++){var m=String(msg||"").match(patterns[i]); if(m&&m[1]&&m[1].trim().length>1) return m[1].trim();}
+  if(t.indexOf("météo")!==-1 || t.indexOf("meteo")!==-1) return "Paris";
+  return "";
+}
+
+async function getWeatherContext(msg){
+  var loc=extractWeatherLocation(msg);
+  if(!loc) return null;
+  try{
+    var geo=await fetch("https://geocoding-api.open-meteo.com/v1/search?name="+encodeURIComponent(loc)+"&count=1&language=fr&format=json");
+    var gd=await geo.json();
+    if(!gd.results||!gd.results.length) return "Météo : ville introuvable pour « "+loc+" ».";
+    var g=gd.results[0];
+    var url="https://api.open-meteo.com/v1/forecast?latitude="+g.latitude+"&longitude="+g.longitude+"&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=3&timezone=auto";
+    var res=await fetch(url); var d=await res.json();
+    var out="Météo actuelle pour "+g.name+(g.admin1?", "+g.admin1:"")+(g.country?", "+g.country:"")+" :\n";
+    if(d.current) out+="- Température : "+d.current.temperature_2m+" °C\n- Conditions : "+weatherCodeLabel(d.current.weather_code)+"\n- Vent : "+d.current.wind_speed_10m+" km/h\n";
+    if(d.daily&&d.daily.time){
+      out+="Prévisions 3 jours :\n";
+      for(var i=0;i<d.daily.time.length;i++) out+="- "+d.daily.time[i]+" : "+d.daily.temperature_2m_min[i]+" à "+d.daily.temperature_2m_max[i]+" °C, pluie "+d.daily.precipitation_sum[i]+" mm\n";
+    }
+    return out.trim();
+  }catch(e){return null;}
+}
+
+function isNewsLikeQuery(msg){
+  var low=String(msg||"").toLowerCase();
+  return /(actualité|actualites|nouveaut[eé]s|news|r[eé]cent|derni[eè]res?|aujourd'hui|2026|innovation|annonce)/i.test(low);
+}
+
+async function doNewsSearch(query){
+  try{
+    var q=query;
+    if(/solaire|photovolta/i.test(query)) q='("solaire photovoltaïque" OR photovoltaïque OR "solar PV") France';
+    var url="https://api.gdeltproject.org/api/v2/doc/doc?query="+encodeURIComponent(q)+"&mode=ArtList&format=json&maxrecords=8&sort=HybridRel&timespan=30d";
+    var res=await fetch(url);
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    var data=await res.json();
+    if(!data.articles||!data.articles.length) return null;
+    var lines=data.articles.slice(0,8).map(function(a,i){
+      return (i+1)+". "+(a.title||"Article")+" — "+(a.domain||a.sourceCountry||"source")+" — "+(a.seendate||"")+"\nURL: "+(a.url||"");
+    });
+    return "Articles récents trouvés sur le web :\n"+lines.join("\n");
+  }catch(e){return null;}
+}
+
+// Remplace la recherche web initiale par une version plus utile : résumé DuckDuckGo + articles GDELT si actualité.
+async function doWebSearch(query) {
+  var blocks=[];
+  if(isNewsLikeQuery(query)){
+    var news=await doNewsSearch(query);
+    if(news) blocks.push(news);
+  }
+  try {
+    var url = "https://api.duckduckgo.com/?q=" + encodeURIComponent(query) + "&format=json&no_html=1&skip_disambig=1";
+    var res = await fetch(url);
+    var data = await res.json();
+    var snippets = [];
+    if (data.AbstractText) snippets.push(data.AbstractText);
+    if (data.Answer) snippets.push(data.Answer);
+    if (data.RelatedTopics) {
+      data.RelatedTopics.slice(0, 8).forEach(function(t) {
+        if (t.Text) snippets.push(t.Text + (t.FirstURL ? "\nURL: " + t.FirstURL : ""));
+      });
+    }
+    if (snippets.length) blocks.push("Résultats web généraux pour « " + query + " » :\n" + snippets.join("\n"));
+  } catch(e) {}
+  return blocks.length ? blocks.join("\n\n") : null;
+}
+
+function needsWeb(msg) {
+  var triggers = ["actualité","actualités","nouveautés","aujourd'hui","maintenant","récent","récente","récents","dernier","dernière","2024","2025","2026","prix","tarif","coût","cours","bourse","météo","meteo","résultat","classement","qui est","c'est quoi","nouvelle","annonce","sortie","disponible","combien coûte","news","photovoltaïque en france","solaire en france","aides","réglementation"];
+  var low = String(msg||"").toLowerCase();
+  return triggers.some(function(t){ return low.indexOf(t) !== -1; }) || extractUrls(msg).length>0;
+}
+
+function detectArtifactRequest(msg){
+  var low=String(msg||"").toLowerCase();
+  if(!/(génère|genere|crée|cree|fais|fabrique|exporte|donne|téléchargeable|telechargeable|fichier|document|image|pdf|word|excel|powerpoint|html|css|javascript|js|json|yml|yaml|csv|txt|svg|png)/i.test(low)) return null;
+  var types=[
+    ["pdf",/\bpdf\b/], ["doc",/\b(word|docx?|document word)\b/], ["xlsx",/\b(excel|xlsx|xls)\b/], ["pptx",/\b(powerpoint|pptx|ppt|diaporama|présentation|presentation)\b/],
+    ["html",/\bhtml\b/], ["css",/\bcss\b/], ["js",/\b(javascript|js)\b/], ["json",/\bjson\b/], ["yml",/\b(yml|yaml)\b/], ["csv",/\bcsv\b/], ["svg",/\b(image|svg|illustration|dessin)\b/], ["txt",/\b(txt|texte)\b/]
+  ];
+  for(var i=0;i<types.length;i++) if(types[i][1].test(low)) return types[i][0];
+  return null;
+}
+function artifactFileName(type){
+  var stamp=new Date().toISOString().slice(0,10);
+  var ext={doc:"doc",xlsx:"xlsx",pptx:"pptx",svg:"svg",yml:"yml",js:"js"}[type]||type;
+  return "myf_ia_"+stamp+"."+ext;
+}
+function extractCodeBlock(text, lang){
+  var t=String(text||"");
+  var re=new RegExp("```"+(lang||"[a-zA-Z0-9_-]*")+"\\s*([\\s\\S]*?)```","i");
+  var m=t.match(re); if(m&&m[1]) return m[1].trim();
+  m=t.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/); if(m&&m[1]) return m[1].trim();
+  return t.trim();
+}
+function textToRows(text){
+  var lines=String(text||"").split(/\n+/).map(function(l){return l.trim();}).filter(Boolean);
+  var rows=[];
+  lines.forEach(function(l){
+    var clean=l.replace(/^[-•]\s*/,"");
+    if(clean.indexOf("|")!==-1){
+      var r=clean.split("|").map(function(x){return x.trim();}).filter(Boolean); if(r.length) rows.push(r);
+    } else if(clean.indexOf(";")!==-1){ rows.push(clean.split(";").map(function(x){return x.trim();})); }
+    else if(clean.indexOf(",")!==-1 && clean.length<160){ rows.push(clean.split(",").map(function(x){return x.trim();})); }
+    else rows.push([clean]);
+  });
+  return rows.length?rows:[["Contenu"],[String(text||"")]];
+}
+function addArtifactBubble(filename, blob, desc){
+  var msgs=document.getElementById("chatMsgs"), typing=document.getElementById("chatTyping");
+  if(!msgs||!typing) return;
+  var url=URL.createObjectURL(blob);
+  var card=document.createElement("div"); card.className="artifact-card";
+  card.innerHTML='<div class="artifact-card-title">📦 Fichier généré</div><div class="artifact-card-desc">'+safeTxt(desc||filename)+'</div>';
+  var a=document.createElement("a"); a.className="artifact-download"; a.href=url; a.download=filename; a.textContent="⬇ Télécharger "+filename;
+  card.appendChild(a); msgs.insertBefore(card, typing); msgs.scrollTop=msgs.scrollHeight;
+}
+function htmlDocFromText(title,text){
+  return "<!doctype html><html lang='fr'><head><meta charset='utf-8'><title>"+safeTxt(title)+"</title><style>body{font-family:Arial,sans-serif;line-height:1.6;margin:40px;color:#1f2937}h1{color:#16365f}pre{white-space:pre-wrap;font-family:Arial,sans-serif}</style></head><body><h1>"+safeTxt(title)+"</h1><pre>"+safeTxt(text)+"</pre></body></html>";
+}
+async function createDownloadFromChat(msg, answer){
+  var type=detectArtifactRequest(msg); if(!type) return;
+  var filename=artifactFileName(type);
+  var content=answer||"";
+  var blob=null;
+  try{
+    if(["html","css","js","json","yml","csv","txt"].indexOf(type)!==-1){
+      var lang= type==="js" ? "javascript" : type;
+      var raw=extractCodeBlock(content, lang);
+      var mimes={html:"text/html;charset=utf-8",css:"text/css;charset=utf-8",js:"text/javascript;charset=utf-8",json:"application/json;charset=utf-8",yml:"text/yaml;charset=utf-8",csv:"text/csv;charset=utf-8",txt:"text/plain;charset=utf-8"};
+      blob=new Blob([raw],{type:mimes[type]||"text/plain;charset=utf-8"});
+      addArtifactBubble(filename, blob, "J’ai préparé le fichier demandé à partir de la réponse générée."); return;
+    }
+    if(type==="doc"){
+      var doc=htmlDocFromText("Document généré", content);
+      blob=new Blob([doc],{type:"application/msword;charset=utf-8"}); addArtifactBubble(filename,blob,"Document Word généré."); return;
+    }
+    if(type==="pdf"){
+      var div=document.createElement("div"); div.innerHTML=htmlDocFromText("Document généré", content); div.style.width="210mm"; div.style.background="#fff";
+      document.body.appendChild(div);
+      if(window.html2pdf){
+        await window.html2pdf().set({margin:[15,18,18,18],filename:filename,image:{type:"jpeg",quality:0.98},html2canvas:{scale:2,backgroundColor:"#ffffff"},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}}).from(div).save();
+      } else {
+        fallbackPrintPdf(filename, div);
+      }
+      setTimeout(function(){if(div&&div.parentNode)div.parentNode.removeChild(div);},700); return;
+    }
+    if(type==="xlsx"){
+      var rows=textToRows(content);
+      if(window.XLSX){
+        var wb=XLSX.utils.book_new(); var ws=XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb,ws,"MYF IA");
+        var arr=XLSX.write(wb,{bookType:"xlsx",type:"array"}); blob=new Blob([arr],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      } else blob=new Blob([rows.map(function(r){return r.join(";");}).join("\n")],{type:"text/csv;charset=utf-8"});
+      addArtifactBubble(filename,blob,"Fichier Excel généré."); return;
+    }
+    if(type==="pptx"){
+      if(window.pptxgen){
+        var pptx=new pptxgen(); pptx.layout="LAYOUT_WIDE"; pptx.author="Agent IA de MYF";
+        var parts=String(content||"").split(/\n\s*\n/).filter(Boolean).slice(0,8);
+        if(!parts.length) parts=[String(content||"Présentation générée")];
+        parts.forEach(function(part,i){var slide=pptx.addSlide(); slide.addText(i===0?"Présentation générée":"Partie "+i,{x:0.6,y:0.35,w:12,h:0.5,fontSize:22,bold:true,color:"16365F"}); slide.addText(part.replace(/```[\s\S]*?```/g,""),{x:0.7,y:1.1,w:12,h:5,fontSize:15,fit:"shrink"});});
+        await pptx.writeFile({ fileName: filename }); return;
+      } else { blob=new Blob([content],{type:"text/plain;charset=utf-8"}); addArtifactBubble(filename.replace(/\.pptx$/,".txt"),blob,"PowerPoint indisponible : contenu exporté en texte."); return; }
+    }
+    if(type==="svg"){
+      var title=normalizeSpaces(msg).slice(0,80)||"Image générée";
+      var desc=normalizeSpaces(content).slice(0,260);
+      var svg='<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#16365f"/><stop offset="1" stop-color="#ff7043"/></linearGradient></defs><rect width="1400" height="900" fill="url(#g)"/><circle cx="1120" cy="160" r="220" fill="rgba(255,255,255,.12)"/><circle cx="150" cy="780" r="260" fill="rgba(255,255,255,.10)"/><text x="90" y="170" fill="#fff" font-family="Arial" font-size="52" font-weight="800">'+safeTxt(title)+'</text><foreignObject x="90" y="250" width="1180" height="470"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial;color:white;font-size:31px;line-height:1.45">'+safeTxt(desc)+'</div></foreignObject><text x="90" y="815" fill="rgba(255,255,255,.82)" font-family="Arial" font-size="24">Agent IA de MYF</text></svg>';
+      blob=new Blob([svg],{type:"image/svg+xml;charset=utf-8"}); addArtifactBubble(filename,blob,"Image SVG générée. Pour une vraie image IA photoréaliste, ajoute une route backend image reliée à une API de génération d’images."); return;
+    }
+  }catch(e){console.warn("Création du fichier impossible",e);}
+}
+
+// Rendu CV professionnel : sections séparées, sidebar contact/compétences, contenu principal clair.
+function splitCVSections(text){
+  var lines=String(text||"").split("\n").map(function(l){return l.trim();});
+  var sections=[], current={title:"EN-TÊTE",lines:[]};
+  function isTitle(t){return t.length>2&&t.length<55&&(/^[A-ZÀÂÄÉÈÊËÏÎÔÖÙÛÜÇ0-9 &/\-]+$/.test(t)||/^(profil|profile|comp[eé]tences|skills|exp[eé]rience|formation|education|outils|logiciels|langues|projets|certifications|centres)/i.test(t));}
+  lines.forEach(function(l){
+    if(!l){ if(current.lines.length) current.lines.push(""); return; }
+    if(isTitle(l) && current.lines.length){ sections.push(current); current={title:l.toUpperCase(),lines:[]}; }
+    else if(isTitle(l) && current.title==="EN-TÊTE" && current.lines.length===0){ current.title=l.toUpperCase(); }
+    else current.lines.push(l);
+  });
+  if(current.lines.length||current.title!=="EN-TÊTE") sections.push(current);
+  return sections;
+}
+function detectContactLines(lines){return lines.filter(function(l){return /@|\+?\d[\d\s().-]{7,}|linkedin|github|adresse|permis|\bfrance\b|\blyon\b|paris|montpellier|perpignan/i.test(l);});}
+function lineHtml(l){
+  if(!l.trim()) return "<br>";
+  var clean=safeTxt(l.replace(/^[-•]\s*/,""));
+  if(/^[-•]/.test(l)||/^\d+[.)]\s+/.test(l)) return '<span class="cv-pro-bullet">'+clean+'</span>';
+  return '<span class="cv-pro-line">'+clean+'</span>';
+}
+function renderCV(raw) {
+  var score=getCVScore(raw); var text=stripCVScoreLine(raw); var page=document.getElementById("cvPage");
+  var sections=splitCVSections(text); var header=sections.length?sections[0]:{title:"EN-TÊTE",lines:[]};
+  var headerLines=header.lines.filter(Boolean); var name=headerLines[0]||"CANDIDAT"; var title=headerLines[1]||"Profil professionnel"; var contacts=detectContactLines(headerLines.slice(1));
+  var sideTitles=/comp[eé]tences|skills|outils|logiciels|langues|certifications|centres/i;
+  var side=[], main=[];
+  sections.slice(1).forEach(function(sec){ if(sideTitles.test(sec.title)) side.push(sec); else main.push(sec); });
+  var html='<div class="cv-pro"><aside class="cv-pro-side"><div><div class="cv-pro-name">'+safeTxt(name)+'</div><div class="cv-pro-title">'+safeTxt(title)+'</div></div>';
+  if(contacts.length) html+='<div class="cv-pro-side-section"><div class="cv-pro-side-title">Contact</div><div class="cv-pro-contact">'+contacts.map(safeTxt).join("\n")+'</div></div>';
+  side.forEach(function(sec){html+='<div class="cv-pro-side-section"><div class="cv-pro-side-title">'+safeTxt(sec.title)+'</div><div class="cv-pro-side-content">'+sec.lines.filter(Boolean).map(function(l){return safeTxt(l.replace(/^[-•]\s*/,""));}).join("\n")+'</div></div>';});
+  html+='</aside><main class="cv-pro-main">';
+  if(score!==null) html+='<div class="cv-pro-score">📊 Correspondance : '+score+'%</div>';
+  if(headerLines.length>2){ var profileLines=headerLines.filter(function(l){return contacts.indexOf(l)===-1 && l!==name && l!==title;}); if(profileLines.length) main.unshift({title:"PROFIL",lines:profileLines}); }
+  main.forEach(function(sec){html+='<section class="cv-pro-section"><div class="cv-pro-section-title">'+safeTxt(sec.title)+'</div><div class="cv-pro-section-content">'+sec.lines.map(lineHtml).join("")+'</div></section>';});
+  html+='</main></div>';
+  page.innerHTML=html; document.getElementById("cvRender").classList.add("show"); document.getElementById("cvOut").style.display="none"; switchCVView("visual");
+}
+
+async function streamMistralChat(model, sysChat, messages, onDelta){
+  var res=await fetch("https://api.mistral.ai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},body:JSON.stringify({model:model,messages:[{role:"system",content:sysChat}].concat(messages),max_tokens:2600,temperature:0.7,stream:true})});
+  if(!res.ok){var t=await res.text(); var errMsg="Erreur Mistral "+res.status; try{var j=JSON.parse(t);errMsg=j.message||j.detail||errMsg;}catch(e2){} throw new Error(errMsg);}
+  var reader=res.body.getReader(), decoder=new TextDecoder(), buffer="", full="";
+  while(true){
+    var result=await reader.read(); if(result.done) break;
+    buffer+=decoder.decode(result.value,{stream:true});
+    var lines=buffer.split("\n"); buffer=lines.pop();
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i].trim(); if(!line.startsWith("data: ")) continue;
+      var raw=line.slice(6).trim(); if(raw==="[DONE]") continue;
+      try{var json=JSON.parse(raw); var delta=json.choices&&json.choices[0]&&json.choices[0].delta&&json.choices[0].delta.content; if(typeof delta==="string"){full+=delta; if(onDelta) onDelta(full);}}catch(e3){}
+    }
+  }
+  return full;
+}
+
+// Nouvelle version du chat : web + météo + URL + fichiers téléchargeables.
+async function sendChat() {
+  var input=document.getElementById("chatInput"); var msg=input.value.trim(); if(!msg) return; if(!API_KEY){alert("Vous devez être connecté pour utiliser le chat.");return;}
+  var model=document.getElementById("chatModel").value; input.value=""; input.style.height="auto"; document.getElementById("chatSendBtn").disabled=true;
+  var displayMsg=msg; if(chatPdfName) displayMsg+="\n📎 "+chatPdfName; addBubble("user",displayMsg);
+  var typing=document.getElementById("chatTyping"); typing.classList.add("show"); document.getElementById("chatMsgs").scrollTop=document.getElementById("chatMsgs").scrollHeight;
+  var urlContext="", urlNote="", urls=extractUrls(msg);
+  try{
+    if(urls.length){setWebStatus("Lecture du lien…"); var urlTexts=[]; for(var u=0;u<Math.min(urls.length,3);u++){var uc=await fetchUrlContent(urls[u]); if(uc) urlTexts.push("[CONTENU DE "+urls[u]+"]\n"+uc.slice(0,7000)+"\n[FIN]");} hideWebStatus(); if(urlTexts.length){urlContext="\n\n"+urlTexts.join("\n\n"); urlNote="🔗 "+urlTexts.length+" lien(s) lu(s)";}}
+    var weatherContext="", weatherNote=""; if(extractWeatherLocation(msg)){setWebStatus("Récupération météo…"); var wc=await getWeatherContext(msg); hideWebStatus(); if(wc){weatherContext="\n\n[CONTEXTE MÉTÉO EN TEMPS RÉEL]\n"+wc+"\n[FIN MÉTÉO]"; weatherNote="🌦️ Météo temps réel";}}
+    var webContext="", webNote=""; if(webSearchEnabled||needsWeb(msg)){setWebStatus(isNewsLikeQuery(msg)?"Recherche d’actualités…":"Recherche sur le web…"); var sn=await doWebSearch(msg); hideWebStatus(); if(sn){webContext="\n\n[CONTEXTE WEB RÉCUPÉRÉ — synthétise et cite les sources/URL quand elles sont présentes]\n"+sn.slice(0,9000)+"\n[FIN WEB]"; webNote="🌐 Recherche web";}}
+    var pdfContext="", pdfNote=""; if(chatPdfText){var extract=chatPdfText.slice(0,8000); pdfContext="\n\n[CONTENU DU FICHIER PDF « "+chatPdfName+" »]\n"+extract+"\n[FIN PDF]"; pdfNote="📎 Basé sur "+chatPdfName;}
+    var artifactType=detectArtifactRequest(msg);
+    var artifactRule=artifactType ? ("L'utilisateur demande un fichier téléchargeable de type "+artifactType+". Génère un contenu complet, propre et directement exploitable. Pour les fichiers de code ou données, mets idéalement le contenu dans un seul bloc de code adapté au format demandé. ") : "";
+    var sysChat="Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. IMPORTANT : quand un contexte web, météo, URL ou PDF est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. Pour les nouveautés ou actualités, fais une synthèse courte avec les points clés, les dates/sources disponibles et ce qu'il faut retenir. N'invente pas de sources. "+artifactRule+"Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. "+urlContext+weatherContext+webContext+pdfContext;
+    var histMsg=msg; if(chatPdfText) histMsg=msg+"\n\n(voir le PDF joint dans le contexte système)"; chatHistory.push({role:"user",content:histMsg});
+    var sourceNote=[urlNote,weatherNote,webNote,pdfNote].filter(Boolean).join(" · ");
+    var aiInner=null; typing.classList.remove("show"); aiInner=addBubble("ai","",true,sourceNote);
+    var full=await streamMistralChat(model, sysChat, chatHistory, function(t){aiInner.textContent=t; document.getElementById("chatMsgs").scrollTop=document.getElementById("chatMsgs").scrollHeight;});
+    var finalText=cleanMarkdown(full); aiInner.textContent=finalText; chatHistory.push({role:"assistant",content:finalText});
+    await createDownloadFromChat(msg, finalText);
+    if(chatPdfText) clearChatPdf();
+  }catch(err){hideWebStatus(); typing.classList.remove("show"); addBubble("ai","Erreur : "+err.message);}
+  finally{document.getElementById("chatSendBtn").disabled=false; input.focus();}
 }
 
 window.addEventListener("load",function(){
