@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -230,6 +232,8 @@ textarea::placeholder,input[type="url"]::placeholder{color:var(--muted)}
 .ol{font-size:11px;font-weight:600;color:var(--muted)}
 select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13px;padding:7px 10px;outline:none;cursor:pointer;width:100%}
 select:focus{border-color:var(--accent)}
+.model-help{font-size:10.8px;color:var(--muted);line-height:1.45;margin-top:5px;background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:9px;padding:7px 9px}
+.model-help strong{color:var(--text);font-weight:700}
 .chips{display:flex;gap:5px;flex-wrap:wrap}
 .chip{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:11px;cursor:pointer;transition:all .2s;font-family:"Inter",sans-serif;user-select:none}
 .chip.on{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
@@ -377,6 +381,9 @@ select:focus{border-color:var(--accent)}
 .chat-model-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .chat-model-bar .ol{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
 .chat-model-bar select{flex:1;min-width:140px;max-width:220px}
+.chat-model-select-wrap{display:flex;flex-direction:column;gap:4px;flex:1;min-width:220px;max-width:390px}
+.chat-model-select-wrap select{max-width:none;width:100%}
+.chat-model-select-wrap .model-help{margin-top:0}
 .chat-clear{padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
 .chat-clear:hover{border-color:var(--error);color:var(--error)}
 .chat-welcome{text-align:center;padding:40px 20px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:14px}
@@ -497,6 +504,7 @@ select:focus{border-color:var(--accent)}
 .generated-image-card{max-width:min(80%,620px)}
 .generated-image-card img{display:block;width:100%;max-height:520px;object-fit:contain;border-radius:12px;border:1px solid var(--border);background:#0D0F17}
 .generated-image-actions{display:flex;gap:8px;flex-wrap:wrap}
+.chat-file-note{font-size:10.5px;color:var(--muted);line-height:1.4;margin-left:2px}
 
 /* ─ CV PROFESSIONNEL OPTIMISÉ ─ */
 .cv-pro{background:#fff;color:#1a1a1a;border-radius:0;font-family:Arial,Helvetica,sans-serif;line-height:1.55;display:grid;grid-template-columns:34% 66%;min-height:980px;overflow:hidden}
@@ -756,7 +764,7 @@ select:focus{border-color:var(--accent)}
         <div class="og"><div class="ol">Type de contrat</div>
           <select id="ptype"><option value="">Automatique</option><option value="stage">Stage</option><option value="alternance">Alternance</option><option value="CDI">CDI</option><option value="CDD">CDD</option><option value="thèse / doctorat">Thèse / Doctorat</option><option value="post-doctorat">Post-doctorat</option><option value="ingénieur de recherche">Ingénieur de recherche</option><option value="VIE">VIE</option></select></div>
         <div class="og"><div class="ol">Modèle Mistral</div>
-          <select id="model"><option value="mistral-large-latest">mistral-large</option><option value="mistral-medium-latest" selected>mistral-medium</option><option value="mistral-small-latest">mistral-small</option><option value="open-mistral-7b">open-mistral-7b</option></select></div>
+          <select id="model" onchange="updateModelHelp('model','modelHelp')"><option value="mistral-large-latest">mistral-large</option><option value="mistral-medium-latest" selected>mistral-medium</option><option value="mistral-small-latest">mistral-small</option><option value="open-mistral-7b">open-mistral-7b</option></select><div class="model-help" id="modelHelp"></div></div>
       </div>
       <div><div class="ol" style="margin-bottom:7px">Ton de la lettre</div>
         <div class="chips">
@@ -776,7 +784,7 @@ select:focus{border-color:var(--accent)}
 
     <button class="gen-btn" id="genBtn" onclick="generateAll()">
       <div class="bspin"></div>
-      <span class="btn-text">✨ Générer la lettre de motivation + CV optimisé</span>
+      <span class="btn-text">Générez votre lettre de motivation et optimisez votre CV</span>
     </button>
 
     <div class="errmsg" id="errMsg"></div>
@@ -876,26 +884,30 @@ select:focus{border-color:var(--accent)}
 
       <div class="chat-model-bar">
         <div class="ol">Modèle :</div>
-        <select id="chatModel">
-          <option value="mistral-large-latest">mistral-large</option>
-          <option value="mistral-medium-latest" selected>mistral-medium</option>
-          <option value="mistral-small-latest">mistral-small</option>
-          <option value="open-mistral-7b">open-mistral-7b</option>
-        </select>
+        <div class="chat-model-select-wrap">
+          <select id="chatModel" onchange="updateModelHelp('chatModel','chatModelHelp')">
+            <option value="mistral-large-latest">mistral-large</option>
+            <option value="mistral-medium-latest" selected>mistral-medium</option>
+            <option value="mistral-small-latest">mistral-small</option>
+            <option value="open-mistral-7b">open-mistral-7b</option>
+          </select>
+          <div class="model-help" id="chatModelHelp"></div>
+        </div>
         <button class="chat-web-toggle" id="webToggle" onclick="toggleWeb()" title="Activer la recherche web">🌐 Web</button>
         <button class="chat-clear" onclick="clearChat()">🗑 Effacer</button>
       </div>
 
       <div class="chat-pdf-bar">
-        <label class="chat-pdf-btn" for="chatPdfFile">📎 Joindre un PDF
-          <input type="file" id="chatPdfFile" accept=".pdf" style="display:none" onchange="loadChatPdf(this)">
+        <label class="chat-pdf-btn" for="chatPdfFile">📎 Joindre un fichier
+          <input type="file" id="chatPdfFile" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.rtf,.html,.htm,.css,.js,.json,.yml,.yaml,.xml,.svg,.jpg,.jpeg,.png,.webp,.gif,.bmp" style="display:none" onchange="loadChatFile(this)">
         </label>
         <button type="button" class="chat-pdf-btn chat-image-btn" onclick="promptImageGeneration()" title="Générer une image IA">🎨 Générer une image</button>
         <div class="chat-pdf-badge" id="chatPdfBadge">
           <span>📄</span><span id="chatPdfName">-</span>
-          <button onclick="clearChatPdf()" title="Retirer le PDF">✕</button>
+          <button onclick="clearChatFile()" title="Retirer le fichier">✕</button>
         </div>
-        <div class="fload" id="chatPdfLoad" style="display:none"><div class="mspin"></div>Lecture du PDF…</div>
+        <div class="fload" id="chatPdfLoad" style="display:none"><div class="mspin"></div><span id="chatPdfLoadText">Lecture du fichier…</span></div>
+        <div class="chat-file-note">Formats acceptés : PDF, Word, PowerPoint, Excel, images, HTML, CSS, JS, JSON, YAML, TXT, CSV…</div>
       </div>
 
       <div class="chat-msgs" id="chatMsgs">
@@ -1645,7 +1657,7 @@ async function generateAll(){
     showErr("Erreur : "+(err.message||"Inconnue")+"\n\nConseils :\n- Vérifiez votre quota sur console.mistral.ai\n- Essayez mistral-small");
   }finally{
     btn.classList.remove("loading");btn.disabled=false;
-    btn.querySelector(".btn-text").textContent="✨ Générer la lettre de motivation + CV optimisé";
+    btn.querySelector(".btn-text").textContent="Générez votre lettre de motivation et optimisez votre CV";
   }
 }
 
@@ -2385,8 +2397,11 @@ function switchNav(tab) {
 
 // ── CHAT STATE ─────────────────────────────────────────────────────────────────
 var chatHistory = [];
+// Les variables gardent le nom historique "Pdf" pour compatibilité, mais elles servent maintenant à tous les fichiers joints.
 var chatPdfText = "";
 var chatPdfName = "";
+var chatFileKind = "";
+var chatFileMime = "";
 var webSearchEnabled = false;
 
 // ── TOGGLE WEB SEARCH ──────────────────────────────────────────────────────────
@@ -2398,45 +2413,132 @@ function toggleWeb() {
   btn.textContent = webSearchEnabled ? "🌐 Web ✓" : "🌐 Web";
 }
 
-// ── PDF CHAT ───────────────────────────────────────────────────────────────────
-async function loadChatPdf(input) {
-  if (!input.files || !input.files[0]) return;
-  var file = input.files[0];
-  if (file.size > 10 * 1024 * 1024) { alert("PDF trop volumineux (max 10 Mo)."); return; }
-  var loadEl = document.getElementById("chatPdfLoad");
-  var badge  = document.getElementById("chatPdfBadge");
-  loadEl.style.display = "flex";
+// ── FICHIER JOINT DANS LE CHAT ────────────────────────────────────────────────
+function formatFileSize(bytes){
+  if(!bytes && bytes!==0) return "";
+  var units=["o","Ko","Mo","Go"], n=bytes, i=0;
+  while(n>=1024 && i<units.length-1){n/=1024;i++;}
+  return (i===0?Math.round(n):n.toFixed(n>=10?1:2))+" "+units[i];
+}
+function getFileExt(name){
+  var m=String(name||"").toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m?m[1]:"";
+}
+function isTextLikeFile(ext, type){
+  return /^(txt|md|markdown|csv|json|yml|yaml|html|htm|css|js|jsx|ts|tsx|xml|svg|rtf|log|ini|env|sql|py|php|java|c|cpp|h|cs|rb|go|rs|sh|bat|ps1)$/i.test(ext) || /^text\//i.test(type||"");
+}
+function isImageFile(ext, type){
+  return /^image\//i.test(type||"") || /^(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(ext);
+}
+async function extractPdfTextFromFile(file){
+  if(!window.pdfjsLib) throw new Error("PDF.js n'est pas chargé.");
+  var ab=await file.arrayBuffer();
+  var pdf=await pdfjsLib.getDocument({data:ab}).promise;
+  var texts=[];
+  for(var i=1;i<=Math.min(pdf.numPages,60);i++){
+    var page=await pdf.getPage(i);
+    var content=await page.getTextContent();
+    texts.push(content.items.map(function(s){return s.str;}).join(" "));
+  }
+  return {text:texts.join("\n").replace(/\s{3,}/g," ").trim(), label:pdf.numPages+" p."};
+}
+async function extractDocxTextFromFile(file){
+  if(!window.mammoth) throw new Error("La librairie Word mammoth.js n'est pas chargée.");
+  var ab=await file.arrayBuffer();
+  var result=await mammoth.extractRawText({arrayBuffer:ab});
+  return {text:String(result.value||"").trim(), label:"Word DOCX"};
+}
+async function extractPptxTextFromFile(file){
+  if(!window.JSZip) throw new Error("La librairie JSZip n'est pas chargée.");
+  var ab=await file.arrayBuffer();
+  var zip=await JSZip.loadAsync(ab);
+  var slideNames=Object.keys(zip.files).filter(function(n){return /^ppt\/slides\/slide\d+\.xml$/i.test(n);}).sort(function(a,b){
+    return (parseInt(a.match(/slide(\d+)/i)?.[1]||"0",10))-(parseInt(b.match(/slide(\d+)/i)?.[1]||"0",10));
+  });
+  var all=[];
+  for(var i=0;i<slideNames.length;i++){
+    var xml=await zip.files[slideNames[i]].async("text");
+    var parts=[];
+    try{
+      var doc=new DOMParser().parseFromString(xml,"application/xml");
+      Array.prototype.slice.call(doc.getElementsByTagName("a:t")).forEach(function(n){if(n.textContent)parts.push(n.textContent);});
+      Array.prototype.slice.call(doc.getElementsByTagName("t")).forEach(function(n){if(n.textContent)parts.push(n.textContent);});
+    }catch(e){}
+    if(!parts.length){
+      parts=(xml.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)||[]).map(function(x){return x.replace(/<[^>]+>/g,"");});
+    }
+    if(parts.length) all.push("[Slide "+(i+1)+"]\n"+parts.join(" "));
+  }
+  return {text:all.join("\n\n").trim(), label:slideNames.length+" slide(s)"};
+}
+async function extractXlsxTextFromFile(file){
+  if(!window.XLSX) throw new Error("La librairie XLSX n'est pas chargée.");
+  var ab=await file.arrayBuffer();
+  var wb=XLSX.read(ab,{type:"array"});
+  var parts=[];
+  wb.SheetNames.forEach(function(name){
+    var csv=XLSX.utils.sheet_to_csv(wb.Sheets[name]);
+    if(csv.trim()) parts.push("[Feuille: "+name+"]\n"+csv.trim());
+  });
+  return {text:parts.join("\n\n").trim(), label:wb.SheetNames.length+" feuille(s)"};
+}
+async function extractPlainTextFromFile(file){
+  var text=await file.text();
+  return {text:String(text||"").trim(), label:"texte"};
+}
+async function extractAttachedFileText(file){
+  var ext=getFileExt(file.name), type=file.type||"";
+  if(ext==="pdf" || type==="application/pdf") return await extractPdfTextFromFile(file);
+  if(ext==="docx") return await extractDocxTextFromFile(file);
+  if(ext==="pptx") return await extractPptxTextFromFile(file);
+  if(ext==="xlsx" || ext==="xls" || /spreadsheet|excel/i.test(type)) return await extractXlsxTextFromFile(file);
+  if(isTextLikeFile(ext,type)) return await extractPlainTextFromFile(file);
+  if(isImageFile(ext,type)){
+    return {text:"[IMAGE JOINTE]\nNom : "+file.name+"\nType : "+(type||ext.toUpperCase())+"\nTaille : "+formatFileSize(file.size)+"\nRemarque : l'image est bien jointe au chat. L'IA peut utiliser ces métadonnées. Pour une analyse visuelle complète du contenu de l'image, il faudra ajouter un endpoint vision/multimodal côté backend.", label:"image"};
+  }
+  if(ext==="doc" || ext==="ppt"){
+    return {text:"[FICHIER BINAIRE JOINT]\nNom : "+file.name+"\nType : "+(ext||type)+"\nTaille : "+formatFileSize(file.size)+"\nRemarque : les anciens formats .doc/.ppt ne sont pas extractibles proprement côté navigateur. Convertissez-les idéalement en .docx/.pptx pour que l'IA puisse lire leur contenu.", label:"format ancien"};
+  }
+  return {text:"[FICHIER JOINT]\nNom : "+file.name+"\nType : "+(type||ext||"inconnu")+"\nTaille : "+formatFileSize(file.size)+"\nRemarque : format accepté comme pièce jointe, mais le texte n'a pas pu être extrait automatiquement.", label:"fichier"};
+}
+async function loadChatFile(input){
+  if(!input.files || !input.files[0]) return;
+  var file=input.files[0];
+  if(file.size>25*1024*1024){alert("Fichier trop volumineux (max 25 Mo).");input.value="";return;}
+  var loadEl=document.getElementById("chatPdfLoad");
+  var loadText=document.getElementById("chatPdfLoadText");
+  var badge=document.getElementById("chatPdfBadge");
+  if(loadText) loadText.textContent="Lecture du fichier…";
+  loadEl.style.display="flex";
   badge.classList.remove("show");
-  try {
-    var ab = await file.arrayBuffer();
-    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-    var texts = [];
-    for (var i = 1; i <= Math.min(pdf.numPages, 40); i++) {
-      var page = await pdf.getPage(i);
-      var content = await page.getTextContent();
-      texts.push(content.items.map(function(s){ return s.str; }).join(" "));
-    }
-    chatPdfText = texts.join("\n").replace(/\s{3,}/g, " ").trim();
-    chatPdfName = file.name;
-    document.getElementById("chatPdfName").textContent = file.name + " (" + pdf.numPages + " p.)";
+  try{
+    var extracted=await extractAttachedFileText(file);
+    chatPdfText=(extracted.text||"").trim();
+    chatPdfName=file.name;
+    chatFileKind=extracted.label||getFileExt(file.name)||"fichier";
+    chatFileMime=file.type||"";
+    var shortName=file.name.length>42?file.name.slice(0,24)+"…"+file.name.slice(-14):file.name;
+    document.getElementById("chatPdfName").textContent=shortName+" · "+formatFileSize(file.size)+" · "+chatFileKind;
     badge.classList.add("show");
-    if (chatPdfText.length < 50) {
-      chatPdfText = "";
-      alert("Le PDF ne contient pas de texte extractible (PDF scanné). Veuillez coller le texte manuellement.");
+    if(!chatPdfText || chatPdfText.length<20){
+      chatPdfText="[FICHIER JOINT]\nNom : "+file.name+"\nType : "+(file.type||getFileExt(file.name)||"inconnu")+"\nTaille : "+formatFileSize(file.size)+"\nContenu textuel non extractible automatiquement.";
     }
-  } catch(e) {
-    alert("Erreur lors de la lecture du PDF : " + e.message);
-  } finally {
-    loadEl.style.display = "none";
-    input.value = "";
+  }catch(e){
+    chatPdfText="";chatPdfName="";chatFileKind="";chatFileMime="";
+    alert("Erreur lors de la lecture du fichier : "+e.message);
+  }finally{
+    loadEl.style.display="none";
+    input.value="";
   }
 }
-
-function clearChatPdf() {
-  chatPdfText = ""; chatPdfName = "";
+function clearChatFile(){
+  chatPdfText=""; chatPdfName=""; chatFileKind=""; chatFileMime="";
   document.getElementById("chatPdfBadge").classList.remove("show");
-  document.getElementById("chatPdfName").textContent = "-";
+  document.getElementById("chatPdfName").textContent="-";
 }
+// Compatibilité avec les anciennes fonctions nommées PDF
+async function loadChatPdf(input){ return loadChatFile(input); }
+function clearChatPdf(){ return clearChatFile(); }
 
 // ── URL FETCH DANS LE CHAT ─────────────────────────────────────────────────────
 // Détecte les URLs dans le message de l'utilisateur
@@ -2671,8 +2773,8 @@ async function sendChat() {
   var pdfNote = "";
   if (chatPdfText) {
     var extract = chatPdfText.slice(0, 8000);
-    pdfContext = "\n\n[CONTENU DU FICHIER PDF « " + chatPdfName + " » — utilise ces données pour répondre]\n" + extract + "\n[FIN DU PDF]";
-    pdfNote = "📎 Basé sur " + chatPdfName;
+    pdfContext = "\n\n[CONTENU DU FICHIER JOINT « " + chatPdfName + " » — utilise ces données pour répondre]\n" + extract + "\n[FIN DU PDF]";
+    pdfNote = "📎 Basé sur le fichier " + chatPdfName;
   }
 
   // ── Système ────────────────────────────────────────────────────────────────
@@ -2689,7 +2791,7 @@ async function sendChat() {
 
   // Ajouter le message à l'historique (avec note pdf si présent)
   var histMsg = msg;
-  if (chatPdfText) histMsg = msg + "\n\n(voir le PDF joint dans le contexte système)";
+  if (chatPdfText) histMsg = msg + "\n\n(voir le fichier joint dans le contexte système)";
   chatHistory.push({ role: "user", content: histMsg });
 
   var aiInner = null;
@@ -3154,11 +3256,11 @@ async function sendChat() {
     if(urls.length){setWebStatus("Lecture du lien…"); var urlTexts=[]; for(var u=0;u<Math.min(urls.length,3);u++){var uc=await fetchUrlContent(urls[u]); if(uc) urlTexts.push("[CONTENU DE "+urls[u]+"]\n"+uc.slice(0,7000)+"\n[FIN]");} hideWebStatus(); if(urlTexts.length){urlContext="\n\n"+urlTexts.join("\n\n"); urlNote="🔗 "+urlTexts.length+" lien(s) lu(s)";}}
     var weatherContext="", weatherNote=""; if(extractWeatherLocation(msg)){setWebStatus("Récupération météo…"); var wc=await getWeatherContext(msg); hideWebStatus(); if(wc){weatherContext="\n\n[CONTEXTE MÉTÉO EN TEMPS RÉEL]\n"+wc+"\n[FIN MÉTÉO]"; weatherNote="🌦️ Météo temps réel";}}
     var webContext="", webNote=""; if(webSearchEnabled||needsWeb(msg)){setWebStatus(isNewsLikeQuery(msg)?"Recherche d’actualités…":"Recherche sur le web…"); var sn=await doWebSearch(msg); hideWebStatus(); if(sn){webContext="\n\n[CONTEXTE WEB RÉCUPÉRÉ — synthétise et cite les sources/URL quand elles sont présentes]\n"+sn.slice(0,9000)+"\n[FIN WEB]"; webNote="🌐 Recherche web";}}
-    var pdfContext="", pdfNote=""; if(chatPdfText){var extract=chatPdfText.slice(0,8000); pdfContext="\n\n[CONTENU DU FICHIER PDF « "+chatPdfName+" »]\n"+extract+"\n[FIN PDF]"; pdfNote="📎 Basé sur "+chatPdfName;}
+    var pdfContext="", pdfNote=""; if(chatPdfText){var extract=chatPdfText.slice(0,8000); pdfContext="\n\n[CONTENU DU FICHIER JOINT « "+chatPdfName+" »]\n"+extract+"\n[FIN FICHIER]"; pdfNote="📎 Basé sur le fichier "+chatPdfName;}
     var artifactType=detectArtifactRequest(msg);
     var artifactRule=artifactType ? ("L'utilisateur demande un fichier téléchargeable de type "+artifactType+". Génère un contenu complet, propre et directement exploitable. Pour les fichiers de code ou données, mets idéalement le contenu dans un seul bloc de code adapté au format demandé. ") : "";
-    var sysChat="Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. IMPORTANT : quand un contexte web, météo, URL ou PDF est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. Pour les nouveautés ou actualités, fais une synthèse courte avec les points clés, les dates/sources disponibles et ce qu'il faut retenir. N'invente pas de sources. "+artifactRule+"Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. "+urlContext+weatherContext+webContext+pdfContext;
-    var histMsg=msg; if(chatPdfText) histMsg=msg+"\n\n(voir le PDF joint dans le contexte système)"; chatHistory.push({role:"user",content:histMsg});
+    var sysChat="Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. IMPORTANT : quand un contexte web, météo, URL ou fichier joint est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. Pour les nouveautés ou actualités, fais une synthèse courte avec les points clés, les dates/sources disponibles et ce qu'il faut retenir. N'invente pas de sources. "+artifactRule+"Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. "+urlContext+weatherContext+webContext+pdfContext;
+    var histMsg=msg; if(chatPdfText) histMsg=msg+"\n\n(voir le fichier joint dans le contexte système)"; chatHistory.push({role:"user",content:histMsg});
     var sourceNote=[urlNote,weatherNote,webNote,pdfNote].filter(Boolean).join(" · ");
     var aiInner=null; typing.classList.remove("show"); aiInner=addBubble("ai","",true,sourceNote);
     var full=await streamMistralChat(model, sysChat, chatHistory, function(t){aiInner.textContent=t; document.getElementById("chatMsgs").scrollTop=document.getElementById("chatMsgs").scrollHeight;});
@@ -3169,8 +3271,27 @@ async function sendChat() {
   finally{document.getElementById("chatSendBtn").disabled=false; input.focus();}
 }
 
+function modelDescription(value){
+  var m={
+    "mistral-large-latest":"<strong>mistral-large</strong> : meilleur choix pour les tâches complexes, les lettres/CV exigeants, l’analyse détaillée et le raisonnement avancé. Plus qualitatif, mais potentiellement plus lent.",
+    "mistral-medium-latest":"<strong>mistral-medium</strong> : choix recommandé par défaut. Très bon équilibre entre qualité, rapidité et coût pour lettres, CV, chat, synthèse et code courant.",
+    "mistral-small-latest":"<strong>mistral-small</strong> : rapide et économique. Adapté aux questions simples, reformulations courtes et réponses rapides. Moins précis pour les tâches complexes.",
+    "open-mistral-7b":"<strong>open-mistral-7b</strong> : modèle léger/open source. Utile pour tester ou réduire les coûts, mais moins performant pour les analyses longues et les documents professionnels."
+  };
+  return m[value]||"Choisissez le modèle selon le niveau de qualité, de vitesse et de coût souhaité.";
+}
+function updateModelHelp(selectId, helpId){
+  var sel=document.getElementById(selectId), help=document.getElementById(helpId);
+  if(sel&&help) help.innerHTML=modelDescription(sel.value);
+}
+function initModelHelps(){
+  updateModelHelp("model","modelHelp");
+  updateModelHelp("chatModel","chatModelHelp");
+}
+
 window.addEventListener("load",function(){
   initTheme();
+  initModelHelps();
   if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 });
 </script>
