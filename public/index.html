@@ -47,7 +47,8 @@
 body{background:var(--bg);color:var(--text);font-family:"Inter",sans-serif;min-height:100vh;line-height:1.6;transition:background .3s,color .3s}
 .screen{display:none;min-height:100vh}
 .screen.active{display:block}
-#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(255,112,67,.08),transparent 60%)}
+#loginScreen{align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(255,112,67,.08),transparent 60%)}
+#loginScreen.active{display:flex}
 
 /* ─ THEME PICKER ─ */
 .theme-bar{display:flex;align-items:center;gap:6px;padding:10px 0 0;flex-wrap:wrap}
@@ -63,7 +64,8 @@ body{background:var(--bg);color:var(--text);font-family:"Inter",sans-serif;min-h
 .ui-lang-bar{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
 .ui-lang-bar select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:"Inter",sans-serif;font-size:11px;padding:3px 6px;outline:none;cursor:pointer}
 /* ─ INTERFACE CHOICE ─ */
-#ifaceScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(255,112,67,.06),transparent 60%)}
+#ifaceScreen{align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(255,112,67,.06),transparent 60%)}
+#ifaceScreen.active{display:flex}
 .iface-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 44px;width:100%;max-width:520px;display:flex;flex-direction:column;gap:24px;box-shadow:0 24px 64px rgba(0,0,0,.4);text-align:center}
 .iface-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
 .iface-sub{font-size:12px;color:var(--muted)}
@@ -481,7 +483,14 @@ select:focus{border-color:var(--accent)}
         <div class="login-sub">Lettre de motivation + CV optimisé par IA</div>
       </div>
     </div>
-
+    <div class="theme-bar" aria-label="Choix du thème">
+      <span class="theme-label">Thème</span>
+      <button type="button" class="t-dot t-dark active" data-theme-choice="dark" onclick="setTheme('dark')" title="Thème sombre"></button>
+      <button type="button" class="t-dot t-light" data-theme-choice="light" onclick="setTheme('light')" title="Thème clair"></button>
+      <button type="button" class="t-dot t-ocean" data-theme-choice="ocean" onclick="setTheme('ocean')" title="Thème océan"></button>
+      <button type="button" class="t-dot t-forest" data-theme-choice="forest" onclick="setTheme('forest')" title="Thème forêt"></button>
+      <button type="button" class="t-dot t-sunset" data-theme-choice="sunset" onclick="setTheme('sunset')" title="Thème sunset"></button>
+    </div>
     <div class="login-tabs">
       <button class="login-tab active" onclick="switchLTab('user')">Utilisateur</button>
       <button class="login-tab" onclick="switchLTab('admin')">Administrateur</button>
@@ -518,7 +527,35 @@ select:focus{border-color:var(--accent)}
     </div>
   </div>
 </div>
-
+<!-- ══ INTERFACE CHOICE SCREEN ══ -->
+<div id="ifaceScreen" class="screen">
+  <div class="iface-box">
+    <div>
+      <div class="iface-title">Choisissez votre interface</div>
+      <div class="iface-sub">Vous pourrez revenir à ce choix depuis chaque espace.</div>
+    </div>
+    <div class="iface-cards">
+      <button type="button" class="iface-card" onclick="selectInterface('candidate')">
+        <div class="iface-icon">💼</div>
+        <div class="iface-name">Demandeur d'emploi</div>
+        <div class="iface-desc">Générer une lettre de motivation et optimiser un CV pour une offre.</div>
+      </button>
+      <button type="button" class="iface-card recruiter" onclick="selectInterface('recruiter')">
+        <div class="iface-icon">🎯</div>
+        <div class="iface-name">Recruteur</div>
+        <div class="iface-desc">Comparer un CV avec une offre et obtenir un score de compatibilité.</div>
+      </button>
+    </div>
+    <div class="theme-bar" style="justify-content:center" aria-label="Choix du thème">
+      <span class="theme-label">Thème</span>
+      <button type="button" class="t-dot t-dark active" data-theme-choice="dark" onclick="setTheme('dark')" title="Thème sombre"></button>
+      <button type="button" class="t-dot t-light" data-theme-choice="light" onclick="setTheme('light')" title="Thème clair"></button>
+      <button type="button" class="t-dot t-ocean" data-theme-choice="ocean" onclick="setTheme('ocean')" title="Thème océan"></button>
+      <button type="button" class="t-dot t-forest" data-theme-choice="forest" onclick="setTheme('forest')" title="Thème forêt"></button>
+      <button type="button" class="t-dot t-sunset" data-theme-choice="sunset" onclick="setTheme('sunset')" title="Thème sunset"></button>
+    </div>
+  </div>
+</div>
 <!-- ══ ADMIN MODAL ══ -->
 <div class="moverlay" id="adminModal">
   <div class="modal">
@@ -582,6 +619,7 @@ select:focus{border-color:var(--accent)}
     <div class="h-mark">MYF</div>
     <div><div class="h-name">Agent IA de MYF</div><div class="h-sub">Lettre de motivation + CV optimisé</div></div>
     <div class="h-right">
+      <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
       <div class="h-pill"><div class="h-dot" id="hDot"></div><span id="hUser">-</span></div>
       <button class="h-btn adm" id="adminBtn" style="display:none" onclick="openModal()">⚙ Admin</button>
       <button class="h-btn" onclick="logout()">Déconnexion</button>
@@ -838,7 +876,78 @@ select:focus{border-color:var(--accent)}
   </div><!-- /view-chat -->
 
 </div>
+<!-- ══ RECRUITER SCREEN ══ -->
+<div id="recScreen" class="screen">
+  <header>
+    <div class="h-mark">MYF</div>
+    <div><div class="h-name">Interface recruteur</div><div class="h-sub">Analyse CV / Offre et score de compatibilité</div></div>
+    <div class="h-right">
+      <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
+      <div class="h-pill"><div class="h-dot dot-user" id="recHDot"></div><span id="recHUser">-</span></div>
+      <button class="h-btn adm" id="recAdminBtn" style="display:none" onclick="openModal()">⚙ Admin</button>
+      <button class="h-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+  <div class="rec-wrap">
+    <div class="rec-grid">
+      <div class="rec-card">
+        <div class="rec-card-title">CV du candidat</div>
+        <textarea id="recCvText" rows="11" placeholder="Collez ici le CV du candidat : expériences, compétences, formations, coordonnées..."></textarea>
+      </div>
+      <div class="rec-card">
+        <div class="rec-card-title">Offre / fiche de poste</div>
+        <textarea id="recOfferText" rows="11" placeholder="Collez ici l'offre : missions, compétences obligatoires, niveau d'expérience, localisation..."></textarea>
+      </div>
+    </div>
 
+    <div class="threshold-ctrl">
+      <label for="recThreshold">Seuil de contact</label>
+      <input id="recThreshold" type="range" min="40" max="95" value="70" oninput="document.getElementById('recThresholdVal').textContent=this.value+'%'; updateRecContactPanel();">
+      <span class="threshold-val" id="recThresholdVal">70%</span>
+      <select id="recModel" style="max-width:210px">
+        <option value="mistral-large-latest">mistral-large</option>
+        <option value="mistral-medium-latest" selected>mistral-medium</option>
+        <option value="mistral-small-latest">mistral-small</option>
+      </select>
+    </div>
+
+    <button class="rec-generate-btn" id="recAnalyzeBtn" onclick="analyzeRecruiterMatch()">
+      <div class="bspin"></div><span>Analyser la compatibilité</span>
+    </button>
+
+    <div class="rec-score-zone" id="recScoreZone">
+      <div class="match-gauge-wrap">
+        <div class="match-gauge-header">
+          <div>
+            <div class="rec-card-title">Score de compatibilité</div>
+            <div class="match-verdict" id="recVerdict">-</div>
+          </div>
+          <div class="match-pct" id="recPct">0%</div>
+        </div>
+        <div class="match-bar-bg">
+          <div class="match-bar-fill" id="recBar" style="width:0%"></div>
+          <div class="threshold-line" id="recThresholdLine" style="left:70%"></div>
+        </div>
+      </div>
+
+      <div class="rec-grid">
+        <div class="rec-card"><div class="rec-card-title">Points forts</div><div class="rec-list" id="recStrengths"></div></div>
+        <div class="rec-card"><div class="rec-card-title">Écarts / risques</div><div class="rec-list" id="recGaps"></div></div>
+      </div>
+
+      <div class="contact-panel" id="recContactPanel">
+        <div class="contact-header">Candidat au-dessus du seuil : prise de contact recommandée</div>
+        <div class="contact-info" id="recContactInfo"></div>
+        <div class="date-pick">
+          <label for="recMeetingDate">Créneau proposé</label>
+          <input id="recMeetingDate" type="datetime-local">
+        </div>
+      </div>
+
+      <div class="rec-analysis-full" id="recAnalysisFull"></div>
+    </div>
+  </div>
+</div>
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // En prod (Render) : l'API est sur le même domaine → chemin relatif
@@ -847,7 +956,24 @@ var BASE = window.location.origin;
 var API_KEY = "";
 var ADMIN_KEY = "";
 var ROLE = "";
+var CURRENT_NAME = "";
+var CURRENT_MATCH_SCORE = 0;
 
+
+// -- THEME ---------------------------------------------------------------
+function setTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  try { localStorage.setItem("myf-theme", theme); } catch(e) {}
+  document.querySelectorAll("[data-theme-choice]").forEach(function(btn) {
+    btn.classList.toggle("active", btn.getAttribute("data-theme-choice") === theme);
+  });
+}
+
+function initTheme() {
+  var saved = "dark";
+  try { saved = localStorage.getItem("myf-theme") || "dark"; } catch(e) {}
+  setTheme(saved);
+}
 // ── API CALLS ─────────────────────────────────────────────────────────────────
 async function api(method, endpoint, body, adminKey) {
   var headers = { "Content-Type": "application/json" };
@@ -872,6 +998,11 @@ function tpw(id, btn) {
 }
 function showLErr(id, msg) { var e=document.getElementById(id); e.textContent=msg; e.classList.add("show"); }
 function hideLErr(id) { document.getElementById(id).classList.remove("show"); }
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, function(ch) {
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch];
+  });
+}
 
 // ── LOGIN TABS ─────────────────────────────────────────────────────────────────
 function switchLTab(tab) {
@@ -917,17 +1048,41 @@ async function loginAdmin() {
 }
 
 // ── ENTER APP ──────────────────────────────────────────────────────────────────
-function enterApp(name, role) {
-  document.getElementById("loginScreen").classList.remove("active");
-  document.getElementById("appScreen").classList.add("active");
+function syncUserHeader(name, role) {
   document.getElementById("hUser").textContent = name;
   document.getElementById("hDot").className = "h-dot " + (role==="admin"?"dot-admin":"dot-user");
-  if (role==="admin") document.getElementById("adminBtn").style.display="block";
+  document.getElementById("recHUser").textContent = name;
+  document.getElementById("recHDot").className = "h-dot " + (role==="admin"?"dot-admin":"dot-user");
+  document.getElementById("adminBtn").style.display = role==="admin" ? "block" : "none";
+  document.getElementById("recAdminBtn").style.display = role==="admin" ? "block" : "none";
 }
 
-function logout() {
-  API_KEY=""; ADMIN_KEY=""; ROLE="";
+function enterApp(name, role) {
+  CURRENT_NAME = name;
+  document.getElementById("loginScreen").classList.remove("active");
   document.getElementById("appScreen").classList.remove("active");
+  document.getElementById("recScreen").classList.remove("active");
+  document.getElementById("ifaceScreen").classList.add("active");
+  syncUserHeader(name, role);
+}
+
+function selectInterface(type) {
+  document.getElementById("ifaceScreen").classList.remove("active");
+  document.getElementById("appScreen").classList.toggle("active", type === "candidate");
+  document.getElementById("recScreen").classList.toggle("active", type === "recruiter");
+  syncUserHeader(CURRENT_NAME || "Utilisateur", ROLE);
+}
+
+function backToIface() {
+  document.getElementById("appScreen").classList.remove("active");
+  document.getElementById("recScreen").classList.remove("active");
+  document.getElementById("ifaceScreen").classList.add("active");
+}
+function logout() {
+  API_KEY=""; ADMIN_KEY=""; ROLE=""; CURRENT_NAME="";
+  document.getElementById("appScreen").classList.remove("active");
+  document.getElementById("recScreen").classList.remove("active");
+  document.getElementById("ifaceScreen").classList.remove("active");
   document.getElementById("loginScreen").classList.add("active");
   document.getElementById("uname").value="";
   document.getElementById("upw").value="";
@@ -936,6 +1091,7 @@ function logout() {
   document.getElementById("prgSteps").classList.remove("show");
   document.getElementById("errMsg").classList.remove("show");
   document.getElementById("adminBtn").style.display="none";
+  document.getElementById("recAdminBtn").style.display="none";
 }
 
 // ── ADMIN MODAL ────────────────────────────────────────────────────────────────
@@ -1597,6 +1753,84 @@ function dlDoc(id,fn){
   a.download=fn;a.click();
 }
 
+
+// -- RECRUITER INTERFACE ------------------------------------------------
+function recList(items, kind) {
+  if (!items || !items.length) return '<div class="rec-item"><span class="rec-item-dot dot-warn"></span><span>Aucune donnée détectée.</span></div>';
+  var dot = kind === "ok" ? "dot-green" : "dot-red";
+  return items.slice(0, 6).map(function(item) {
+    return '<div class="rec-item"><span class="rec-item-dot '+dot+'"></span><span>'+escapeHtml(String(item))+'</span></div>';
+  }).join("");
+}
+
+function updateRecContactPanel() {
+  var panel = document.getElementById("recContactPanel");
+  var threshold = Number(document.getElementById("recThreshold").value || 70);
+  document.getElementById("recThresholdLine").style.left = threshold + "%";
+  panel.classList.toggle("show", CURRENT_MATCH_SCORE >= threshold && CURRENT_MATCH_SCORE > 0);
+}
+
+function recScoreClass(score) {
+  if (score >= 75) return "green";
+  if (score >= 55) return "orange";
+  return "red";
+}
+
+function extractJsonObject(text) {
+  try { return JSON.parse(text); } catch(e) {}
+  var m = text.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch(e2) { return null; }
+}
+
+async function analyzeRecruiterMatch() {
+  var cv = document.getElementById("recCvText").value.trim();
+  var offer = document.getElementById("recOfferText").value.trim();
+  if (!cv || !offer) { alert("Collez le CV et l'offre avant de lancer l'analyse."); return; }
+  if (!API_KEY) { alert("Vous devez être connecté pour analyser un candidat."); return; }
+
+  var btn = document.getElementById("recAnalyzeBtn");
+  var spin = btn.querySelector(".bspin");
+  var label = btn.querySelector("span");
+  btn.disabled = true; spin.style.display = "block"; label.textContent = "Analyse en cours...";
+
+  var sys = "Tu es un recruteur senior. Analyse l'adéquation entre un CV et une offre. Réponds uniquement en JSON valide avec les clés: score (nombre 0-100), verdict (phrase courte), strengths (tableau de chaînes), gaps (tableau de chaînes), contact (objet avec email, phone, name si détectés, sinon chaînes vides), analysis (synthèse claire en français).";
+  var user = "CV CANDIDAT:\n" + cv + "\n\nOFFRE:\n" + offer;
+  var full = "";
+
+  try {
+    await streamCall(sys, user, document.getElementById("recModel").value, function(chunk) { full += chunk; });
+    var data = extractJsonObject(full);
+    if (!data) throw new Error("Réponse IA illisible. Relancez l'analyse.");
+    var score = Math.max(0, Math.min(100, Number(data.score) || 0));
+    CURRENT_MATCH_SCORE = score;
+
+    var cls = recScoreClass(score);
+    var pct = document.getElementById("recPct");
+    var bar = document.getElementById("recBar");
+    pct.textContent = score + "%";
+    pct.className = "match-pct " + cls;
+    bar.style.width = score + "%";
+    bar.className = "match-bar-fill " + cls;
+    document.getElementById("recVerdict").textContent = data.verdict || "Analyse terminée";
+    document.getElementById("recStrengths").innerHTML = recList(data.strengths || [], "ok");
+    document.getElementById("recGaps").innerHTML = recList(data.gaps || [], "gap");
+    document.getElementById("recAnalysisFull").textContent = data.analysis || full;
+
+    var c = data.contact || {};
+    var contactHtml = [];
+    if (c.name) contactHtml.push('<span class="contact-btn">👤 '+escapeHtml(c.name)+'</span>');
+    if (c.email) contactHtml.push('<a class="contact-btn email" href="mailto:'+escapeHtml(c.email)+'">✉ '+escapeHtml(c.email)+'</a>');
+    if (c.phone) contactHtml.push('<a class="contact-btn phone" href="tel:'+escapeHtml(c.phone)+'">☎ '+escapeHtml(c.phone)+'</a>');
+    document.getElementById("recContactInfo").innerHTML = contactHtml.join("") || '<span class="contact-btn">Coordonnées non détectées dans le CV</span>';
+    document.getElementById("recScoreZone").classList.add("show");
+    updateRecContactPanel();
+  } catch(err) {
+    alert("Erreur analyse recruteur : " + err.message);
+  } finally {
+    btn.disabled = false; spin.style.display = "none"; label.textContent = "Analyser la compatibilité";
+  }
+}
 // ── NAVIGATION ─────────────────────────────────────────────────────────────────
 function switchNav(tab) {
   ["cv","chat"].forEach(function(t) {
@@ -1973,6 +2207,7 @@ async function sendChat() {
 }
 
 window.addEventListener("load",function(){
+  initTheme();
   if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 });
 </script>
