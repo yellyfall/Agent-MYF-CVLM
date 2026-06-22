@@ -170,31 +170,13 @@ select:focus{border-color:var(--accent)}
 .letter-render.show{display:flex}
 .letter-page{padding:52px 60px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box}
 @media(max-width:640px){.letter-page{padding:28px 20px}}
-.letter-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    margin-bottom:40px;
-}
-.letter-sender{
-    width:45%;
-    text-align:left;
-}
-.letter-right{
-    width:45%;
-    display:flex;
-    flex-direction:column;
-    align-items:flex-end;
-}
-.letter-recipient{
-    text-align:right;
-    width:100%;
-}
-.letter-date{
-    margin-top:20px;
-    width:100%;
-    text-align:right;
-}.letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}
+.letter-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:40px}
+.letter-sender{text-align:right;font-size:12.5px;line-height:1.7;color:#222}
+.letter-sender strong{font-size:14px;font-weight:700;display:block;margin-bottom:3px;color:#111}
+.letter-recipient{text-align:left;font-size:12.5px;line-height:1.7;color:#222}
+.letter-recipient strong{font-size:13.5px;font-weight:700;display:block;margin-bottom:3px;color:#111}
+.letter-date{text-align:right;font-size:12px;color:#555;margin-bottom:24px;font-style:italic}
+.letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}
 .letter-subject span{font-weight:400;font-style:italic;color:#444}
 .letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word}
 .letter-body p{margin-bottom:16px}
@@ -217,7 +199,8 @@ select:focus{border-color:var(--accent)}
 .cv-contacts span{display:flex;align-items:center;gap:4px}
 .cv-section{margin-bottom:20px}
 .cv-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#1a3a6e;border-bottom:1px solid #d0daea;padding-bottom:5px;margin-bottom:12px}
-.cv-entry{margin-bottom:12px}
+.cv-entry{margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #f0f3f8}
+.cv-entry:last-child{border-bottom:none;margin-bottom:0}
 .cv-entry-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px}
 .cv-entry-title{font-weight:700;font-size:13px;color:#111}
 .cv-entry-date{font-size:11.5px;color:#666;white-space:nowrap}
@@ -616,36 +599,19 @@ select:focus{border-color:var(--accent)}
           </div>
         </div>
         <!-- Aperçu visuel de la lettre -->
-<div class="letter-render show" id="letterRender">
-  <div class="letter-page">
-
-    <div class="letter-header">
-
-      <!-- Expéditeur à gauche -->
-      <div class="letter-sender" id="lmSender"></div>
-
-      <div class="letter-right">
-
-        <!-- Destinataire à droite -->
-        <div class="letter-recipient" id="lmRecipient"></div>
-
-        <!-- Date sous le destinataire -->
-        <div class="letter-date" id="lmDate"></div>
-
-      </div>
-
-    </div>
-
-    <div class="letter-subject" id="lmSubject"></div>
-
-    <div class="letter-body" id="lmBody"></div>
-
-    <div class="letter-closing" id="lmClosing"></div>
-
-    <div class="letter-signature" id="lmSignature"></div>
-
-  </div>
-</div>
+        <div class="letter-render show" id="letterRender">
+          <div class="letter-page">
+            <div class="letter-header">
+              <div class="letter-recipient" id="lmRecipient"></div>
+              <div class="letter-sender" id="lmSender"></div>
+            </div>
+            <div class="letter-date" id="lmDate"></div>
+            <div class="letter-subject" id="lmSubject"></div>
+            <div class="letter-body" id="lmBody"></div>
+            <div class="letter-closing" id="lmClosing"></div>
+            <div class="letter-signature" id="lmSignature"></div>
+          </div>
+        </div>
         <!-- Texte brut (caché par défaut) -->
         <div class="outbox" id="lmOut" style="display:none"></div>
       </div>
@@ -1256,86 +1222,47 @@ function detectCVStructure(cvText) {
 
 // ── RENDU VISUEL LETTRE ────────────────────────────────────────────────────────
 function renderLetter(j) {
-  function e(id, html) {
-    var el = document.getElementById(id);
-    if (el) el.innerHTML = html;
-  }
+  function e(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
 
-  function esc(s) {
-    return (s || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br>");
-  }
-
-  // ── EXPÉDITEUR (HAUT GAUCHE)
-  var senderHtml = "<strong>" + esc(j.sender_name) + "</strong>";
-
-  if (j.sender_address)
-    senderHtml += "<br>" + esc(j.sender_address);
-
-  if (j.sender_phone)
-    senderHtml += "<br>" + esc(j.sender_phone);
-
-  if (j.sender_email)
-    senderHtml += "<br>" + esc(j.sender_email);
-
+  // Expéditeur (en haut à droite)
+  var senderHtml = "<strong>"+esc(j.sender_name)+"</strong>";
+  if (j.sender_address) senderHtml += "<br>"+esc(j.sender_address);
+  if (j.sender_phone)   senderHtml += "<br>"+esc(j.sender_phone);
+  if (j.sender_email)   senderHtml += "<br>"+esc(j.sender_email);
   e("lmSender", senderHtml);
 
-  // ── DESTINATAIRE (HAUT DROITE)
+  // Destinataire (en haut à gauche)
   var recipHtml = "";
-
-  if (j.recipient_company)
-    recipHtml += "<strong>" + esc(j.recipient_company) + "</strong><br>";
-
-  if (j.recipient_name)
-    recipHtml += esc(j.recipient_name) +
-      (j.recipient_title ? ", " + esc(j.recipient_title) : "") +
-      "<br>";
-
-  if (j.recipient_address)
-    recipHtml += esc(j.recipient_address).replace(/,\s*/g, "<br>");
-
+  if (j.recipient_company) recipHtml += "<strong>"+esc(j.recipient_company)+"</strong><br>";
+  if (j.recipient_name)    recipHtml += esc(j.recipient_name)+(j.recipient_title?", "+esc(j.recipient_title):"")+"<br>";
+  if (j.recipient_address) recipHtml += esc(j.recipient_address).replace(/,\s*/g,"<br>");
   e("lmRecipient", recipHtml);
 
-  // ── DATE (SOUS LE DESTINATAIRE À DROITE)
-  var dateText = "";
+  // Date (en dessous à droite → aligné droite via CSS letter-date)
+  e("lmDate", esc((j.city||"")?j.city+", "+j.date:j.date));
 
-  if (j.city && j.date)
-    dateText = esc(j.city + ", le " + j.date);
-  else
-    dateText = esc(j.date || "");
+  // Objet
+  e("lmSubject", "Objet : <span>"+esc(j.subject)+"</span>");
 
-  e("lmDate", dateText);
-
-  // ── OBJET
-  e("lmSubject", "Objet : <span>" + esc(j.subject) + "</span>");
-
-  // ── CORPS
-  var bodyHtml = esc(j.salutation) + "<br><br>";
-
-  bodyHtml += (j.body || "")
-    .split(/\n\n+/)
-    .map(function (p) {
-      return "<p>" + esc(p) + "</p>";
-    })
-    .join("");
-
+  // Corps
+  var bodyHtml = esc(j.salutation)+"<br><br>";
+  bodyHtml += (j.body||"").split(/\n\n+/).map(function(p){ return "<p>"+esc(p)+"</p>"; }).join("");
   e("lmBody", bodyHtml);
 
-  // ── FORMULE DE POLITESSE
+  // Formule de politesse
   e("lmClosing", esc(j.closing));
 
-  // ── SIGNATURE
+  // Signature
   e("lmSignature", esc(j.signature));
 
   document.getElementById("letterRender").classList.add("show");
   document.getElementById("lmOut").style.display = "none";
-
-  // Vue visuelle
+  window._lastLetterJson = j;  // mémoriser pour l'export Word
+  // Activer le vue visuelle
   switchLetterView("visual");
 }
+
 // Reconstruire le texte brut depuis le JSON
 function buildLetterText(j) {
   var parts = [];
@@ -1385,103 +1312,267 @@ function cpLmText() {
 }
 
 function dlLetterDoc() {
-  var text = document.getElementById("lmOut").textContent || "";
-  var rows = text.split("\n").map(function(l){
-    return l.trim()
-      ?"<p style='margin:0 0 9pt;font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5'>"+l.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</p>"
-      :"<p style='margin:0 0 4pt'>&nbsp;</p>";
-  }).join("");
-  var doc="<html xmlns:o='urn:schemas-microsoft-com:office:office'><head><meta charset='utf-8'><style>@page{margin:2.5cm}body{margin:0}</style></head><body>"+rows+"</body></html>";
-  var a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([doc],{type:"application/msword"}));
-  a.download="lettre_motivation.doc";a.click();
+  // Récupérer le JSON mémorisé ou reconstruire depuis le DOM
+  var j = window._lastLetterJson;
+  if (!j) {
+    // fallback texte brut
+    var text = document.getElementById("lmOut").textContent || "";
+    var rows = text.split("\n").map(function(l){
+      return l.trim()
+        ? "<w:p><w:r><w:rPr><w:sz w:val='22'/><w:szCs w:val='22'/></w:rPr><w:t xml:space='preserve'>"+xmlEsc(l)+"</w:t></w:r></w:p>"
+        : "<w:p><w:pPr><w:spacing w:after='120'/></w:pPr></w:p>";
+    }).join("");
+    dlDocxRaw(rows, "lettre_motivation.doc");
+    return;
+  }
+
+  // ── Construction du vrai document Word avec mise en page lettre ──
+  var header = ""
+    // Tableau 2 colonnes : destinataire (gauche) | expéditeur (droite)
+    + "<w:tbl>"
+    + "<w:tblPr><w:tblW w:w='9360' w:type='dxa'/><w:tblBorders><w:top w:val='none'/><w:left w:val='none'/><w:bottom w:val='none'/><w:right w:val='none'/><w:insideH w:val='none'/><w:insideV w:val='none'/></w:tblBorders></w:tblPr>"
+    + "<w:tblGrid><w:gridCol w:w='4680'/><w:gridCol w:w='4680'/></w:tblGrid>"
+    + "<w:tr>"
+    // Cellule gauche : destinataire
+    + "<w:tc><w:tcPr><w:tcW w:w='4680' w:type='dxa'/></w:tcPr>"
+    + wPara(j.recipient_company||"", {bold:true, size:22})
+    + (j.recipient_name ? wPara((j.recipient_name)+(j.recipient_title?", "+j.recipient_title:""), {size:20}) : "")
+    + (j.recipient_address ? j.recipient_address.split(/,\s*|\n/).map(function(s){ return wPara(s.trim(),{size:20,color:"444444"}); }).join("") : "")
+    + "</w:tc>"
+    // Cellule droite : expéditeur (aligné droite)
+    + "<w:tc><w:tcPr><w:tcW w:w='4680' w:type='dxa'/></w:tcPr>"
+    + wPara(j.sender_name||"", {bold:true, size:24, align:"right"})
+    + (j.sender_address ? j.sender_address.split(/,\s*|\n/).map(function(s){ return wPara(s.trim(),{size:20,color:"444444",align:"right"}); }).join("") : "")
+    + (j.sender_phone  ? wPara(j.sender_phone, {size:20,color:"444444",align:"right"})  : "")
+    + (j.sender_email  ? wPara(j.sender_email, {size:20,color:"444444",align:"right"})  : "")
+    + "</w:tc>"
+    + "</w:tr></w:tbl>";
+
+  // Date (droite)
+  var dateLine = wPara((j.city?j.city+", ":"")+j.date, {size:20, color:"555555", align:"right", italic:true, spaceBefore:200, spaceAfter:200});
+
+  // Objet (gras souligné)
+  var subjectLine = wPara("Objet : " + (j.subject||""), {bold:true, size:22, underline:true, spaceBefore:160, spaceAfter:240});
+
+  // Corps : salutation + paragraphes
+  var bodyLines = wPara(j.salutation||"", {size:22, spaceAfter:160});
+  (j.body||"").split(/\n\n+/).forEach(function(p){
+    var clean = p.replace(/\n/g," ").trim();
+    if (clean) bodyLines += wPara(clean, {size:22, spaceAfter:160, justify:true});
+  });
+
+  // Formule de politesse + signature
+  var closing = wPara(j.closing||"", {size:22, spaceBefore:200, spaceAfter:280});
+  var signature = wPara(j.signature||"", {size:22, bold:true, spaceBefore:600});
+
+  var body = header + dateLine + subjectLine + bodyLines + closing + signature;
+  dlDocxRaw(body, "lettre_motivation.doc");
+}
+
+// Helpers Word XML
+function xmlEsc(s){
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+}
+function wPara(text, opts) {
+  opts = opts || {};
+  var pPr = "<w:pPr>";
+  if (opts.align && opts.align !== "left") pPr += "<w:jc w:val='"+(opts.align==="right"?"right":opts.align==="center"?"center":"both")+"'/>";
+  if (opts.spaceBefore || opts.spaceAfter) pPr += "<w:spacing w:before='"+(opts.spaceBefore||0)+"' w:after='"+(opts.spaceAfter||120)+"'/>";
+  pPr += "</w:pPr>";
+  var rPr = "<w:rPr>";
+  if (opts.bold)    rPr += "<w:b/><w:bCs/>";
+  if (opts.italic)  rPr += "<w:i/><w:iCs/>";
+  if (opts.underline) rPr += "<w:u w:val='single'/>";
+  if (opts.color)   rPr += "<w:color w:val='"+opts.color+"'/>";
+  if (opts.size)    rPr += "<w:sz w:val='"+opts.size+"'/><w:szCs w:val='"+opts.size+"'/>";
+  rPr += "</w:rPr>";
+  return "<w:p>"+pPr+"<w:r>"+rPr+"<w:t xml:space='preserve'>"+xmlEsc(text)+"</w:t></w:r></w:p>";
+}
+function dlDocxRaw(bodyXml, filename) {
+  var doc = "<?xml version='1.0' encoding='UTF-8' standalone='yes'?>"
+    +"<w:document xmlns:wpc='http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas' "
+    +"xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main' "
+    +"xmlns:r='http://schemas.openxmlformats.org/officeDocument/2006/relationships'>"
+    +"<w:body>"
+    +"<w:sectPr><w:pgMar w:top='1134' w:right='1134' w:bottom='1134' w:left='1134'/></w:sectPr>"
+    + bodyXml
+    +"</w:body></w:document>";
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([doc], {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}));
+  a.download = filename; a.click();
 }
 
 // ── RENDU VISUEL CV ────────────────────────────────────────────────────────────
 function renderCV(raw) {
-  // Extraire le taux de correspondance
   var scoreMatch = raw.match(/\[MATCH RATE ESTIMATE[^:]*:\s*(\d+)%?\]|\[TAUX DE CORRESPONDANCE[^:]*:\s*(\d+)%?\]/i);
   var score = scoreMatch ? (scoreMatch[1]||scoreMatch[2]) : null;
-  // Supprimer la ligne du taux du texte
-  var text = raw.replace(/^\[.*?%?\]\s*/i,"").trim();
-
+  var text = raw.replace(/^\[.*?%?\]\n?/im,"").trim();
   var lines = text.split("\n");
   var page = document.getElementById("cvPage");
   var html = "";
 
-  if (score) {
-    html += '<div class="cv-score">📊 Correspondance : '+score+'%</div>';
+  if (score) html += '<div class="cv-score">📊 Correspondance estimée : '+score+'%</div>';
+
+  // ── Détection du header (nom, titre, contacts) ────────────────────────────
+  var headerLines = [];
+  var bodyStart = 0;
+  var contactRe = /[@+]|tél|tel|mob|linkedin|github|adresse|address|email|mail|\d{2}[\s.\-]\d{2}/i;
+  var dateRe    = /\b(jan|fév|feb|mar|avr|apr|mai|may|jun|jul|aoû|aug|sep|oct|nov|déc|dec|\d{4})\b/i;
+
+  // Les 6 premières lignes non vides : chercher nom + titre + contacts
+  var nonEmpty = [];
+  for (var i=0;i<lines.length && nonEmpty.length<8;i++){
+    if (lines[i].trim()) nonEmpty.push({idx:i, text:lines[i].trim()});
   }
 
-  // Heuristique de rendu : détecter nom, titre, contacts sur les premières lignes
-  var firstLines = lines.slice(0, 8);
-  var nameIdx = -1, titleIdx = -1, contactLines = [];
-
-  firstLines.forEach(function(l, i){
-    var t = l.trim();
-    if (!t) return;
-    if (nameIdx === -1 && t.length < 60 && !/[@+\d{3,}]/.test(t)) { nameIdx = i; return; }
-    if (titleIdx === -1 && nameIdx !== -1 && t.length < 80 && !/[@+]/.test(t) && i < 5) { titleIdx = i; return; }
-    if (/@|[+\d]{7,}|linkedin|github|adresse|email/i.test(t)) contactLines.push(t);
+  var nameIdx=-1, titleIdx=-1;
+  nonEmpty.forEach(function(l,pos){
+    if (nameIdx===-1 && l.text.length < 55 && !contactRe.test(l.text) && !dateRe.test(l.text) && pos<4) { nameIdx=l.idx; return; }
+    if (titleIdx===-1 && nameIdx!==-1 && l.text.length < 80 && !contactRe.test(l.text) && !dateRe.test(l.text) && pos<5) { titleIdx=l.idx; return; }
   });
 
-  // Header CV
   html += '<div class="cv-header-zone">';
-  if (nameIdx !== -1) html += '<div class="cv-name">'+esc(lines[nameIdx])+'</div>';
-  if (titleIdx !== -1) html += '<div class="cv-title">'+esc(lines[titleIdx])+'</div>';
-  if (contactLines.length) {
-    html += '<div class="cv-contacts">';
-    contactLines.forEach(function(c){ html += '<span>'+esc(c)+'</span>'; });
-    html += '</div>';
+  if (nameIdx!==-1) html += '<div class="cv-name">'+esc(lines[nameIdx])+'</div>';
+  if (titleIdx!==-1) html += '<div class="cv-title">'+esc(lines[titleIdx])+'</div>';
+
+  // Contacts : lignes avec email/tel/linkedin dans les 12 premières lignes
+  var contactHtml = "";
+  var lastHeaderIdx = Math.max(nameIdx, titleIdx);
+  for (var ci=0;ci<Math.min(lines.length,14);ci++){
+    var ct = lines[ci].trim();
+    if (!ct || ci===nameIdx || ci===titleIdx) continue;
+    if (contactRe.test(ct) && ct.length < 120) {
+      // Split sur | ou · ou — pour plusieurs infos sur une ligne
+      ct.split(/[|·—•]/).forEach(function(piece){
+        var p = piece.trim();
+        if (p) contactHtml += '<span>'+esc(p)+'</span>';
+      });
+      if (ci > lastHeaderIdx) lastHeaderIdx = ci;
+    }
   }
+  if (contactHtml) html += '<div class="cv-contacts">'+contactHtml+'</div>';
   html += '</div>';
 
-  // Reste des sections
-  var startIdx = Math.max(nameIdx, titleIdx, contactLines.length ? 3 : 0) + 1;
-  var remaining = lines.slice(startIdx);
-  var currentSection = null;
-  var currentEntries = [];
+  bodyStart = lastHeaderIdx + 1;
 
-  function flushSection() {
-    if (!currentSection && currentEntries.length === 0) return;
-    if (currentSection) {
-      html += '<div class="cv-section">';
-      html += '<div class="cv-section-title">'+esc(currentSection)+'</div>';
-      // Détecter si c'est une section compétences (mots courts séparés par virgule/retour)
-      var allText = currentEntries.join(" ");
-      var isSkills = /compétence|skill|logiciel|outil|langue|technologie|maîtrise/i.test(currentSection)
-        || (currentEntries.length > 2 && allText.length < 400);
-      if (isSkills) {
-        html += '<div class="cv-skills-grid">';
-        currentEntries.join("\n").split(/[,\n•·\-–]/).forEach(function(s){
-          var sk = s.trim(); if (sk.length > 1 && sk.length < 60) html += '<span class="cv-skill-tag">'+esc(sk)+'</span>';
-        });
-        html += '</div>';
-      } else {
-        currentEntries.forEach(function(entry){
-          html += '<div class="cv-entry"><div class="cv-entry-desc">'+esc(entry)+'</div></div>';
-        });
-      }
-      html += '</div>';
-    }
-    currentSection = null;
-    currentEntries = [];
+  // ── Parsing des sections et entrées ──────────────────────────────────────
+  // Un titre de section = ligne courte, pas de date, pas de chiffre au début, souvent tout en CAPS ou moins de 40 chars
+  function isSectionTitle(t) {
+    if (!t || t.length > 60) return false;
+    if (dateRe.test(t) && /\d{4}/.test(t)) return false; // contient une date → pas un titre
+    if (/^\d/.test(t)) return false;
+    if (contactRe.test(t) && !/@/.test(t) === false) return false;
+    var isAllCaps = t === t.toUpperCase() && t.replace(/[^A-ZÀÂÉÈÊÙÎÏÔÛ]/g,"").length > 2;
+    var isShortTitle = t.length < 45 && /^[A-ZÀÂÉÈÊÙÎÏÔÛ]/.test(t) && !/[.!?]$/.test(t) && !/\d{4}/.test(t);
+    return isAllCaps || isShortTitle;
   }
 
-  remaining.forEach(function(line){
-    var t = line.trim();
-    if (!t) return;
-    // Détecter titre de section : ligne courte en majuscules ou ligne courte standalone
-    var isSectionTitle = (t.length < 50 && (t === t.toUpperCase() || /^[-=_]{3,}$/.test(t)) && t.replace(/[-=_ ]/g,"").length > 2)
-      || (/^[A-ZÀÂÉÈÊÙÎÏÔÛ][^.]{2,35}$/.test(t) && !/^\d/.test(t) && !/@/.test(t) && t.length < 40);
-    if (isSectionTitle) {
-      flushSection();
-      currentSection = t;
-    } else {
-      currentEntries.push(t);
+  // Détecte une ligne "intitulé de poste | entreprise | date" = entrée d'expérience
+  function isEntryHeader(t) {
+    return dateRe.test(t) && t.length < 120;
+  }
+
+  // Sections à traiter comme compétences (tags)
+  function isSkillSection(title) {
+    return /compét|skill|outil|logiciel|langue|technolog|maîtri|certif|language|soft|hard|tool|framew/i.test(title);
+  }
+
+  var sections = [];
+  var curSection = null;
+  var curLines = [];
+
+  function flushSec() {
+    if (curSection !== null || curLines.length > 0) {
+      sections.push({ title: curSection, lines: curLines.slice() });
     }
+    curSection = null; curLines = [];
+  }
+
+  for (var li = bodyStart; li < lines.length; li++) {
+    var t = lines[li].trim();
+    if (!t) continue;
+    if (isSectionTitle(t)) {
+      flushSec();
+      curSection = t;
+    } else {
+      curLines.push(t);
+    }
+  }
+  flushSec();
+
+  // ── Rendu de chaque section ───────────────────────────────────────────────
+  sections.forEach(function(sec) {
+    if (!sec.title && sec.lines.length === 0) return;
+
+    html += '<div class="cv-section">';
+    if (sec.title) html += '<div class="cv-section-title">'+esc(sec.title)+'</div>';
+
+    if (sec.title && isSkillSection(sec.title)) {
+      // Rendu compétences : tags
+      html += '<div class="cv-skills-grid">';
+      sec.lines.join("\n").split(/[,\n•·\-–|]/).forEach(function(s){
+        var sk = s.trim().replace(/^[-•·]\s*/,"");
+        if (sk.length > 1 && sk.length < 80) html += '<span class="cv-skill-tag">'+esc(sk)+'</span>';
+      });
+      html += '</div>';
+    } else {
+      // Rendu expériences / formation : grouper par entrée
+      var entries = [];
+      var curEntry = null;
+
+      sec.lines.forEach(function(line) {
+        var t2 = line.trim();
+        if (isEntryHeader(t2) || (t2.length < 100 && /^[A-ZÀÂÉÈÊÙÎÏÔÛ]/.test(t2) && dateRe.test(t2))) {
+          if (curEntry) entries.push(curEntry);
+          // Parser la ligne d'en-tête : chercher la date (souvent après | ou – ou en fin)
+          var dateMatch = t2.match(/(\b\d{4}\s*[-–]\s*(?:\d{4}|[A-Za-z]+\.?\s*\d{4}|(?:présent|present|aujourd|auj\.?|current|now))\b|\b\d{4}\b)/i);
+          var dateStr = dateMatch ? dateMatch[0] : "";
+          var titlePart = t2.replace(dateStr,"").replace(/^[-–|]\s*|\s*[-–|]$/g,"").replace(/\s{2,}/g," ").trim();
+          // Détecter sous-titre (entreprise) après | ou –
+          var parts = titlePart.split(/\s*[|–—]\s*/);
+          curEntry = {
+            title: parts[0]||"",
+            sub: parts.slice(1).join(" | "),
+            date: dateStr,
+            bullets: []
+          };
+        } else {
+          if (!curEntry) curEntry = {title:"",sub:"",date:"",bullets:[]};
+          curEntry.bullets.push(t2);
+        }
+      });
+      if (curEntry) entries.push(curEntry);
+
+      if (entries.length === 0) {
+        // Juste des lignes sans structure détectée
+        sec.lines.forEach(function(l){
+          html += '<div class="cv-entry"><div class="cv-entry-desc">'+esc(l)+'</div></div>';
+        });
+      } else {
+        entries.forEach(function(en) {
+          html += '<div class="cv-entry">';
+          if (en.title || en.date) {
+            html += '<div class="cv-entry-head">';
+            html += '<div class="cv-entry-title">'+esc(en.title)+'</div>';
+            if (en.date) html += '<div class="cv-entry-date">'+esc(en.date)+'</div>';
+            html += '</div>';
+          }
+          if (en.sub) html += '<div class="cv-entry-sub">'+esc(en.sub)+'</div>';
+          if (en.bullets.length) {
+            var bulletHtml = '<ul style="margin:4px 0 0 16px;padding:0;display:flex;flex-direction:column;gap:2px">';
+            en.bullets.forEach(function(b){
+              var clean = b.replace(/^[-•·]\s*/,"");
+              bulletHtml += '<li style="font-size:12px;color:#333;line-height:1.6">'+esc(clean)+'</li>';
+            });
+            bulletHtml += '</ul>';
+            html += bulletHtml;
+          }
+          html += '</div>';
+        });
+      }
+    }
+    html += '</div>';
   });
-  flushSection();
 
   page.innerHTML = html;
   document.getElementById("cvRender").classList.add("show");
