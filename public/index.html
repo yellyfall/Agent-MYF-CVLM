@@ -889,14 +889,45 @@ select:focus{border-color:var(--accent)}
     </div>
   </header>
   <div class="rec-wrap">
-    <div class="rec-grid">
+        <div class="rec-grid">
       <div class="rec-card">
-        <div class="rec-card-title">CV du candidat</div>
-        <textarea id="recCvText" rows="11" placeholder="Collez ici le CV du candidat : expériences, compétences, formations, coordonnées..."></textarea>
+        <div class="rec-card-title">CV du candidat <span class="cbadge">PDF ou texte</span></div>
+        <div class="uz" id="recCvZone">
+          <input type="file" id="recCvFile" accept=".pdf,application/pdf" onchange="uploadRecCV(this)">
+          <div class="uz-icon">📂</div>
+          <div class="uz-text">Téléversez le CV PDF ou <strong>cliquez</strong></div>
+          <div class="uz-hint">PDF texte natif recommandé</div>
+        </div>
+        <div class="fload" id="recCvLoad"><div class="mspin"></div>Lecture du CV PDF...</div>
+        <div class="fbadge" id="recCvBadge"><span>✅</span><span id="recCvName">-</span><button onclick="clearRecCV()">✕</button></div>
+        <div class="div"></div>
+        <div class="ol" style="font-size:11px;color:var(--muted)">Ou collez / complétez le CV :</div>
+        <textarea id="recCvText" rows="7" placeholder="Collez ici le CV du candidat : expériences, compétences, formations, coordonnées..."></textarea>
       </div>
       <div class="rec-card">
-        <div class="rec-card-title">Offre / fiche de poste</div>
-        <textarea id="recOfferText" rows="11" placeholder="Collez ici l'offre : missions, compétences obligatoires, niveau d'expérience, localisation..."></textarea>
+        <div class="rec-card-title">Offre / fiche de poste <span class="cbadge">PDF, lien ou texte</span></div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchRecOfferTab('text')" id="rec-tab-text">Texte</button>
+          <button class="tab" onclick="switchRecOfferTab('link')" id="rec-tab-link">Lien</button>
+          <button class="tab" onclick="switchRecOfferTab('file')" id="rec-tab-file">PDF</button>
+        </div>
+        <div class="tab-c active" id="rec-offer-text">
+          <textarea id="recOfferText" rows="9" placeholder="Collez ici l'offre : missions, compétences obligatoires, niveau d'expérience, localisation..."></textarea>
+        </div>
+        <div class="tab-c" id="rec-offer-link">
+          <input type="url" id="recOfferUrl" placeholder="https://www.linkedin.com/jobs/view/...">
+          <div class="info-note">L'agent tentera de lire le contenu du lien. Si le site bloque l'accès, collez le texte dans l'onglet Texte.</div>
+        </div>
+        <div class="tab-c" id="rec-offer-file">
+          <div class="uz" id="recOfZone">
+            <input type="file" id="recOfFile" accept=".pdf,application/pdf" onchange="uploadRecOffer(this)">
+            <div class="uz-icon">📎</div>
+            <div class="uz-text">Téléversez l'offre PDF ou <strong>cliquez</strong></div>
+            <div class="uz-hint">PDF texte natif recommandé</div>
+          </div>
+          <div class="fload" id="recOfLoad"><div class="mspin"></div>Lecture de l'offre PDF...</div>
+          <div class="fbadge" id="recOfBadge"><span>✅</span><span id="recOfName">-</span><button onclick="clearRecOffer()">✕</button></div>
+        </div>
       </div>
     </div>
 
@@ -1210,6 +1241,7 @@ document.getElementById("akey").addEventListener("keydown",function(e){if(e.key=
 
 // ── APP ────────────────────────────────────────────────────────────────────────
 var curTab="text", cvData=null, ofData=null;
+var recOfferTab="text", recCvData=null, recOfferData=null;
 
 function switchTab(tab){
   curTab=tab;
@@ -1272,6 +1304,67 @@ async function readTxt(file){
 }
 async function readAny(file){return file.type==="application/pdf"?extractPDF(file):readTxt(file);}
 
+async function uploadRecCV(input){
+  var file=input.files[0]; if(!file)return;
+  document.getElementById("recCvLoad").classList.add("show");
+  document.getElementById("recCvBadge").classList.remove("show");
+  try{
+    recCvData=await extractPDF(file);
+    document.getElementById("recCvName").textContent=file.name;
+    document.getElementById("recCvBadge").classList.add("show");
+  }catch(e){alert("Erreur CV recruteur : "+e.message);}
+  finally{document.getElementById("recCvLoad").classList.remove("show"); input.value="";}
+}
+
+async function uploadRecOffer(input){
+  var file=input.files[0]; if(!file)return;
+  document.getElementById("recOfLoad").classList.add("show");
+  document.getElementById("recOfBadge").classList.remove("show");
+  try{
+    recOfferData=await extractPDF(file);
+    document.getElementById("recOfName").textContent=file.name;
+    document.getElementById("recOfBadge").classList.add("show");
+  }catch(e){alert("Erreur offre recruteur : "+e.message);}
+  finally{document.getElementById("recOfLoad").classList.remove("show"); input.value="";}
+}
+
+function clearRecCV(){
+  recCvData=null;
+  document.getElementById("recCvFile").value="";
+  document.getElementById("recCvBadge").classList.remove("show");
+}
+
+function clearRecOffer(){
+  recOfferData=null;
+  document.getElementById("recOfFile").value="";
+  document.getElementById("recOfBadge").classList.remove("show");
+}
+
+function switchRecOfferTab(tab){
+  recOfferTab=tab;
+  ["text","link","file"].forEach(function(t){
+    document.getElementById("rec-tab-"+t).classList.toggle("active", t===tab);
+    document.getElementById("rec-offer-"+t).classList.toggle("active", t===tab);
+  });
+}
+
+async function getRecCVText(){
+  var manual=document.getElementById("recCvText").value.trim();
+  if(recCvData&&recCvData.content)return recCvData.content+(manual?"\n\n--- Notes complémentaires recruteur ---\n"+manual:"");
+  return manual;
+}
+
+async function getRecOfferText(){
+  if(recOfferTab==="text")return document.getElementById("recOfferText").value.trim();
+  if(recOfferTab==="file"&&recOfferData&&recOfferData.content)return recOfferData.content;
+  if(recOfferTab==="link"){
+    var url=document.getElementById("recOfferUrl").value.trim();
+    if(!url)return "";
+    var content=await fetchUrlContent(url);
+    return content ? "URL de l'offre : "+url+"\n\n--- Contenu lu depuis le lien ---\n"+content : "URL de l'offre : "+url+"\n\nLe site n'a pas permis la lecture automatique. Demander au recruteur de coller le texte si l'analyse manque de précision.";
+  }
+  return "";
+}
 async function uploadCV(input){
   var file=input.files[0]; if(!file)return;
   document.getElementById("cvLoad").classList.add("show");
@@ -1291,7 +1384,7 @@ async function uploadOf(input){
 function clearCV(){cvData=null;document.getElementById("cvFile").value="";document.getElementById("cvBadge").classList.remove("show");updPipeline();}
 function clearOf(){ofData=null;document.getElementById("ofFile").value="";document.getElementById("ofBadge").classList.remove("show");updPipeline();}
 
-["cvZone","ofZone"].forEach(function(id){
+["cvZone","ofZone","recCvZone","recOfZone"].forEach(function(id){
   var z=document.getElementById(id);
   z.addEventListener("dragover",function(e){e.preventDefault();z.classList.add("dg");});
   z.addEventListener("dragleave",function(){z.classList.remove("dg");});
@@ -1299,7 +1392,9 @@ function clearOf(){ofData=null;document.getElementById("ofFile").value="";docume
     e.preventDefault();z.classList.remove("dg");
     var file=e.dataTransfer.files[0]; if(!file)return;
     if(id==="cvZone")await uploadCV({files:[file]});
-    else await uploadOf({files:[file]});
+    else if(id==="ofZone")await uploadOf({files:[file]});
+    else if(id==="recCvZone")await uploadRecCV({files:[file]});
+    else await uploadRecOffer({files:[file]});
   });
 });
 
@@ -1784,17 +1879,23 @@ function extractJsonObject(text) {
 }
 
 async function analyzeRecruiterMatch() {
-  var cv = document.getElementById("recCvText").value.trim();
-  var offer = document.getElementById("recOfferText").value.trim();
-  if (!cv || !offer) { alert("Collez le CV et l'offre avant de lancer l'analyse."); return; }
   if (!API_KEY) { alert("Vous devez être connecté pour analyser un candidat."); return; }
 
   var btn = document.getElementById("recAnalyzeBtn");
   var spin = btn.querySelector(".bspin");
   var label = btn.querySelector("span");
-  btn.disabled = true; spin.style.display = "block"; label.textContent = "Analyse en cours...";
+  btn.disabled = true; spin.style.display = "block"; label.textContent = "Lecture des documents...";
 
-  var sys = "Tu es un recruteur senior. Analyse l'adéquation entre un CV et une offre. Réponds uniquement en JSON valide avec les clés: score (nombre 0-100), verdict (phrase courte), strengths (tableau de chaînes), gaps (tableau de chaînes), contact (objet avec email, phone, name si détectés, sinon chaînes vides), analysis (synthèse claire en français).";
+  var cv = await getRecCVText();
+  var offer = await getRecOfferText();
+  if (!cv || !offer) {
+    btn.disabled = false; spin.style.display = "none"; label.textContent = "Analyser la compatibilité";
+    alert("Ajoutez un CV et une offre avant de lancer l'analyse. Le CV peut être un PDF ou du texte, et l'offre peut être un PDF, un lien ou du texte collé.");
+    return;
+  }
+  label.textContent = "Analyse en cours...";
+
+  var sys = "Tu es un recruteur senior. Analyse l'adéquation entre un CV candidat et une offre d'emploi, même si les informations proviennent d'un PDF, d'un lien web ou d'un copier-coller. Utilise toutes les informations disponibles. Réponds uniquement en JSON valide avec les clés: score (nombre 0-100), verdict (phrase courte), strengths (tableau de chaînes), gaps (tableau de chaînes), contact (objet avec email, phone, name si détectés, sinon chaînes vides), analysis (synthèse claire en français).";
   var user = "CV CANDIDAT:\n" + cv + "\n\nOFFRE:\n" + offer;
   var full = "";
 
