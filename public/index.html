@@ -492,6 +492,11 @@ select:focus{border-color:var(--accent)}
 .artifact-card-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
 .artifact-download{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:max-content;padding:8px 13px;background:var(--accent2);color:#fff;border-radius:var(--radius-sm);font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 4px 14px var(--accent2-glow)}
 .artifact-download:hover{transform:translateY(-1px)}
+.chat-image-btn{border-color:rgba(167,139,250,.35);color:var(--accent3)}
+.chat-image-btn:hover{border-color:var(--accent3);color:var(--accent3);background:rgba(167,139,250,.10)}
+.generated-image-card{max-width:min(80%,620px)}
+.generated-image-card img{display:block;width:100%;max-height:520px;object-fit:contain;border-radius:12px;border:1px solid var(--border);background:#0D0F17}
+.generated-image-actions{display:flex;gap:8px;flex-wrap:wrap}
 
 /* ─ CV PROFESSIONNEL OPTIMISÉ ─ */
 .cv-pro{background:#fff;color:#1a1a1a;border-radius:0;font-family:Arial,Helvetica,sans-serif;line-height:1.55;display:grid;grid-template-columns:34% 66%;min-height:980px;overflow:hidden}
@@ -885,6 +890,7 @@ select:focus{border-color:var(--accent)}
         <label class="chat-pdf-btn" for="chatPdfFile">📎 Joindre un PDF
           <input type="file" id="chatPdfFile" accept=".pdf" style="display:none" onchange="loadChatPdf(this)">
         </label>
+        <button type="button" class="chat-pdf-btn chat-image-btn" onclick="promptImageGeneration()" title="Générer une image IA">🎨 Générer une image</button>
         <div class="chat-pdf-badge" id="chatPdfBadge">
           <span>📄</span><span id="chatPdfName">-</span>
           <button onclick="clearChatPdf()" title="Retirer le PDF">✕</button>
@@ -903,7 +909,7 @@ select:focus{border-color:var(--accent)}
             <button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>
             <button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>
             <button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>
-            <button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button><button class="chat-sug" onclick="chatSuggest(this)">🎨 Génère une image d’une centrale photovoltaïque futuriste</button>
           </div>
         </div>
         <div class="chat-typing" id="chatTyping">
@@ -1597,22 +1603,22 @@ async function generateAll(){
     var sysCV="You are an expert CV optimizer. "
       +"CRITICAL LANGUAGE RULE: Rewrite the ENTIRE CV exclusively in "+lang+" ("+langLabel+"). "
       +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
-      +"PROFESSIONAL CV RULE: Return a clean, structured CV text that can be rendered as a modern professional CV. "
-      +"Use clear standard sections such as PROFILE, SKILLS, PROFESSIONAL EXPERIENCE, EDUCATION, TOOLS/SOFTWARE, LANGUAGES, and PROJECTS only when the information exists in the original CV. "
-      +"The visual application will create an attractive layout, so your role is to provide clear content with stable headings and concise bullet points.\n\n"
-      +"DATA INTEGRITY RULE: Keep candidate's real name, contacts, diplomas, employers, dates and locations exactly as in the original. "
-      +"NEVER invent experiences, degrees, certifications, dates, employers, tools or software not supported by the CV.\n\n"
+      +"ABSOLUTE LAYOUT RULE: You must keep the original CV layout as a text template. "
+      +"Do NOT redesign the CV. Do NOT reorder sections. Do NOT create a new CV format. "
+      +"Keep the same headings, same section order, same blocks, same line-break logic, same separators, same contact area, same dates and same candidate identity. "
+      +"Only improve wording inside existing skills, profile and experience descriptions. "
+      +"Do not add a new section unless the original CV already has that section.\n\n"
       +"Detected original structure:\n"
       +cvStructureHint+"\n\n"
       +"METHOD:\n"
-      +"1. Keep the candidate identity and contact details at the top.\n"
-      +"2. Improve wording inside profile, skills and experience bullet points using exact keywords from the job offer.\n"
-      +"3. Make bullet points strong, concrete and professional.\n"
-      +"4. Separate sections clearly with uppercase headings.\n"
-      +"5. Keep a similar length and density so the CV remains readable and professional.\n"
-      +"6. Do not add unsupported achievements or numbers.\n\n"
+      +"1. Keep candidate's real name, contacts, diplomas, employers, dates and locations exactly as in the original.\n"
+      +"2. Optimize only the content of skills, profile/summary and experience bullet points.\n"
+      +"3. Integrate exact keywords from the job offer naturally, without inventing experience.\n"
+      +"4. Preserve the original bullets/separators as much as possible.\n"
+      +"5. Do not shorten or expand the CV too much; keep a similar length and density.\n"
+      +"6. NEVER invent experiences, degrees, certifications, dates, employers or software not supported by the CV.\n\n"
       +"Start with one line: [MATCH RATE ESTIMATE: XX%]\n"
-      +"Then return the full optimized CV with clear section headings and bullet points.\n"
+      +"Then return the optimized CV using the same text layout as the original.\n"
       +"Return ONLY the CV text, no comments, no markdown symbols.";
 
     var userCV="LANGUAGE: "+lang+" ("+langLabel+") — rewrite in "+lang+".\n\n"
@@ -2553,7 +2559,7 @@ function clearChat() {
     +'<button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>'
     +'<button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>'
     +'<button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>'
-    +'<button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button>'
+    +'<button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button><button class="chat-sug" onclick="chatSuggest(this)">🎨 Génère une image d’une centrale photovoltaïque futuriste</button>'
     +'</div>';
   msgs.appendChild(welcome);
   var typing = document.createElement("div");
@@ -2996,11 +3002,153 @@ async function streamMistralChat(model, sysChat, messages, onDelta){
 }
 
 // Nouvelle version du chat : web + météo + URL + fichiers téléchargeables.
+
+// ── IMAGE IA VIA BACKEND MISTRAL ───────────────────────────────────────────────
+function isImageGenerationRequest(msg){
+  var low = String(msg || "").toLowerCase();
+  var hasImageWord = /(image|photo|illustration|dessin|visuel|logo|affiche|poster|bannière|banniere|banner|avatar|icône|icone)/i.test(low);
+  var hasCreateVerb = /(génère|genere|générer|generer|crée|cree|créer|creer|fais|fabrique|dessine|produis|conçois|concois|imagine|make|create|generate|draw)/i.test(low);
+  if (!hasImageWord || !hasCreateVerb) return false;
+  if (/(analyse|analyser|décris|decris|identifier|identifie|c'est quoi|quelle est)/i.test(low) && !hasCreateVerb) return false;
+  return true;
+}
+
+function imagePromptFromMessage(msg){
+  var prompt = String(msg || "").trim();
+  prompt = prompt.replace(/^(peux-tu|peux tu|stp|s'il te plaît|s'il te plait|merci)\s+/i, "");
+  prompt = prompt.replace(/^(génère|genere|générer|generer|crée|cree|créer|creer|fais|fabrique|dessine|produis|conçois|concois|imagine)\s+(moi\s+)?(une?|des?)?\s*/i, "");
+  prompt = prompt.replace(/^(image|photo|illustration|dessin|visuel)\s*[:\-]\s*/i, "");
+  prompt = prompt.trim();
+  return prompt || msg;
+}
+
+function promptImageGeneration(){
+  var input = document.getElementById("chatInput");
+  if (!API_KEY) { alert("Vous devez être connecté pour générer une image."); return; }
+  var prompt = (input && input.value ? input.value.trim() : "");
+  if (!prompt) {
+    prompt = window.prompt("Décris l'image à générer :", "Une centrale photovoltaïque futuriste en France, style réaliste, lumière dorée");
+  }
+  if (!prompt) return;
+  input.value = "Génère une image : " + prompt;
+  autoGrow(input);
+  sendChat();
+}
+
+async function generateImageFromBackend(prompt, options){
+  var modelEl = document.getElementById("chatModel");
+  var model = options && options.model ? options.model : (modelEl ? modelEl.value : "mistral-medium-latest");
+
+  var response = await fetch(BASE + "/api/generate-image", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": API_KEY
+    },
+    body: JSON.stringify({
+      prompt: prompt,
+      model: model,
+      output_format: "png",
+      size: "auto",
+      quality: "auto",
+      background: "auto"
+    })
+  });
+
+  var data = await response.json().catch(function(){ return null; });
+  if (!response.ok || !data || !data.success) {
+    throw new Error((data && data.message) || ("Erreur image HTTP " + response.status));
+  }
+  return data.data || {};
+}
+
+function addGeneratedImageBubble(imageData, prompt){
+  var msgs = document.getElementById("chatMsgs");
+  var typing = document.getElementById("chatTyping");
+  if (!msgs || !typing) return;
+
+  var imageUrl = imageData.image_url || imageData.download_url;
+  if (!imageUrl) {
+    addBubble("ai", "Image générée, mais aucune URL exploitable n'a été retournée.");
+    return;
+  }
+
+  var absoluteUrl = imageUrl;
+  if (imageUrl.indexOf("http") !== 0 && imageUrl.indexOf("data:") !== 0) {
+    absoluteUrl = BASE + imageUrl;
+  }
+
+  var card = document.createElement("div");
+  card.className = "artifact-card generated-image-card";
+
+  var title = document.createElement("div");
+  title.className = "artifact-card-title";
+  title.textContent = "🎨 Image IA générée";
+
+  var desc = document.createElement("div");
+  desc.className = "artifact-card-desc";
+  desc.textContent = "Prompt : " + normalizeSpaces(prompt).slice(0, 280);
+
+  var img = document.createElement("img");
+  img.src = absoluteUrl;
+  img.alt = prompt || "Image générée par l'IA";
+
+  var actions = document.createElement("div");
+  actions.className = "generated-image-actions";
+
+  var open = document.createElement("a");
+  open.className = "artifact-download";
+  open.href = absoluteUrl;
+  open.target = "_blank";
+  open.rel = "noopener";
+  open.textContent = "👁 Ouvrir l'image";
+
+  var download = document.createElement("a");
+  download.className = "artifact-download";
+  download.href = absoluteUrl;
+  download.download = imageData.filename || "image-myf-ia.png";
+  download.textContent = "⬇ Télécharger l'image";
+
+  actions.appendChild(open);
+  actions.appendChild(download);
+
+  card.appendChild(title);
+  card.appendChild(desc);
+  card.appendChild(img);
+  card.appendChild(actions);
+
+  msgs.insertBefore(card, typing);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 async function sendChat() {
   var input=document.getElementById("chatInput"); var msg=input.value.trim(); if(!msg) return; if(!API_KEY){alert("Vous devez être connecté pour utiliser le chat.");return;}
   var model=document.getElementById("chatModel").value; input.value=""; input.style.height="auto"; document.getElementById("chatSendBtn").disabled=true;
   var displayMsg=msg; if(chatPdfName) displayMsg+="\n📎 "+chatPdfName; addBubble("user",displayMsg);
   var typing=document.getElementById("chatTyping"); typing.classList.add("show"); document.getElementById("chatMsgs").scrollTop=document.getElementById("chatMsgs").scrollHeight;
+
+  if (isImageGenerationRequest(msg)) {
+    try {
+      var imagePrompt = imagePromptFromMessage(msg);
+      setWebStatus("Génération de l’image IA avec Mistral…");
+      var imageData = await generateImageFromBackend(imagePrompt);
+      hideWebStatus();
+      typing.classList.remove("show");
+      addGeneratedImageBubble(imageData, imagePrompt);
+      chatHistory.push({ role: "user", content: msg });
+      chatHistory.push({ role: "assistant", content: "Image IA générée : " + (imageData.image_url || imageData.download_url || "") });
+      if (chatPdfText) clearChatPdf();
+    } catch (imgErr) {
+      hideWebStatus();
+      typing.classList.remove("show");
+      addBubble("ai", "Erreur génération image : " + imgErr.message + "\n\nVérifiez que votre serveur Render utilise bien le server.js avec l’endpoint /api/generate-image et que la clé Mistral est configurée.");
+    } finally {
+      document.getElementById("chatSendBtn").disabled = false;
+      input.focus();
+    }
+    return;
+  }
+
   var urlContext="", urlNote="", urls=extractUrls(msg);
   try{
     if(urls.length){setWebStatus("Lecture du lien…"); var urlTexts=[]; for(var u=0;u<Math.min(urls.length,3);u++){var uc=await fetchUrlContent(urls[u]); if(uc) urlTexts.push("[CONTENU DE "+urls[u]+"]\n"+uc.slice(0,7000)+"\n[FIN]");} hideWebStatus(); if(urlTexts.length){urlContext="\n\n"+urlTexts.join("\n\n"); urlNote="🔗 "+urlTexts.length+" lien(s) lu(s)";}}
