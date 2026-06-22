@@ -305,10 +305,10 @@ select:focus{border-color:var(--accent)}
     text-align:right;
 }.letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}
 .letter-subject span{font-weight:400;font-style:italic;color:#444}
-.letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word}
-.letter-body p{margin-bottom:16px}
+.letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word;text-align:justify;text-align-last:left;hyphens:auto}
+.letter-body p{margin-bottom:16px;text-align:justify;text-align-last:left;break-inside:avoid-page;page-break-inside:avoid}
 .letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8}
-.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111}
+.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111;text-align:right}
 .letter-toolbar{display:flex;gap:6px;padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap}
 .letter-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;width:fit-content}
 .lv-btn{padding:5px 12px;border:none;background:none;color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s}
@@ -473,6 +473,11 @@ select:focus{border-color:var(--accent)}
 
 /* ─ EXPORT PDF / CV CONSERVÉ ─ */
 .pdf-export-temp{position:fixed;left:0;top:0;width:210mm;background:#fff;color:#111;z-index:-10;pointer-events:none}
+.pdf-export-temp *{box-sizing:border-box}
+.pdf-export-temp p,.pdf-export-temp .letter-header,.pdf-export-temp .letter-subject,.pdf-export-temp .letter-closing,.pdf-export-temp .letter-signature{break-inside:avoid-page;page-break-inside:avoid}
+.pdf-export-temp .letter-body,.pdf-export-temp .letter-body p{text-align:justify;text-align-last:left;hyphens:auto}
+.pdf-export-temp .letter-signature{text-align:right}
+.pdf-export-temp .cv-preserve-inner{orphans:3;widows:3}
 .cv-preserve-page{background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid rgba(79,142,247,.2);overflow:hidden;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.55}
 .cv-preserve-inner{padding:40px 50px;max-width:780px;margin:0 auto;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box}
 .cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px;font-family:Arial,Helvetica,sans-serif}
@@ -1920,23 +1925,42 @@ function fallbackPrintPdf(title, node) {
     alert("Le navigateur a bloqué l'ouverture de la fenêtre PDF. Autorisez les pop-ups ou réessayez.");
     return;
   }
-  var css = "@page{size:A4;margin:0}body{margin:0;background:#fff;color:#111}"
+  var css = "@page{size:A4;margin:12mm 0 20mm 0}body{margin:0;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}"
+    +"@page{ @bottom-center{content:'Page ' counter(page) ' / ' counter(pages);font-size:9px;color:#777} }"
     +".letter-render{display:flex;background:#fff;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;font-size:13.5px;line-height:1.8}"
-    +".letter-page{padding:22mm 25mm;box-sizing:border-box;width:210mm;min-height:297mm;margin:0 auto}"
-    +".letter-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px}"
+    +".letter-page{padding:16mm 25mm 18mm;box-sizing:border-box;width:210mm;min-height:auto;margin:0 auto}"
+    +".letter-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;break-inside:avoid-page;page-break-inside:avoid}"
     +".letter-sender{width:45%;text-align:left}.letter-right{width:45%;display:flex;flex-direction:column;align-items:flex-end}"
     +".letter-recipient{text-align:right;width:100%}.letter-date{margin-top:20px;width:100%;text-align:right}"
-    +".letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}"
-    +".letter-subject span{font-weight:400;font-style:italic;color:#444}.letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word}"
-    +".letter-body p{margin-bottom:16px}.letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8}.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111}"
+    +".letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px;break-inside:avoid-page;page-break-inside:avoid}"
+    +".letter-subject span{font-weight:400;font-style:italic;color:#444}.letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word;text-align:justify;text-align-last:left;hyphens:auto}"
+    +".letter-body p{margin-bottom:16px;text-align:justify;text-align-last:left;break-inside:avoid-page;page-break-inside:avoid}.letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8;break-inside:avoid-page;page-break-inside:avoid}.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111;text-align:right;break-inside:avoid-page;page-break-inside:avoid}"
     +".cv-render{display:flex;background:#fff;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7}"
-    +".cv-page{padding:18mm 20mm;box-sizing:border-box;width:210mm;min-height:297mm;margin:0 auto}"
+    +".cv-page{padding:12mm 20mm 18mm;box-sizing:border-box;width:210mm;min-height:auto;margin:0 auto}"
     +".cv-preserve-page{background:#fff;color:#1a1a1a;border:none;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.55}"
-    +".cv-preserve-inner{padding:0;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box}"
+    +".cv-preserve-inner{padding:0;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box;orphans:3;widows:3}"
     +".cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px}";
   w.document.open();
   w.document.write("<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+escapeHtml(title)+"</title><style>"+css+"</style></head><body>"+node.outerHTML+"<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},300)}<\/script></body></html>");
   w.document.close();
+}
+
+function addPageNumbersToPdf(pdf) {
+  try {
+    var total = pdf.internal.getNumberOfPages();
+    var pageW = pdf.internal.pageSize.getWidth();
+    var pageH = pdf.internal.pageSize.getHeight();
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(120, 120, 120);
+    for (var i = 1; i <= total; i++) {
+      pdf.setPage(i);
+      pdf.text("Page " + i + " / " + total, pageW / 2, pageH - 8, { align: "center" });
+    }
+    pdf.setTextColor(0, 0, 0);
+  } catch(e) {
+    console.warn("Numérotation PDF impossible :", e);
+  }
 }
 
 async function downloadNodeAsPdf(node, filename, title) {
@@ -1946,19 +1970,30 @@ async function downloadNodeAsPdf(node, filename, title) {
   document.body.appendChild(temp);
   try {
     if (!(await ensureHtml2Pdf())) throw new Error("Librairie html2pdf indisponible");
-    await window.html2pdf().set({
-      margin: 0,
+
+    // Marges A4 : on garde une vraie zone basse pour éviter de remplir la page jusqu'en bas.
+    // La numérotation est ajoutée dans cette zone par jsPDF.
+    var worker = window.html2pdf().set({
+      margin: [8, 0, 18, 0],
       filename: filename,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0, letterRendering: true },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["css", "legacy"] }
-    }).from(node).save();
+      pagebreak: {
+        mode: ["css", "legacy"],
+        avoid: [".letter-header", ".letter-subject", ".letter-body p", ".letter-closing", ".letter-signature", ".cv-preserve-score"]
+      }
+    }).from(node).toPdf();
+
+    await worker.get("pdf").then(function(pdf) {
+      addPageNumbersToPdf(pdf);
+    });
+    await worker.save();
   } catch(e) {
     console.warn("Export PDF direct impossible, ouverture du mode impression :", e);
     fallbackPrintPdf(title || filename, node);
   } finally {
-    setTimeout(function(){ if (temp && temp.parentNode) temp.parentNode.removeChild(temp); }, 500);
+    setTimeout(function(){ if (temp && temp.parentNode) temp.parentNode.removeChild(temp); }, 800);
   }
 }
 
@@ -1972,19 +2007,24 @@ function getLetterPdfNode() {
   clone.classList.add("show");
   clone.style.display = "flex";
   clone.style.width = "210mm";
-  clone.style.minHeight = "297mm";
+  clone.style.minHeight = "auto";
   clone.style.border = "none";
   clone.style.borderRadius = "0";
   clone.style.background = "#fff";
   var page = clone.querySelector(".letter-page");
   if (page) {
     page.style.width = "210mm";
-    page.style.minHeight = "297mm";
+    page.style.minHeight = "auto";
     page.style.maxWidth = "none";
     page.style.margin = "0";
-    page.style.padding = "22mm 25mm";
+    page.style.padding = "16mm 25mm 18mm";
     page.style.boxSizing = "border-box";
   }
+  var body = clone.querySelector(".letter-body");
+  if (body) { body.style.textAlign = "justify"; body.style.textAlignLast = "left"; body.style.hyphens = "auto"; }
+  clone.querySelectorAll(".letter-body p").forEach(function(p){ p.style.textAlign = "justify"; p.style.textAlignLast = "left"; p.style.breakInside = "avoid-page"; p.style.pageBreakInside = "avoid"; });
+  var signature = clone.querySelector(".letter-signature");
+  if (signature) { signature.style.textAlign = "right"; signature.style.breakInside = "avoid-page"; signature.style.pageBreakInside = "avoid"; }
   return clone;
 }
 
@@ -1997,17 +2037,17 @@ function getCVPdfNode() {
   clone.classList.add("show");
   clone.style.display = "flex";
   clone.style.width = "210mm";
-  clone.style.minHeight = "297mm";
+  clone.style.minHeight = "auto";
   clone.style.border = "none";
   clone.style.borderRadius = "0";
   clone.style.background = "#fff";
   var page = clone.querySelector(".cv-page");
   if (page) {
     page.style.width = "210mm";
-    page.style.minHeight = "297mm";
+    page.style.minHeight = "auto";
     page.style.maxWidth = "none";
     page.style.margin = "0";
-    page.style.padding = "18mm 20mm";
+    page.style.padding = "12mm 20mm 18mm";
     page.style.boxSizing = "border-box";
   }
   var preserve = clone.querySelector(".cv-preserve-page");
