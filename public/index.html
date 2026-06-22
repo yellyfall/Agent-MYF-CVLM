@@ -91,7 +91,7 @@ body{background:var(--bg);color:var(--text);font-family:"Inter",sans-serif;min-h
 .match-bar-bg{background:var(--surface2);border-radius:20px;height:10px;overflow:hidden;position:relative}
 .match-bar-fill{height:100%;border-radius:20px;transition:width 1s ease;background:linear-gradient(90deg,var(--accent),var(--warn))}
 .match-bar-fill.green{background:linear-gradient(90deg,#22c55e,var(--success))}
-.match-bar-fill.red{background:linear(90deg,var(--error),#f87171)}
+.match-bar-fill.red{background:linear-gradient(90deg,var(--error),#f87171)}
 .threshold-line{position:absolute;top:0;bottom:0;width:2px;background:var(--text);border-radius:2px}
 .rec-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:700px){.rec-grid{grid-template-columns:1fr}}
@@ -929,9 +929,7 @@ select:focus{border-color:var(--accent)}
           <div class="fbadge" id="recOfBadge"><span>✅</span><span id="recOfName">-</span><button onclick="clearRecOffer()">✕</button></div>
         </div>
       </div>
-    </div>
-
-    <div class="threshold-ctrl">
+    </div><div class="threshold-ctrl">
       <label for="recThreshold">Seuil de contact</label>
       <input id="recThreshold" type="range" min="40" max="95" value="70" oninput="document.getElementById('recThresholdVal').textContent=this.value+'%'; updateRecContactPanel();">
       <span class="threshold-val" id="recThresholdVal">70%</span>
@@ -989,6 +987,7 @@ var ADMIN_KEY = "";
 var ROLE = "";
 var CURRENT_NAME = "";
 var CURRENT_MATCH_SCORE = 0;
+var LAST_LETTER_JSON = null;
 
 
 // -- THEME ---------------------------------------------------------------
@@ -1241,7 +1240,7 @@ document.getElementById("akey").addEventListener("keydown",function(e){if(e.key=
 
 // ── APP ────────────────────────────────────────────────────────────────────────
 var curTab="text", cvData=null, ofData=null;
-var recOfferTab="text", recCvData=null, recOfferData=null;
+var recOfferTab="text", recCvData=null, recOfferData=null, REC_LAST_CONTACT=null;
 
 function switchTab(tab){
   curTab=tab;
@@ -1328,17 +1327,8 @@ async function uploadRecOffer(input){
   finally{document.getElementById("recOfLoad").classList.remove("show"); input.value="";}
 }
 
-function clearRecCV(){
-  recCvData=null;
-  document.getElementById("recCvFile").value="";
-  document.getElementById("recCvBadge").classList.remove("show");
-}
-
-function clearRecOffer(){
-  recOfferData=null;
-  document.getElementById("recOfFile").value="";
-  document.getElementById("recOfBadge").classList.remove("show");
-}
+function clearRecCV(){ recCvData=null; document.getElementById("recCvFile").value=""; document.getElementById("recCvBadge").classList.remove("show"); }
+function clearRecOffer(){ recOfferData=null; document.getElementById("recOfFile").value=""; document.getElementById("recOfBadge").classList.remove("show"); }
 
 function switchRecOfferTab(tab){
   recOfferTab=tab;
@@ -1466,6 +1456,7 @@ async function generateAll(){
   document.getElementById("lmOut").textContent="";
   document.getElementById("cvOut").textContent="";
   document.getElementById("scoreZone").innerHTML="";
+  LAST_LETTER_JSON = null;
   // Réinitialiser les rendus visuels
   document.getElementById("letterRender").classList.remove("show");
   document.getElementById("cvRender").classList.remove("show");
@@ -1478,8 +1469,10 @@ async function generateAll(){
     document.getElementById("pi2").className="pi act";
     document.getElementById("pi2").innerHTML='<div class="pispin"></div>Rédaction en cours...';
 
+    var todayLabel = getTodayLetterDate(lang);
     var sysLM="You are an expert professional cover letter writer.\n"
-      +"CRITICAL LANGUAGE RULE: Write EVERY word exclusively in "+lang+" ("+langLabel+"). No mixing.\n\n"
+      +"CRITICAL LANGUAGE RULE: Write EVERY word exclusively in "+lang+" ("+langLabel+"). No mixing.\n"
+      +"DATE RULE: The date field MUST be exactly: "+todayLabel+"\n\n"
       +"You must return a VALID JSON object (no markdown, no text outside JSON) with these exact keys:\n"
       +"{\n"
       +"  \"sender_name\": \"full name of candidate\",\n"
@@ -1491,7 +1484,7 @@ async function generateAll(){
       +"  \"recipient_title\": \"HR director / Hiring manager / etc or empty\",\n"
       +"  \"recipient_address\": \"company address or empty string\",\n"
       +"  \"city\": \"candidate city\",\n"
-      +"  \"date\": \"formatted date in "+lang+"\",\n"
+      +"  \"date\": \""+todayLabel+"\",\n"
       +"  \"subject\": \"precise subject line\",\n"
       +"  \"salutation\": \"opening greeting\",\n"
       +"  \"body\": \"full letter body paragraphs separated by \\n\\n. Length: "+llen+". Tone: "+tones+". Use exact keywords from the job offer. Show concrete achievements.\",\n"
@@ -1514,15 +1507,9 @@ async function generateAll(){
       document.getElementById("lmOut").textContent = t;
     });
 
-    // Parser le JSON
-    var lmJson = null;
-    try {
-      var cleaned = lmRaw.replace(/^```[a-z]*\n?/i,"").replace(/```$/,"").trim();
-      lmJson = JSON.parse(cleaned);
-    } catch(e) {
-      // Fallback : afficher tel quel si JSON invalide
-      lmJson = null;
-    }
+    // Parser le JSON avec extraction robuste, même si l'IA ajoute un bloc ```json
+    var lmJson = extractJsonObject(lmRaw);
+    if (lmJson) lmJson = normalizeLetterDate(lmJson);
 
     if (lmJson) {
       renderLetter(lmJson);
@@ -1611,8 +1598,31 @@ function detectCVStructure(cvText) {
   return "The original CV has these sections in this order:\n" + sections.map(function(s,i){ return (i+1)+". "+s; }).join("\n");
 }
 
+function getTodayLetterDate(lang) {
+  var localeMap = {
+    "français":"fr-FR",
+    "anglais":"en-GB",
+    "espagnol":"es-ES",
+    "allemand":"de-DE",
+    "italien":"it-IT",
+    "russe":"ru-RU",
+    "arabe":"ar-SA",
+    "mandarin (chinois simplifié)":"zh-CN",
+    "japonais":"ja-JP"
+  };
+  var locale = localeMap[lang] || "fr-FR";
+  return new Date().toLocaleDateString(locale, { year:"numeric", month:"long", day:"numeric" });
+}
+function normalizeLetterDate(j) {
+  j = j || {};
+  var lang = document.getElementById("lang") ? document.getElementById("lang").value : "français";
+  j.date = getTodayLetterDate(lang);
+  return j;
+}
 // ── RENDU VISUEL LETTRE ────────────────────────────────────────────────────────
 function renderLetter(j) {
+  j = normalizeLetterDate(j);
+  LAST_LETTER_JSON = j;
   function e(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
   function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
 
@@ -1655,6 +1665,7 @@ function renderLetter(j) {
 
 // Reconstruire le texte brut depuis le JSON
 function buildLetterText(j) {
+  j = normalizeLetterDate(j);
   var parts = [];
   if (j.sender_name)    parts.push(j.sender_name);
   if (j.sender_address) parts.push(j.sender_address);
@@ -1701,17 +1712,74 @@ function cpLmText() {
   });
 }
 
+function formatHtmlLines(value) {
+  return escapeHtml(value || "").replace(/\n/g, "<br>");
+}
+
 function dlLetterDoc() {
-  var text = document.getElementById("lmOut").textContent || "";
-  var rows = text.split("\n").map(function(l){
-    return l.trim()
-      ?"<p style='margin:0 0 9pt;font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5'>"+l.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</p>"
-      :"<p style='margin:0 0 4pt'>&nbsp;</p>";
-  }).join("");
-  var doc="<html xmlns:o='urn:schemas-microsoft-com:office:office'><head><meta charset='utf-8'><style>@page{margin:2.5cm}body{margin:0}</style></head><body>"+rows+"</body></html>";
+  var j = LAST_LETTER_JSON ? normalizeLetterDate(Object.assign({}, LAST_LETTER_JSON)) : null;
+
+  if (!j) {
+    var text = document.getElementById("lmOut").textContent || "";
+    var rows = text.split("\n").map(function(l){
+      return l.trim()
+        ? "<p style='margin:0 0 9pt;font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5'>"+escapeHtml(l)+"</p>"
+        : "<p style='margin:0 0 4pt'>&nbsp;</p>";
+    }).join("");
+    var fallbackDoc = "<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office'><head><meta charset='utf-8'><style>@page{margin:2.5cm}body{margin:0}</style></head><body>"+rows+"</body></html>";
+    var af=document.createElement("a");
+    af.href=URL.createObjectURL(new Blob([fallbackDoc],{type:"application/msword"}));
+    af.download="lettre_motivation.doc"; af.click();
+    return;
+  }
+
+  var sender = "";
+  if (j.sender_name) sender += "<strong>"+formatHtmlLines(j.sender_name)+"</strong>";
+  if (j.sender_address) sender += "<br>"+formatHtmlLines(j.sender_address);
+  if (j.sender_phone) sender += "<br>"+formatHtmlLines(j.sender_phone);
+  if (j.sender_email) sender += "<br>"+formatHtmlLines(j.sender_email);
+
+  var recipient = "";
+  if (j.recipient_company) recipient += "<strong>"+formatHtmlLines(j.recipient_company)+"</strong>";
+  if (j.recipient_name) recipient += (recipient ? "<br>" : "") + formatHtmlLines(j.recipient_name) + (j.recipient_title ? ", " + formatHtmlLines(j.recipient_title) : "");
+  if (j.recipient_address) recipient += (recipient ? "<br>" : "") + formatHtmlLines(String(j.recipient_address).replace(/,\s*/g, "\\n"));
+
+  var bodyHtml = "";
+  if (j.salutation) bodyHtml += "<p>"+formatHtmlLines(j.salutation)+"</p>";
+  String(j.body || "").split(/\n\n+/).forEach(function(paragraph){
+    if (paragraph.trim()) bodyHtml += "<p>"+formatHtmlLines(paragraph.trim())+"</p>";
+  });
+
+  var dateLine = formatHtmlLines((j.city ? j.city + ", " : "") + (j.date || ""));
+
+  var doc =
+    "<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office'><head><meta charset='utf-8'>"
+    +"<style>"
+    +"@page{margin:2.2cm}body{margin:0;background:#fff;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;font-size:11pt;line-height:1.8}"
+    +".letter-page{width:100%;box-sizing:border-box}"
+    +".top-table{width:100%;border-collapse:collapse;margin-bottom:30pt}"
+    +".top-table td{vertical-align:top;width:50%;font-size:11pt;line-height:1.55}"
+    +".sender{text-align:left;padding-right:25pt}"
+    +".right{text-align:right;padding-left:25pt}"
+    +".recipient{text-align:right}"
+    +".date{margin-top:16pt;text-align:right}"
+    +".subject{font-weight:bold;font-size:11pt;margin:0 0 22pt;border-bottom:2px solid #eeeeee;padding-bottom:8pt;color:#111}"
+    +".subject span{font-weight:normal;font-style:italic;color:#444}"
+    +".body p{margin:0 0 12pt;color:#222;line-height:1.8}"
+    +".closing{margin-top:24pt;color:#333;line-height:1.8}"
+    +".signature{margin-top:34pt;font-weight:bold;color:#111}"
+    +"</style></head><body><div class='letter-page'>"
+    +"<table class='top-table'><tr><td class='sender'>"+sender+"</td><td class='right'><div class='recipient'>"+recipient+"</div><div class='date'>"+dateLine+"</div></td></tr></table>"
+    +"<div class='subject'>Objet : <span>"+formatHtmlLines(j.subject || "")+"</span></div>"
+    +"<div class='body'>"+bodyHtml+"</div>"
+    +"<div class='closing'>"+formatHtmlLines(j.closing || "")+"</div>"
+    +"<div class='signature'>"+formatHtmlLines(j.signature || j.sender_name || "")+"</div>"
+    +"</div></body></html>";
+
   var a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([doc],{type:"application/msword"}));
-  a.download="lettre_motivation.doc";a.click();
+  a.download="lettre_motivation.doc";
+  a.click();
 }
 
 // ── RENDU VISUEL CV ────────────────────────────────────────────────────────────
@@ -1850,32 +1918,156 @@ function dlDoc(id,fn){
 
 
 // -- RECRUITER INTERFACE ------------------------------------------------
+function normalizeStringList(items) {
+  if (Array.isArray(items)) return items.map(function(x){ return String(x || "").trim(); }).filter(Boolean);
+  if (typeof items === "string") return items.split(/\n|;|•|-/).map(function(x){ return x.trim(); }).filter(Boolean);
+  if (items && typeof items === "object") return Object.keys(items).map(function(k){ return String(items[k] || "").trim(); }).filter(Boolean);
+  return [];
+}
+
 function recList(items, kind) {
-  if (!items || !items.length) return '<div class="rec-item"><span class="rec-item-dot dot-warn"></span><span>Aucune donnée détectée.</span></div>';
+  var arr = normalizeStringList(items);
+  if (!arr.length) return '<div class="rec-item"><span class="rec-item-dot dot-warn"></span><span>Aucune donnée détectée.</span></div>';
   var dot = kind === "ok" ? "dot-green" : "dot-red";
-  return items.slice(0, 6).map(function(item) {
-    return '<div class="rec-item"><span class="rec-item-dot '+dot+'"></span><span>'+escapeHtml(String(item))+'</span></div>';
+  return arr.slice(0, 6).map(function(item) {
+    return '<div class="rec-item"><span class="rec-item-dot '+dot+'"></span><span>'+escapeHtml(item)+'</span></div>';
   }).join("");
 }
 
 function updateRecContactPanel() {
   var panel = document.getElementById("recContactPanel");
-  var threshold = Number(document.getElementById("recThreshold").value || 70);
-  document.getElementById("recThresholdLine").style.left = threshold + "%";
-  panel.classList.toggle("show", CURRENT_MATCH_SCORE >= threshold && CURRENT_MATCH_SCORE > 0);
+  var thresholdEl = document.getElementById("recThreshold");
+  var line = document.getElementById("recThresholdLine");
+  if (!panel || !thresholdEl) return;
+  var threshold = Number(thresholdEl.value || 70);
+  if (line) line.style.left = threshold + "%";
+  panel.classList.toggle("show", CURRENT_MATCH_SCORE >= threshold);
+  updateRecruiterMailLinks();
 }
 
-function recScoreClass(score) {
-  if (score >= 75) return "green";
-  if (score >= 55) return "orange";
-  return "red";
+function recScoreClass(score) { if (score >= 75) return "green"; if (score >= 55) return "orange"; return "red"; }
+
+function normalizeAiJson(text) {
+  return String(text || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+}
+
+function tryParseJson(candidate) {
+  if (!candidate) return null;
+  var variants = [
+    candidate,
+    candidate.replace(/,\s*([}\]])/g, "$1"),
+    candidate.replace(/\n/g, "\\n").replace(/,\s*([}\]])/g, "$1")
+  ];
+  for (var i = 0; i < variants.length; i++) {
+    try { return JSON.parse(variants[i]); } catch(e) {}
+  }
+  return null;
 }
 
 function extractJsonObject(text) {
-  try { return JSON.parse(text); } catch(e) {}
-  var m = text.match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  try { return JSON.parse(m[0]); } catch(e2) { return null; }
+  var cleaned = normalizeAiJson(text);
+  var parsed = tryParseJson(cleaned);
+  if (parsed) return parsed;
+
+  var start = cleaned.indexOf("{");
+  if (start < 0) return null;
+
+  var depth = 0, inString = false, escape = false;
+  for (var i = start; i < cleaned.length; i++) {
+    var ch = cleaned[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return tryParseJson(cleaned.slice(start, i + 1));
+      }
+    }
+  }
+  return null;
+}
+
+function parseRecruiterScore(value) {
+  if (typeof value === "number") return value;
+  var m = String(value || "").match(/\d+(?:[.,]\d+)?/);
+  return m ? Number(m[0].replace(",", ".")) : 0;
+}
+
+function extractJobTitle(offer) {
+  var lines = String(offer || "").split(/\n+/).map(function(l){return l.trim();}).filter(Boolean);
+  for (var i=0;i<Math.min(lines.length,12);i++) {
+    if (/^(poste|intitulé|titre|job title|offre|emploi)\s*[:\-]/i.test(lines[i])) return lines[i].replace(/^(poste|intitulé|titre|job title|offre|emploi)\s*[:\-]\s*/i, "");
+  }
+  return lines[0] && lines[0].length < 90 ? lines[0] : "le poste proposé";
+}
+
+function extractCandidateContact(cv) {
+  var text = String(cv || "");
+  var emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  var phoneMatch = text.match(/(?:\+?\d[\d .()\-]{7,}\d)/);
+  var lines = text.split(/\n+/).map(function(l){ return l.trim(); }).filter(Boolean);
+  var name = "Candidat";
+  for (var i=0; i<Math.min(lines.length, 8); i++) {
+    if (!/@|www\.|linkedin|github|adresse|email|tél|tel|phone|\d{5,}/i.test(lines[i]) && lines[i].length >= 3 && lines[i].length <= 70) {
+      name = lines[i];
+      break;
+    }
+  }
+  return {
+    name: name,
+    email: emailMatch ? emailMatch[0] : "",
+    phone: phoneMatch ? phoneMatch[0].trim() : ""
+  };
+}
+
+function fallbackRecruiterAnalysis(cv, offer, raw) {
+  var contact = extractCandidateContact(cv);
+  return {
+    score: 60,
+    verdict: "Analyse partielle : l'IA n'a pas renvoyé un JSON strict, mais les données ont été récupérées.",
+    job_title: extractJobTitle(offer),
+    strengths: ["CV exploitable détecté.", "Coordonnées candidat recherchées automatiquement dans le CV."],
+    gaps: ["Analyse structurée IA incomplète : vérifiez la synthèse brute ci-dessous."],
+    contact: contact,
+    analysis: raw || "La réponse IA n'a pas pu être structurée automatiquement."
+  };
+}
+
+function formatMeetingDate(value) {
+  if (!value) return "à une date à convenir";
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  return d.toLocaleString("fr-FR", { weekday:"long", year:"numeric", month:"long", day:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+
+function buildCandidateMail(contact) {
+  contact = contact || {};
+  var name = contact.name || "Madame, Monsieur";
+  var job = contact.job_title || "le poste proposé";
+  var when = formatMeetingDate(document.getElementById("recMeetingDate").value);
+  var subject = "Votre candidature pour le poste de " + job;
+  var body =
+    "Bonjour " + name + ",\n\n"
+    + "Nous avons le plaisir de vous informer que votre profil a été retenu pour le poste de " + job + ".\n\n"
+    + "Nous souhaiterions vous proposer un entretien " + when + ".\n\n"
+    + "Merci de nous confirmer votre disponibilité pour ce créneau ou, si besoin, de nous proposer d'autres disponibilités.\n\n"
+    + "Cordialement,";
+  var email = String(contact.email || "").trim();
+  return "mailto:" + encodeURIComponent(email) + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+}
+
+function updateRecruiterMailLinks() {
+  if (!REC_LAST_CONTACT) return;
+  document.querySelectorAll("[data-rec-mail]").forEach(function(a){ a.href = buildCandidateMail(REC_LAST_CONTACT); });
 }
 
 async function analyzeRecruiterMatch() {
@@ -1884,26 +2076,60 @@ async function analyzeRecruiterMatch() {
   var btn = document.getElementById("recAnalyzeBtn");
   var spin = btn.querySelector(".bspin");
   var label = btn.querySelector("span");
-  btn.disabled = true; spin.style.display = "block"; label.textContent = "Lecture des documents...";
+  btn.disabled = true;
+  spin.style.display = "block";
+  label.textContent = "Lecture des documents...";
 
-  var cv = await getRecCVText();
-  var offer = await getRecOfferText();
+  var cv = "";
+  var offer = "";
+  try {
+    cv = await getRecCVText();
+    offer = await getRecOfferText();
+  } catch(readErr) {
+    btn.disabled = false;
+    spin.style.display = "none";
+    label.textContent = "Analyser la compatibilité";
+    alert("Erreur de lecture des documents : " + readErr.message);
+    return;
+  }
+
   if (!cv || !offer) {
-    btn.disabled = false; spin.style.display = "none"; label.textContent = "Analyser la compatibilité";
+    btn.disabled = false;
+    spin.style.display = "none";
+    label.textContent = "Analyser la compatibilité";
     alert("Ajoutez un CV et une offre avant de lancer l'analyse. Le CV peut être un PDF ou du texte, et l'offre peut être un PDF, un lien ou du texte collé.");
     return;
   }
+
   label.textContent = "Analyse en cours...";
 
-  var sys = "Tu es un recruteur senior. Analyse l'adéquation entre un CV candidat et une offre d'emploi, même si les informations proviennent d'un PDF, d'un lien web ou d'un copier-coller. Utilise toutes les informations disponibles. Réponds uniquement en JSON valide avec les clés: score (nombre 0-100), verdict (phrase courte), strengths (tableau de chaînes), gaps (tableau de chaînes), contact (objet avec email, phone, name si détectés, sinon chaînes vides), analysis (synthèse claire en français).";
-  var user = "CV CANDIDAT:\n" + cv + "\n\nOFFRE:\n" + offer;
-  var full = "";
+  var baseContact = extractCandidateContact(cv);
+  var jobFallback = extractJobTitle(offer);
+  var sys =
+    "Tu es un recruteur senior. Analyse l'adéquation entre un CV candidat et une offre d'emploi. "
+    + "Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans bloc ``` et sans texte avant ou après. "
+    + "Utilise uniquement des guillemets doubles pour les clés et les chaînes. "
+    + "Schéma obligatoire : "
+    + "{\"score\":0,\"verdict\":\"\",\"job_title\":\"\",\"strengths\":[],\"gaps\":[],\"contact\":{\"name\":\"\",\"email\":\"\",\"phone\":\"\"},\"analysis\":\"\"}. "
+    + "score doit être un nombre entre 0 et 100. "
+    + "strengths et gaps doivent être des tableaux de chaînes. "
+    + "contact doit contenir le nom, l'e-mail et le téléphone trouvés dans le CV. "
+    + "Si une coordonnée n'est pas détectée, mets une chaîne vide. "
+    + "L'analyse doit être claire, concise et en français.";
 
+  var user =
+    "CV CANDIDAT:\n" + cv.slice(0, 12000)
+    + "\n\nOFFRE:\n" + offer.slice(0, 12000)
+    + "\n\nRetourne uniquement l'objet JSON valide.";
+
+  var full = "";
   try {
-    await streamCall(sys, user, document.getElementById("recModel").value, function(chunk) { full += chunk; });
+    await streamCall(sys, user, document.getElementById("recModel").value, function(chunk) { full = chunk; });
+
     var data = extractJsonObject(full);
-    if (!data) throw new Error("Réponse IA illisible. Relancez l'analyse.");
-    var score = Math.max(0, Math.min(100, Number(data.score) || 0));
+    if (!data || typeof data !== "object") data = fallbackRecruiterAnalysis(cv, offer, full);
+
+    var score = Math.max(0, Math.min(100, parseRecruiterScore(data.score)));
     CURRENT_MATCH_SCORE = score;
 
     var cls = recScoreClass(score);
@@ -1913,26 +2139,55 @@ async function analyzeRecruiterMatch() {
     pct.className = "match-pct " + cls;
     bar.style.width = score + "%";
     bar.className = "match-bar-fill " + cls;
-    document.getElementById("recVerdict").textContent = data.verdict || "Analyse terminée";
-    document.getElementById("recStrengths").innerHTML = recList(data.strengths || [], "ok");
-    document.getElementById("recGaps").innerHTML = recList(data.gaps || [], "gap");
-    document.getElementById("recAnalysisFull").textContent = data.analysis || full;
 
-    var c = data.contact || {};
+    document.getElementById("recVerdict").textContent = data.verdict || "Analyse terminée";
+    document.getElementById("recStrengths").innerHTML = recList(data.strengths, "ok");
+    document.getElementById("recGaps").innerHTML = recList(data.gaps, "gap");
+    document.getElementById("recAnalysisFull").textContent = data.analysis || full || "Analyse terminée.";
+
+    var aiContact = data.contact && typeof data.contact === "object" ? data.contact : {};
+    REC_LAST_CONTACT = {
+      name: aiContact.name || baseContact.name || "",
+      email: aiContact.email || baseContact.email || "",
+      phone: aiContact.phone || baseContact.phone || "",
+      job_title: data.job_title || jobFallback
+    };
+
     var contactHtml = [];
-    if (c.name) contactHtml.push('<span class="contact-btn">👤 '+escapeHtml(c.name)+'</span>');
-    if (c.email) contactHtml.push('<a class="contact-btn email" href="mailto:'+escapeHtml(c.email)+'">✉ '+escapeHtml(c.email)+'</a>');
-    if (c.phone) contactHtml.push('<a class="contact-btn phone" href="tel:'+escapeHtml(c.phone)+'">☎ '+escapeHtml(c.phone)+'</a>');
+    if (REC_LAST_CONTACT.name) contactHtml.push('<span class="contact-btn">👤 '+escapeHtml(REC_LAST_CONTACT.name)+'</span>');
+    if (REC_LAST_CONTACT.email) contactHtml.push('<a class="contact-btn email" data-rec-mail="1" href="'+buildCandidateMail(REC_LAST_CONTACT)+'">✉ '+escapeHtml(REC_LAST_CONTACT.email)+'</a>');
+    if (REC_LAST_CONTACT.phone) contactHtml.push('<a class="contact-btn phone" href="tel:'+escapeHtml(REC_LAST_CONTACT.phone.replace(/\s+/g, ""))+'">☎ '+escapeHtml(REC_LAST_CONTACT.phone)+'</a>');
     document.getElementById("recContactInfo").innerHTML = contactHtml.join("") || '<span class="contact-btn">Coordonnées non détectées dans le CV</span>';
+
+    document.getElementById("recMeetingDate").onchange = updateRecruiterMailLinks;
     document.getElementById("recScoreZone").classList.add("show");
     updateRecContactPanel();
   } catch(err) {
-    alert("Erreur analyse recruteur : " + err.message);
+    var fallback = fallbackRecruiterAnalysis(cv, offer, full);
+    CURRENT_MATCH_SCORE = Math.max(0, Math.min(100, parseRecruiterScore(fallback.score)));
+    document.getElementById("recScoreZone").classList.add("show");
+    document.getElementById("recPct").textContent = CURRENT_MATCH_SCORE + "%";
+    document.getElementById("recPct").className = "match-pct " + recScoreClass(CURRENT_MATCH_SCORE);
+    document.getElementById("recBar").style.width = CURRENT_MATCH_SCORE + "%";
+    document.getElementById("recBar").className = "match-bar-fill " + recScoreClass(CURRENT_MATCH_SCORE);
+    document.getElementById("recVerdict").textContent = "Analyse partielle disponible";
+    document.getElementById("recStrengths").innerHTML = recList(fallback.strengths, "ok");
+    document.getElementById("recGaps").innerHTML = recList(fallback.gaps.concat(["Erreur IA/API : " + err.message]), "gap");
+    document.getElementById("recAnalysisFull").textContent = fallback.analysis;
+    REC_LAST_CONTACT = Object.assign({}, fallback.contact, { job_title: fallback.job_title });
+    var contactHtmlFallback = [];
+    if (REC_LAST_CONTACT.name) contactHtmlFallback.push('<span class="contact-btn">👤 '+escapeHtml(REC_LAST_CONTACT.name)+'</span>');
+    if (REC_LAST_CONTACT.email) contactHtmlFallback.push('<a class="contact-btn email" data-rec-mail="1" href="'+buildCandidateMail(REC_LAST_CONTACT)+'">✉ '+escapeHtml(REC_LAST_CONTACT.email)+'</a>');
+    if (REC_LAST_CONTACT.phone) contactHtmlFallback.push('<a class="contact-btn phone" href="tel:'+escapeHtml(REC_LAST_CONTACT.phone.replace(/\s+/g, ""))+'">☎ '+escapeHtml(REC_LAST_CONTACT.phone)+'</a>');
+    document.getElementById("recContactInfo").innerHTML = contactHtmlFallback.join("") || '<span class="contact-btn">Coordonnées non détectées dans le CV</span>';
+    document.getElementById("recMeetingDate").onchange = updateRecruiterMailLinks;
+    updateRecContactPanel();
   } finally {
-    btn.disabled = false; spin.style.display = "none"; label.textContent = "Analyser la compatibilité";
+    btn.disabled = false;
+    spin.style.display = "none";
+    label.textContent = "Analyser la compatibilité";
   }
 }
-// ── NAVIGATION ─────────────────────────────────────────────────────────────────
 function switchNav(tab) {
   ["cv","chat"].forEach(function(t) {
     document.getElementById("nav-"+t).classList.toggle("active", t===tab);
