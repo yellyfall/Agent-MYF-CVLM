@@ -472,7 +472,7 @@ select:focus{border-color:var(--accent)}
 .loading-state{text-align:center;padding:20px;color:var(--muted);font-size:13px}
 
 /* ─ EXPORT PDF / CV CONSERVÉ ─ */
-.pdf-export-temp{position:fixed;left:-99999px;top:0;background:#fff;color:#111;z-index:-1}
+.pdf-export-temp{position:fixed;left:0;top:0;width:210mm;background:#fff;color:#111;z-index:-10;pointer-events:none}
 .cv-preserve-page{background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid rgba(79,142,247,.2);overflow:hidden;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.55}
 .cv-preserve-inner{padding:40px 50px;max-width:780px;margin:0 auto;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box}
 .cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px;font-family:Arial,Helvetica,sans-serif}
@@ -1042,6 +1042,19 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"]/g, function(ch) {
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch];
   });
+}
+function normalizeInlineAddress(value) {
+  return String(value || "")
+    .replace(/\\n/g, ", ")      // enlève les caractères visibles \n
+    .replace(/\r?\n/g, ", ")     // enlève les vrais retours à la ligne
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/(?:,\s*){2,}/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^,\s*|\s*,\s*$/g, "")
+    .trim();
+}
+function formatHtmlInline(value) {
+  return escapeHtml(normalizeInlineAddress(value));
 }
 
 // ── LOGIN TABS ─────────────────────────────────────────────────────────────────
@@ -1644,11 +1657,11 @@ function renderLetter(j) {
   if (j.sender_email)   senderHtml += "<br>"+esc(j.sender_email);
   e("lmSender", senderHtml);
 
-  // Destinataire (en haut à gauche)
+  // Destinataire (en haut à droite)
   var recipHtml = "";
   if (j.recipient_company) recipHtml += "<strong>"+esc(j.recipient_company)+"</strong><br>";
   if (j.recipient_name)    recipHtml += esc(j.recipient_name)+(j.recipient_title?", "+esc(j.recipient_title):"")+"<br>";
-  if (j.recipient_address) recipHtml += esc(j.recipient_address).replace(/,\s*/g,"<br>");
+  if (j.recipient_address) recipHtml += formatHtmlInline(j.recipient_address);
   e("lmRecipient", recipHtml);
 
   // Date (en dessous à droite → aligné droite via CSS letter-date)
@@ -1685,7 +1698,7 @@ function buildLetterText(j) {
   parts.push("");
   if (j.recipient_company) parts.push(j.recipient_company);
   if (j.recipient_name)    parts.push(j.recipient_name+(j.recipient_title?", "+j.recipient_title:""));
-  if (j.recipient_address) parts.push(j.recipient_address);
+  if (j.recipient_address) parts.push(normalizeInlineAddress(j.recipient_address));
   parts.push("");
   parts.push((j.city?j.city+", ":"")+j.date);
   parts.push("");
@@ -1753,7 +1766,7 @@ function dlLetterDoc() {
   var recipient = "";
   if (j.recipient_company) recipient += "<strong>"+formatHtmlLines(j.recipient_company)+"</strong>";
   if (j.recipient_name) recipient += (recipient ? "<br>" : "") + formatHtmlLines(j.recipient_name) + (j.recipient_title ? ", " + formatHtmlLines(j.recipient_title) : "");
-  if (j.recipient_address) recipient += (recipient ? "<br>" : "") + formatHtmlLines(String(j.recipient_address).replace(/,\s*/g, "\\n"));
+  if (j.recipient_address) recipient += (recipient ? "<br>" : "") + formatHtmlInline(j.recipient_address);
 
   var bodyHtml = "";
   if (j.salutation) bodyHtml += "<p>"+formatHtmlLines(j.salutation)+"</p>";
@@ -1862,6 +1875,156 @@ function dlDoc(id,fn){
   var a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([doc],{type:"application/msword"}));
   a.download=fn;a.click();
+}
+
+
+// ── EXPORT PDF LETTRE / CV ────────────────────────────────────────────────────
+function loadScriptOnce(src) {
+  return new Promise(function(resolve) {
+    if (window.html2pdf) return resolve(true);
+    var finished = false;
+    function done(ok) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve(!!ok && !!window.html2pdf);
+    }
+    var timer = setTimeout(function(){ done(false); }, 4500);
+    var existing = document.querySelector('script[src="' + src + '"]');
+    if (existing) {
+      existing.addEventListener("load", function(){ done(true); }, { once:true });
+      existing.addEventListener("error", function(){ done(false); }, { once:true });
+      // Si le script était déjà chargé mais que l'évènement load est passé, on vérifie juste après.
+      setTimeout(function(){ done(!!window.html2pdf); }, 400);
+      return;
+    }
+    var script = document.createElement("script");
+    script.src = src;
+    script.onload = function(){ done(true); };
+    script.onerror = function(){ done(false); };
+    document.head.appendChild(script);
+  });
+}
+
+async function ensureHtml2Pdf() {
+  if (window.html2pdf) return true;
+  try {
+    await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js");
+  } catch(e) {}
+  return !!window.html2pdf;
+}
+
+function fallbackPrintPdf(title, node) {
+  var w = window.open("", "_blank");
+  if (!w) {
+    alert("Le navigateur a bloqué l'ouverture de la fenêtre PDF. Autorisez les pop-ups ou réessayez.");
+    return;
+  }
+  var css = "@page{size:A4;margin:0}body{margin:0;background:#fff;color:#111}"
+    +".letter-render{display:flex;background:#fff;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;font-size:13.5px;line-height:1.8}"
+    +".letter-page{padding:22mm 25mm;box-sizing:border-box;width:210mm;min-height:297mm;margin:0 auto}"
+    +".letter-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px}"
+    +".letter-sender{width:45%;text-align:left}.letter-right{width:45%;display:flex;flex-direction:column;align-items:flex-end}"
+    +".letter-recipient{text-align:right;width:100%}.letter-date{margin-top:20px;width:100%;text-align:right}"
+    +".letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}"
+    +".letter-subject span{font-weight:400;font-style:italic;color:#444}.letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word}"
+    +".letter-body p{margin-bottom:16px}.letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8}.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111}"
+    +".cv-render{display:flex;background:#fff;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7}"
+    +".cv-page{padding:18mm 20mm;box-sizing:border-box;width:210mm;min-height:297mm;margin:0 auto}"
+    +".cv-preserve-page{background:#fff;color:#1a1a1a;border:none;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.55}"
+    +".cv-preserve-inner{padding:0;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box}"
+    +".cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px}";
+  w.document.open();
+  w.document.write("<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+escapeHtml(title)+"</title><style>"+css+"</style></head><body>"+node.outerHTML+"<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},300)}<\/script></body></html>");
+  w.document.close();
+}
+
+async function downloadNodeAsPdf(node, filename, title) {
+  var temp = document.createElement("div");
+  temp.className = "pdf-export-temp";
+  temp.appendChild(node);
+  document.body.appendChild(temp);
+  try {
+    if (!(await ensureHtml2Pdf())) throw new Error("Librairie html2pdf indisponible");
+    await window.html2pdf().set({
+      margin: 0,
+      filename: filename,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["css", "legacy"] }
+    }).from(node).save();
+  } catch(e) {
+    console.warn("Export PDF direct impossible, ouverture du mode impression :", e);
+    fallbackPrintPdf(title || filename, node);
+  } finally {
+    setTimeout(function(){ if (temp && temp.parentNode) temp.parentNode.removeChild(temp); }, 500);
+  }
+}
+
+function getLetterPdfNode() {
+  var src = document.getElementById("letterRender");
+  var hasText = (document.getElementById("lmOut") && document.getElementById("lmOut").textContent.trim().length > 20) || LAST_LETTER_JSON;
+  if (!src || !hasText) { alert("Générez d'abord une lettre de motivation avant de télécharger le PDF."); return null; }
+  if (LAST_LETTER_JSON) renderLetter(Object.assign({}, LAST_LETTER_JSON));
+  var clone = src.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.classList.add("show");
+  clone.style.display = "flex";
+  clone.style.width = "210mm";
+  clone.style.minHeight = "297mm";
+  clone.style.border = "none";
+  clone.style.borderRadius = "0";
+  clone.style.background = "#fff";
+  var page = clone.querySelector(".letter-page");
+  if (page) {
+    page.style.width = "210mm";
+    page.style.minHeight = "297mm";
+    page.style.maxWidth = "none";
+    page.style.margin = "0";
+    page.style.padding = "22mm 25mm";
+    page.style.boxSizing = "border-box";
+  }
+  return clone;
+}
+
+function getCVPdfNode() {
+  var src = document.getElementById("cvRender");
+  var hasText = document.getElementById("cvOut") && document.getElementById("cvOut").textContent.trim().length > 20;
+  if (!src || !hasText) { alert("Générez d'abord le CV optimisé avant de télécharger le PDF."); return null; }
+  var clone = src.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.classList.add("show");
+  clone.style.display = "flex";
+  clone.style.width = "210mm";
+  clone.style.minHeight = "297mm";
+  clone.style.border = "none";
+  clone.style.borderRadius = "0";
+  clone.style.background = "#fff";
+  var page = clone.querySelector(".cv-page");
+  if (page) {
+    page.style.width = "210mm";
+    page.style.minHeight = "297mm";
+    page.style.maxWidth = "none";
+    page.style.margin = "0";
+    page.style.padding = "18mm 20mm";
+    page.style.boxSizing = "border-box";
+  }
+  var preserve = clone.querySelector(".cv-preserve-page");
+  if (preserve) { preserve.style.border = "none"; preserve.style.borderRadius = "0"; }
+  var inner = clone.querySelector(".cv-preserve-inner");
+  if (inner) { inner.style.padding = "0"; inner.style.maxWidth = "none"; }
+  return clone;
+}
+
+function dlLetterPdf() {
+  var node = getLetterPdfNode();
+  if (node) downloadNodeAsPdf(node, "lettre_motivation.pdf", "Lettre de motivation");
+}
+
+function dlCVPdf() {
+  var node = getCVPdfNode();
+  if (node) downloadNodeAsPdf(node, "cv_optimise.pdf", "CV optimisé");
 }
 
 
