@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agent IA de MYF</title>
-<meta name="myf-build" content="v22-live-web-standalone">
+<meta name="myf-build" content="v23-cv-pdf-layout-standalone">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -732,6 +732,97 @@ select:focus{border-color:var(--accent)}
   .cv-modern-exp-head,.cv-modern-edu-head{flex-direction:column;gap:2px}
   .cv-modern-date{text-align:left;white-space:normal}
   .cv-modern-contact-row span{white-space:normal}
+}
+
+
+/* ─ CV PDF V23 : marges et sauts de page cohérents ─ */
+.cv-render{
+  overflow:visible;
+}
+.cv-page{
+  overflow:visible;
+}
+.cv-modern-page{
+  padding-bottom:8mm;
+}
+.cv-modern-header{
+  break-inside:avoid;
+  page-break-inside:avoid;
+}
+.cv-modern-section{
+  break-inside:avoid;
+  page-break-inside:avoid;
+  margin-bottom:14px;
+}
+.cv-modern-section-title{
+  break-after:avoid;
+  page-break-after:avoid;
+}
+.cv-modern-entry{
+  break-inside:avoid;
+  page-break-inside:avoid;
+}
+.cv-modern-exp-head,
+.cv-modern-edu-head{
+  break-after:avoid;
+  page-break-after:avoid;
+}
+.cv-modern-tasks li{
+  break-inside:avoid;
+  page-break-inside:avoid;
+}
+.pdf-export-temp{
+  position:fixed;
+  left:0;
+  top:0;
+  width:210mm;
+  background:#fff;
+  color:#111;
+  z-index:-10;
+  pointer-events:none;
+  overflow:visible;
+}
+.pdf-export-temp .cv-render,
+.pdf-export-temp .cv-page,
+.pdf-export-temp .cv-modern-page{
+  overflow:visible!important;
+}
+.pdf-export-temp .cv-page{
+  padding-top:0!important;
+  padding-bottom:0!important;
+}
+.pdf-export-temp .cv-modern-page{
+  padding-bottom:0!important;
+}
+.pdf-export-temp .cv-modern-section{
+  background:#fff;
+  break-inside:avoid-page;
+  page-break-inside:avoid;
+  margin-bottom:14px;
+}
+.pdf-export-temp .cv-modern-entry{
+  break-inside:avoid-page;
+  page-break-inside:avoid;
+}
+@media print{
+  @page{
+    size:A4;
+    margin:16mm 18mm 18mm 18mm;
+  }
+  .cv-render,
+  .cv-page,
+  .cv-modern-page{
+    overflow:visible!important;
+  }
+  .cv-page{
+    padding:0!important;
+  }
+  .cv-modern-section,
+  .cv-modern-entry,
+  .cv-modern-header{
+    break-inside:avoid-page;
+    page-break-inside:avoid;
+  }
 }
 
 /* ─ CHAT ARTIFACTS / FICHIERS TÉLÉCHARGEABLES ─ */
@@ -4600,6 +4691,230 @@ async function sendChat() {
     document.getElementById("chatSendBtn").disabled = false;
     input.focus();
   }
+}
+
+
+/* ==========================================================================
+   CORRECTIF MYF V23 — MISE EN PAGE PDF CV COHÉRENTE
+   ========================================================================== */
+
+/**
+ * Pour le CV, on garde volontairement des marges haut/bas plus confortables.
+ * Objectif :
+ * - ne pas remplir la page jusqu'en bas ;
+ * - ne pas commencer la page suivante tout en haut ;
+ * - éviter de couper une section ou une expérience quand c'est possible.
+ */
+
+function addPageNumbersToPdf(pdf) {
+  // Pas de numérotation sur le CV, selon la demande utilisateur.
+  return;
+}
+
+function prepareCvPdfLayout(node) {
+  if (!node) return node;
+
+  node.classList.add("cv-pdf-export");
+  node.style.display = "flex";
+  node.style.width = "210mm";
+  node.style.minHeight = "auto";
+  node.style.border = "none";
+  node.style.borderRadius = "0";
+  node.style.background = "#ffffff";
+  node.style.overflow = "visible";
+
+  var page = node.querySelector(".cv-page");
+  if (page) {
+    page.style.width = "210mm";
+    page.style.maxWidth = "none";
+    page.style.minHeight = "auto";
+    page.style.margin = "0";
+    // Les marges haut/bas sont gérées par html2pdf sur chaque page.
+    // On garde seulement un retrait gauche/droite propre.
+    page.style.padding = "0 18mm";
+    page.style.boxSizing = "border-box";
+    page.style.overflow = "visible";
+  }
+
+  var modern = node.querySelector(".cv-modern-page");
+  if (modern) {
+    modern.style.width = "100%";
+    modern.style.boxSizing = "border-box";
+    modern.style.padding = "0";
+    modern.style.margin = "0";
+    modern.style.background = "#ffffff";
+    modern.style.overflow = "visible";
+  }
+
+  var header = node.querySelector(".cv-modern-header");
+  if (header) {
+    header.style.breakInside = "avoid";
+    header.style.pageBreakInside = "avoid";
+    header.style.marginBottom = "14px";
+  }
+
+  node.querySelectorAll(".cv-modern-section").forEach(function(sec) {
+    sec.style.breakInside = "avoid";
+    sec.style.pageBreakInside = "avoid";
+    sec.style.marginTop = "0";
+    sec.style.marginBottom = "13px";
+  });
+
+  node.querySelectorAll(".cv-modern-entry").forEach(function(entry) {
+    entry.style.breakInside = "avoid";
+    entry.style.pageBreakInside = "avoid";
+  });
+
+  node.querySelectorAll(".cv-modern-tasks li").forEach(function(li) {
+    li.style.breakInside = "avoid";
+    li.style.pageBreakInside = "avoid";
+  });
+
+  return node;
+}
+
+function getCVPdfNode() {
+  var src = document.getElementById("cvRender");
+  var hasText = document.getElementById("cvOut") && document.getElementById("cvOut").textContent.trim().length > 20;
+
+  if (!src || !hasText) {
+    alert("Générez d'abord le CV optimisé avant de télécharger le PDF.");
+    return null;
+  }
+
+  var clone = src.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.classList.add("show");
+
+  var preserve = clone.querySelector(".cv-preserve-page");
+  if (preserve) {
+    preserve.style.border = "none";
+    preserve.style.borderRadius = "0";
+  }
+
+  var inner = clone.querySelector(".cv-preserve-inner");
+  if (inner) {
+    inner.style.padding = "0";
+    inner.style.maxWidth = "none";
+  }
+
+  return prepareCvPdfLayout(clone);
+}
+
+async function downloadNodeAsPdf(node, filename, title) {
+  var temp = document.createElement("div");
+  temp.className = "pdf-export-temp";
+  temp.appendChild(node);
+  document.body.appendChild(temp);
+
+  var isCv = /cv/i.test(filename || "") || !!node.querySelector(".cv-modern-page") || !!node.querySelector(".cv-page");
+
+  try {
+    if (!(await ensureHtml2Pdf())) throw new Error("Librairie html2pdf indisponible");
+
+    var worker = window.html2pdf().set({
+      // Pour le CV : marge haute et basse sur CHAQUE page.
+      // Cela évite le contenu collé tout en haut ou tout en bas.
+      margin: isCv ? [16, 0, 18, 0] : [10, 0, 14, 0],
+      filename: filename,
+      image: {
+        type: "jpeg",
+        quality: 0.98
+      },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+        letterRendering: true,
+        windowWidth: 1200
+      },
+      jsPDF: {
+        unit: "mm",
+        format: "a4",
+        orientation: "portrait"
+      },
+      pagebreak: {
+        mode: ["css", "legacy"],
+        before: [],
+        after: [],
+        avoid: isCv
+          ? [
+              ".cv-modern-header",
+              ".cv-modern-section",
+              ".cv-modern-entry",
+              ".cv-modern-exp-head",
+              ".cv-modern-edu-head",
+              ".cv-preserve-score"
+            ]
+          : [
+              ".letter-header",
+              ".letter-subject",
+              ".letter-body p",
+              ".letter-closing",
+              ".letter-signature"
+            ]
+      }
+    }).from(node).toPdf();
+
+    // Pas de numéro de page.
+    await worker.save();
+  } catch(e) {
+    console.warn("Export PDF direct impossible, ouverture du mode impression :", e);
+    fallbackPrintPdf(title || filename, node);
+  } finally {
+    setTimeout(function() {
+      if (temp && temp.parentNode) temp.parentNode.removeChild(temp);
+    }, 800);
+  }
+}
+
+function fallbackPrintPdf(title, node) {
+  var w = window.open("", "_blank");
+
+  if (!w) {
+    alert("Le navigateur a bloqué l'ouverture de la fenêtre PDF. Autorisez les pop-ups ou réessayez.");
+    return;
+  }
+
+  var css =
+    "@page{size:A4;margin:16mm 18mm 18mm 18mm}" +
+    "body{margin:0;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    ".cv-render{display:flex;background:#fff;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.48;border:none}" +
+    ".cv-page{box-sizing:border-box;width:100%;max-width:none;min-height:auto;margin:0;padding:0}" +
+    ".cv-modern-page{background:#fff;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.48;box-sizing:border-box}" +
+    ".cv-modern-header{break-inside:avoid;page-break-inside:avoid;text-align:center;border-bottom:2px solid #1a3a6e;padding-bottom:12px;margin-bottom:16px}" +
+    ".cv-modern-name{font-size:20px;font-weight:800;color:#111827;text-transform:uppercase}" +
+    ".cv-modern-profile{font-size:14px;font-weight:600;color:#1a3a6e;margin-top:5px}" +
+    ".cv-modern-contact-row{font-size:12px;color:#374151;display:flex;justify-content:center;flex-wrap:wrap;gap:0;margin-top:6px}" +
+    ".cv-modern-contact-row span:not(:last-child)::after{content:'|';color:#9ca3af;margin:0 8px}" +
+    ".cv-modern-section{break-inside:avoid;page-break-inside:avoid;margin:0 0 14px;padding:9px 11px 10px;border:1px solid #dbe5f2;border-left:4px solid #1a3a6e;border-radius:8px;background:#fff}" +
+    ".cv-modern-section-title{font-size:16px;font-weight:800;color:#1a3a6e;text-transform:uppercase;border-bottom:1px solid #c7d2e5;padding-bottom:4px;margin:0 0 8px}" +
+    ".cv-modern-entry{break-inside:avoid;page-break-inside:avoid;margin:0 0 10px;padding:0 0 8px;border-bottom:1px dashed #d7dfec}" +
+    ".cv-modern-entry:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}" +
+    ".cv-modern-exp-head,.cv-modern-edu-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:3px}" +
+    ".cv-modern-role,.cv-modern-school{font-size:14px;font-weight:800;color:#1a3a6e}" +
+    ".cv-modern-company{font-size:12px;font-weight:800;color:#1a3a6e;text-decoration:underline;text-underline-offset:2px}" +
+    ".cv-modern-date{font-size:13px;color:#374151;font-weight:700;white-space:nowrap;text-align:right}" +
+    ".cv-modern-degree,.cv-modern-extra,.cv-modern-text,.cv-modern-tags span{font-size:12px;color:#111827}" +
+    ".cv-modern-tasks{margin:4px 0 0 17px;padding:0}" +
+    ".cv-modern-tasks li{font-size:12px;line-height:1.5;margin:0 0 2px;text-align:justify;break-inside:avoid;page-break-inside:avoid}" +
+    ".letter-render{display:flex;background:#fff;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;font-size:13.5px;line-height:1.8}" +
+    ".letter-page{padding:0;box-sizing:border-box;width:100%;min-height:auto;margin:0 auto}" +
+    ".letter-header,.letter-subject,.letter-body p,.letter-closing,.letter-signature{break-inside:avoid;page-break-inside:avoid}";
+
+  w.document.open();
+  w.document.write(
+    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" +
+      escapeHtml(title) +
+      "</title><style>" +
+      css +
+      "</style></head><body>" +
+      node.outerHTML +
+      "<script>window.onload=function(){setTimeout(function(){window.print();},500)}<\/script></body></html>"
+  );
+  w.document.close();
 }
 
 
