@@ -1087,6 +1087,23 @@ select:focus{border-color:var(--accent)}
   box-sizing:border-box!important;
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CORRECTIF V37 — APERÇU LETTRE : DESTINATAIRE BIEN EN HAUT À DROITE
+───────────────────────────────────────────────────────────────────────────── */
+.letter-header{
+  align-items:flex-start!important;
+}
+.letter-right{
+  margin-left:auto!important;
+  text-align:right!important;
+  align-self:flex-start!important;
+}
+.letter-recipient,
+.letter-date{
+  text-align:right!important;
+}
+
 </style>
 </head>
 <body>
@@ -9615,6 +9632,310 @@ async function dlLetterPdf() {
     doc.save("lettre_motivation.pdf");
   } catch(e) {
     console.error("Export PDF lettre V36 impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V37 — PDF LETTRE : DESTINATAIRE HAUT DROITE + CORPS JUSTIFIÉ
+   ========================================================================== */
+
+function v37Clean(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function v37SplitParagraphs(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .split(/\n\s*\n+/)
+    .map(v37Clean)
+    .filter(Boolean);
+}
+
+// Écriture justifiée réelle : chaque mot est positionné pour remplir la largeur.
+function v37WriteJustifiedParagraph(doc, paragraph, x, y, w, options) {
+  options = options || {};
+
+  var size = options.size || 11;
+  var lineH = options.lineH || 5.4;
+  var pageH = options.pageH || 297;
+  var marginT = options.marginT || 22;
+  var marginB = options.marginB || 22;
+  var newPage = options.newPage;
+  var bottom = function() { return pageH - marginB; };
+
+  paragraph = v37Clean(paragraph);
+  if (!paragraph) return y;
+
+  doc.setFont("times", "normal");
+  doc.setFontSize(size);
+  doc.setTextColor(25, 25, 25);
+
+  var lines = doc.splitTextToSize(paragraph, w);
+
+  lines.forEach(function(line, idx) {
+    if (y + lineH > bottom()) {
+      if (typeof newPage === "function") {
+        y = newPage();
+      } else {
+        doc.addPage();
+        y = marginT;
+      }
+    }
+
+    var isLast = idx === lines.length - 1;
+    var words = String(line).trim().split(/\s+/).filter(Boolean);
+
+    // Dernière ligne du paragraphe : alignée à gauche pour éviter les grands espaces.
+    if (isLast || words.length <= 1) {
+      doc.text(line, x, y);
+      y += lineH;
+      return;
+    }
+
+    var wordsWidth = words.reduce(function(sum, word) {
+      return sum + doc.getTextWidth(word);
+    }, 0);
+
+    var gap = (w - wordsWidth) / (words.length - 1);
+
+    // Si l'écartement devient trop grand, on garde une ligne normale.
+    if (!isFinite(gap) || gap > 5.5) {
+      doc.text(line, x, y);
+      y += lineH;
+      return;
+    }
+
+    var xx = x;
+
+    words.forEach(function(word, wordIdx) {
+      doc.text(word, xx, y);
+      xx += doc.getTextWidth(word);
+      if (wordIdx < words.length - 1) xx += gap;
+    });
+
+    y += lineH;
+  });
+
+  y += options.after || 0;
+  return y;
+}
+
+function v37DrawTextBlock(doc, text, x, y, w, options) {
+  options = options || {};
+
+  var size = options.size || 10.5;
+  var style = options.style || "normal";
+  var lineH = options.lineH || 5;
+  var align = options.align || "left";
+
+  doc.setFont("times", style);
+  doc.setFontSize(size);
+  doc.setTextColor(25, 25, 25);
+
+  String(text || "")
+    .split(/\n/)
+    .map(v37Clean)
+    .filter(Boolean)
+    .forEach(function(line) {
+      var wrapped = doc.splitTextToSize(line, w);
+      wrapped.forEach(function(part) {
+        doc.text(part, align === "right" ? x + w : x, y, { align: align });
+        y += lineH;
+      });
+    });
+
+  return y;
+}
+
+async function dlLetterPdf() {
+  var j = typeof v36LetterData === "function" ? v36LetterData() : null;
+
+  if (!j) {
+    alert("Générez d'abord une lettre de motivation avant de télécharger le PDF.");
+    return;
+  }
+
+  var hasLetter =
+    j.subject || j.body || j.salutation ||
+    (document.getElementById("lmOut") && document.getElementById("lmOut").textContent.trim().length > 20) ||
+    (document.getElementById("lmBody") && document.getElementById("lmBody").textContent.trim().length > 20);
+
+  if (!hasLetter) {
+    alert("Générez d'abord une lettre de motivation avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+
+    var marginL = 24;
+    var marginR = 24;
+    var marginT = 22;
+    var marginB = 22;
+
+    var contentW = pageW - marginL - marginR;
+    var y = marginT;
+
+    function bottom() {
+      return pageH - marginB;
+    }
+
+    function newPage() {
+      doc.addPage();
+      y = marginT;
+      return y;
+    }
+
+    function ensure(h) {
+      if (y + h > bottom()) {
+        y = newPage();
+      }
+    }
+
+    function setFont(size, style) {
+      doc.setFont("times", style || "normal");
+      doc.setFontSize(size);
+      doc.setTextColor(25, 25, 25);
+    }
+
+    function writeWrapped(text, x, w, size, style, lineH, after, align) {
+      text = v37Clean(text);
+      if (!text) return;
+
+      setFont(size, style || "normal");
+
+      var lines = doc.splitTextToSize(text, w);
+
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, align === "right" ? x + w : x, y, { align: align || "left" });
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    var senderLines = [
+      j.sender_name,
+      j.sender_address,
+      j.sender_phone,
+      j.sender_email
+    ].filter(Boolean).join("\n");
+
+    var recipientNameLine = "";
+    if (j.recipient_name) {
+      recipientNameLine = j.recipient_name + (j.recipient_title ? ", " + j.recipient_title : "");
+    }
+
+    var recipientLines = [
+      j.recipient_company,
+      recipientNameLine,
+      j.recipient_address
+    ].filter(Boolean).join("\n");
+
+    var yTop = y;
+
+    // Expéditeur en haut à gauche
+    var leftW = 78;
+    var ySender = v37DrawTextBlock(doc, senderLines, marginL, yTop, leftW, {
+      size: 10.5,
+      style: "normal",
+      lineH: 5,
+      align: "left"
+    });
+
+    // Destinataire carrément en haut à droite, texte aligné droite
+    var rightW = 82;
+    var rightX = pageW - marginR - rightW;
+
+    var yRecipient = v37DrawTextBlock(doc, recipientLines, rightX, yTop, rightW, {
+      size: 10.5,
+      style: "normal",
+      lineH: 5,
+      align: "right"
+    });
+
+    // La date vient juste sous le destinataire, alignée tout à droite
+    y = yRecipient + 7;
+
+    var dateLine = ((j.city ? j.city + ", " : "") + (j.date || "")).trim();
+    if (dateLine) {
+      setFont(10.5, "normal");
+      doc.text(dateLine, pageW - marginR, y, { align: "right" });
+      y += 16;
+    } else {
+      y = Math.max(ySender, yRecipient) + 16;
+    }
+
+    // Objet
+    if (j.subject) {
+      setFont(10.5, "italic");
+
+      var subjectText = "Objet : " + j.subject;
+      var subjectLines = doc.splitTextToSize(subjectText, contentW);
+
+      subjectLines.forEach(function(line) {
+        ensure(6);
+        doc.text(line, marginL, y);
+        y += 5.2;
+      });
+
+      doc.setDrawColor(225, 225, 225);
+      doc.setLineWidth(0.25);
+      doc.line(marginL, y + 1, pageW - marginR, y + 1);
+
+      y += 15;
+    }
+
+    // Salutation
+    if (j.salutation) {
+      writeWrapped(j.salutation, marginL, contentW, 11, "normal", 5.4, 5.5, "left");
+    }
+
+    // Corps justifié
+    v37SplitParagraphs(j.body).forEach(function(p) {
+      y = v37WriteJustifiedParagraph(doc, p, marginL, y, contentW, {
+        size: 11,
+        lineH: 5.4,
+        after: 5.2,
+        pageH: pageH,
+        marginT: marginT,
+        marginB: marginB,
+        newPage: newPage
+      });
+    });
+
+    // Formule + signature ensemble si possible
+    ensure(34);
+
+    if (j.closing) {
+      writeWrapped(j.closing, marginL, contentW, 11, "normal", 5.4, 14, "left");
+    }
+
+    if (j.signature) {
+      setFont(12, "bold");
+      doc.text(j.signature.toUpperCase(), pageW - marginR, y, { align: "right" });
+    }
+
+    doc.save("lettre_motivation.pdf");
+  } catch(e) {
+    console.error("Export PDF lettre V37 impossible :", e);
     alert("Export PDF impossible : " + (e.message || e));
   }
 }
