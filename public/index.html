@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agent IA de MYF</title>
-<meta name="myf-build" content="v23-cv-pdf-layout-standalone">
+<meta name="myf-build" content="v24-secure-session-proxy-standalone">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -4915,6 +4915,209 @@ function fallbackPrintPdf(title, node) {
       "<script>window.onload=function(){setTimeout(function(){window.print();},500)}<\/script></body></html>"
   );
   w.document.close();
+}
+
+
+/* ========================================================================== 
+   CORRECTIF MYF V24 — SÉCURITÉ : SESSION TOKEN + PROXY IA CÔTÉ SERVEUR
+   ========================================================================== */
+
+var SESSION_TOKEN = "";
+
+function getActiveToken() {
+  return SESSION_TOKEN || API_KEY || ADMIN_KEY || "";
+}
+
+function secureAuthHeaders(token) {
+  var headers = { "Content-Type": "application/json" };
+  var t = token || getActiveToken();
+  if (t) {
+    headers["x-session-token"] = t;
+    // Compatibilité avec les anciennes routes du serveur.
+    headers["x-admin-key"] = t;
+  }
+  return headers;
+}
+
+// Remplace l'ancien helper API : les clés Mistral ne transitent plus par le navigateur.
+async function api(method, endpoint, body, adminKey) {
+  var publicRoute = endpoint === "/login" || endpoint === "/admin/login" || endpoint === "/admin/setup";
+  var headers = { "Content-Type": "application/json" };
+  var token = adminKey || (!publicRoute ? getActiveToken() : "");
+
+  if (token) {
+    headers["x-session-token"] = token;
+    headers["x-admin-key"] = token;
+  }
+
+  var opts = { method: method, headers: headers };
+  if (body) opts.body = JSON.stringify(body);
+
+  try {
+    var res = await fetch(BASE + "/api" + endpoint, opts);
+    var data = await res.json();
+    return data;
+  } catch(e) {
+    return { success: false, message: "Erreur réseau : " + e.message, data: {} };
+  }
+}
+
+async function loginUser() {
+  hideLErr("uerr");
+  var username = document.getElementById("uname").value.trim();
+  var password = document.getElementById("upw").value;
+
+  if (!username || !password) {
+    showLErr("uerr", "Remplissez tous les champs.");
+    return;
+  }
+
+  var btn = document.getElementById("uLoginBtn");
+  var spin = document.getElementById("uSpin");
+  btn.disabled = true;
+  spin.classList.add("show");
+
+  var res = await api("POST", "/login", { username: username, password: password });
+
+  btn.disabled = false;
+  spin.classList.remove("show");
+
+  if (res.success) {
+    SESSION_TOKEN = res.data.session_token || "";
+    API_KEY = SESSION_TOKEN; // API_KEY devient un simple token de session, jamais une clé Mistral.
+    ROLE = "user";
+    try { sessionStorage.setItem("myf_session_token", SESSION_TOKEN); } catch(e) {}
+    enterApp(res.data.fullname || res.data.username, "user");
+  } else {
+    showLErr("uerr", res.message || "Erreur de connexion.");
+  }
+}
+
+async function loginAdmin() {
+  hideLErr("aerr");
+  var keyEl = document.getElementById("akey");
+  var key = keyEl.value.trim();
+
+  if (!key) {
+    showLErr("aerr", "Saisissez votre clé admin.");
+    return;
+  }
+
+  var btn = document.getElementById("aLoginBtn");
+  var spin = document.getElementById("aSpin");
+  btn.disabled = true;
+  spin.classList.add("show");
+
+  var res = await api("POST", "/admin/login", { key: key });
+
+  btn.disabled = false;
+  spin.classList.remove("show");
+
+  if (res.success) {
+    SESSION_TOKEN = res.data.session_token || "";
+    API_KEY = SESSION_TOKEN;
+    ADMIN_KEY = SESSION_TOKEN;
+    ROLE = "admin";
+    try { keyEl.value = ""; sessionStorage.setItem("myf_session_token", SESSION_TOKEN); } catch(e) {}
+    enterApp("Administrateur MYF", "admin");
+  } else {
+    showLErr("aerr", res.message || "Clé invalide.");
+  }
+}
+
+function logout() {
+  API_KEY = "";
+  ADMIN_KEY = "";
+  SESSION_TOKEN = "";
+  ROLE = "";
+  CURRENT_NAME = "";
+  try { sessionStorage.removeItem("myf_session_token"); } catch(e) {}
+
+  ["ifaceScreen", "appScreen", "recScreen", "chatScreen", "adminScreen"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+  });
+
+  var login = document.getElementById("loginScreen");
+  if (login) login.classList.add("active");
+}
+
+async function secureMistralStream(payload, onDelta) {
+  var res = await fetch(BASE + "/api/ai-stream", {
+    method: "POST",
+    headers: secureAuthHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    var raw = await res.text();
+    var errMsg = "Erreur IA " + res.status;
+    try {
+      var json = JSON.parse(raw);
+      errMsg = json.message || json.detail || json.error || errMsg;
+    } catch(e) {
+      if (raw) errMsg = raw.slice(0, 400);
+    }
+    throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
+  }
+
+  var reader = res.body.getReader();
+  var decoder = new TextDecoder();
+  var buffer = "";
+  var full = "";
+
+  while (true) {
+    var result = await reader.read();
+    if (result.done) break;
+
+    buffer += decoder.decode(result.value, { stream: true });
+    var lines = buffer.split("\n");
+    buffer = lines.pop();
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line.startsWith("data: ")) continue;
+
+      var raw = line.slice(6).trim();
+      if (raw === "[DONE]") continue;
+
+      try {
+        var json = JSON.parse(raw);
+        if (json.error) throw new Error(json.error);
+        var delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
+        if (typeof delta === "string") {
+          full += delta;
+          if (onDelta) onDelta(full);
+        }
+      } catch(e) {
+        // On ignore les lignes SSE non JSON, sauf vraie erreur déjà remontée côté serveur.
+      }
+    }
+  }
+
+  return full;
+}
+
+// Génération CV/LM/recruteur : proxy côté serveur.
+async function streamCall(sysPrompt, userMsg, model, onChunk) {
+  return secureMistralStream({
+    model: model,
+    system: sysPrompt,
+    messages: [{ role: "user", content: userMsg }],
+    max_tokens: 3000,
+    temperature: 0.7
+  }, onChunk);
+}
+
+// Chat IA : proxy côté serveur.
+async function streamMistralChat(model, sysChat, messages, onDelta) {
+  return secureMistralStream({
+    model: model,
+    system: sysChat,
+    messages: messages,
+    max_tokens: 2600,
+    temperature: 0.7
+  }, onDelta);
 }
 
 
