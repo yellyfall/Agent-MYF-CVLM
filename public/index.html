@@ -6918,6 +6918,505 @@ if (typeof sendChat === "function") {
 */
 
 
+
+/* ==========================================================================
+   CORRECTIF MYF V32 — PDF CV STYLE MODÈLE MOUSSA YELLY FALL
+   ========================================================================== */
+/*
+  Rendu PDF inspiré du CV modèle fourni :
+  - pas d'encadrés autour des sections ;
+  - section simple, professionnelle, ATS-friendly ;
+  - entreprise avant le poste dans les expériences ;
+  - diplôme avant établissement dans la formation ;
+  - Formations = uniquement études universitaires / lycée / collège / école ;
+  - compétences logicielles et techniques séparées ;
+  - marges propres haut/bas.
+*/
+
+function v32Norm(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function v32Clean(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function v32SplitPieces(value) {
+  var raw = v32Clean(value);
+
+  // Corrige certains collages fréquents observés dans les exports.
+  raw = raw
+    .replace(/(UTEC\s*15-712)(Analyse)/gi, "$1\n$2")
+    .replace(/(chantier)(Analyse)/gi, "$1\n$2")
+    .replace(/(prenantes)(Veille)/gi, "$1\n$2")
+    .replace(/(charge)(Montage)/gi, "$1\n$2")
+    .replace(/(autoconsommation)(Relation)/gi, "$1\n$2")
+    .replace(/(courant)(Anglais)/gi, "$1 | $2");
+
+  return raw
+    .split(/\n|•|;/)
+    .map(function(x) {
+      return v32Clean(x.replace(/^[-–—•]\s*/, ""));
+    })
+    .filter(Boolean);
+}
+
+function v32PushUnique(arr, value) {
+  var v = v32Clean(value);
+  if (!v) return;
+
+  var n = v32Norm(v);
+  if (!n) return;
+
+  for (var i = 0; i < arr.length; i++) {
+    if (v32Norm(arr[i]) === n) return;
+  }
+
+  arr.push(v);
+}
+
+function v32IsAcademicEntry(entry) {
+  var txt = [
+    entry && entry.school,
+    entry && entry.degree,
+    entry && entry.role,
+    entry && entry.company,
+    entry && entry.date,
+    entry && entry.extra ? entry.extra.join(" ") : "",
+    entry && entry.tasks ? entry.tasks.join(" ") : ""
+  ].join(" ");
+
+  var t = v32Norm(txt);
+
+  return /(universite|université|lycee|lycée|college|collège|ecole|école|institut|faculte|faculté|ugb|upvd|perpignan via domitia|gaston berger|master|licence|bachelor|dut|bts|doctorat|diplome|diplôme|physique appliquee|physique appliquée|energie solaire|énergie solaire|energies renouvelables|énergies renouvelables)/.test(t);
+}
+
+function v32IsSoftware(value) {
+  var t = v32Norm(value);
+  return /(solaredge|sketchup|autocad|revit|archelios|qgis|pvsyst|pvgis|office|excel|word|powerpoint|latex|pleiades|pléiades|comsol|ees|matlab|python|javascript|node|render|github|sqlite|laragon)/.test(t);
+}
+
+function v32IsLanguage(value) {
+  var t = v32Norm(value);
+  return /(francais|français|anglais|english|espagnol|arabe|wolof|c2|b2|b1|a2|courant|intermediaire|intermédiaire|langue)/.test(t);
+}
+
+function v32SectionKind(title) {
+  var t = v32Norm(title);
+
+  if (/experience|expérience|professionnelle/.test(t)) return "experience";
+  if (/formation|education|etude|étude|diplome|diplôme/.test(t)) return "education";
+  if (/logiciel|software|outils/.test(t)) return "software";
+  if (/langue|language/.test(t)) return "language";
+  if (/skill|competence|compétence|technique|hard|soft|savoir|expertise|aptitude|atout|certification|habilitation|norme|methode|méthode/.test(t)) return "skill";
+
+  return "other";
+}
+
+function v32OrganizeCvData(data) {
+  var out = {
+    name: data.name || "MOUSSA YELLY FALL",
+    profile: data.profile || "",
+    contacts: data.contacts || [],
+    experiences: [],
+    formations: [],
+    software: [],
+    technical: [],
+    languages: []
+  };
+
+  (data.sections || []).forEach(function(sec) {
+    var kind = v32SectionKind(sec.title);
+
+    if (kind === "experience") {
+      (sec.entries || []).forEach(function(entry) {
+        out.experiences.push(entry);
+      });
+      return;
+    }
+
+    if (kind === "education") {
+      (sec.entries || []).forEach(function(entry) {
+        if (v32IsAcademicEntry(entry)) {
+          out.formations.push(entry);
+        } else {
+          var entryText = [
+            entry.role,
+            entry.company,
+            entry.school,
+            entry.degree,
+            (entry.extra || []).join(" "),
+            (entry.tasks || []).join(" ")
+          ].filter(Boolean).join(" ");
+
+          v32SplitPieces(entryText).forEach(function(x) {
+            if (v32IsSoftware(x)) v32PushUnique(out.software, x);
+            else if (v32IsLanguage(x)) v32PushUnique(out.languages, x);
+            else v32PushUnique(out.technical, x);
+          });
+        }
+      });
+
+      (sec.lines || []).forEach(function(line) {
+        v32SplitPieces(line).forEach(function(x) {
+          if (v32IsSoftware(x)) v32PushUnique(out.software, x);
+          else if (v32IsLanguage(x)) v32PushUnique(out.languages, x);
+          else v32PushUnique(out.technical, x);
+        });
+      });
+
+      (sec.tags || []).forEach(function(tag) {
+        if (v32IsSoftware(tag)) v32PushUnique(out.software, tag);
+        else if (v32IsLanguage(tag)) v32PushUnique(out.languages, tag);
+        else v32PushUnique(out.technical, tag);
+      });
+
+      return;
+    }
+
+    if (kind === "software") {
+      (sec.tags || []).forEach(function(x) { v32PushUnique(out.software, x); });
+      (sec.lines || []).forEach(function(line) {
+        v32SplitPieces(line).forEach(function(x) { v32PushUnique(out.software, x); });
+      });
+      return;
+    }
+
+    if (kind === "language") {
+      (sec.tags || []).forEach(function(x) { v32PushUnique(out.languages, x); });
+      (sec.lines || []).forEach(function(line) {
+        v32SplitPieces(line).forEach(function(x) { v32PushUnique(out.languages, x); });
+      });
+      return;
+    }
+
+    // Skills / autres : trier entre logiciels, langues et compétences techniques.
+    (sec.tags || []).forEach(function(x) {
+      if (v32IsSoftware(x)) v32PushUnique(out.software, x);
+      else if (v32IsLanguage(x)) v32PushUnique(out.languages, x);
+      else v32PushUnique(out.technical, x);
+    });
+
+    (sec.lines || []).forEach(function(line) {
+      v32SplitPieces(line).forEach(function(x) {
+        if (v32IsSoftware(x)) v32PushUnique(out.software, x);
+        else if (v32IsLanguage(x)) v32PushUnique(out.languages, x);
+        else v32PushUnique(out.technical, x);
+      });
+    });
+
+    (sec.entries || []).forEach(function(entry) {
+      var entryText = [
+        entry.role,
+        entry.company,
+        entry.school,
+        entry.degree,
+        (entry.extra || []).join(" "),
+        (entry.tasks || []).join(" ")
+      ].filter(Boolean).join(" ");
+
+      v32SplitPieces(entryText).forEach(function(x) {
+        if (v32IsSoftware(x)) v32PushUnique(out.software, x);
+        else if (v32IsLanguage(x)) v32PushUnique(out.languages, x);
+        else v32PushUnique(out.technical, x);
+      });
+    });
+  });
+
+  return out;
+}
+
+function v32ParseExperienceHeader(entry) {
+  var role = v32Clean(entry.role || "");
+  var company = v32Clean(entry.company || "");
+  var date = v32Clean(entry.date || "");
+
+  // Si l'ancien parseur a laissé "Poste | Entreprise" dans role.
+  if (!company && role.indexOf("|") !== -1) {
+    var parts = role.split("|").map(v32Clean).filter(Boolean);
+    role = parts[0] || role;
+    company = parts.slice(1).join(" | ");
+  }
+
+  // Si company manque mais school contient l'organisation.
+  if (!company && entry.school) company = v32Clean(entry.school);
+
+  return { role: role, company: company, date: date };
+}
+
+function v32ParseFormation(entry) {
+  var degree = v32Clean(entry.degree || entry.role || "");
+  var school = v32Clean(entry.school || entry.company || "");
+  var date = v32Clean(entry.date || "");
+
+  // Si le diplôme est dans school et l'école dans degree, on tente de corriger.
+  if (/universit|lycee|lycée|college|collège|ecole|école|institut/i.test(degree) && !/universit|lycee|lycée|college|collège|ecole|école|institut/i.test(school)) {
+    var tmp = degree;
+    degree = school;
+    school = tmp;
+  }
+
+  return { degree: degree, school: school, date: date };
+}
+
+function v32CleanTask(task) {
+  return v32Clean(String(task || "").replace(/^[-–—•]\s*/, ""));
+}
+
+async function dlCVPdf() {
+  var rawData = typeof cvPdfCollectData === "function" ? cvPdfCollectData() : null;
+
+  if (!rawData || !rawData.sections || !rawData.sections.length) {
+    alert("Générez d'abord le CV optimisé avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var data = v32OrganizeCvData(rawData);
+
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+
+    // Marges proches d'un CV classique, avec respiration haut/bas.
+    var marginL = 15;
+    var marginR = 15;
+    var marginT = 14;
+    var marginB = 15;
+    var contentW = pageW - marginL - marginR;
+
+    var y = marginT;
+
+    var black = [20, 20, 20];
+    var muted = [70, 70, 70];
+
+    function color(c) {
+      doc.setTextColor(c[0], c[1], c[2]);
+    }
+
+    function bottomLimit() {
+      return pageH - marginB;
+    }
+
+    function addPage() {
+      doc.addPage();
+      y = marginT + 2;
+    }
+
+    function ensure(h) {
+      if (y + h > bottomLimit()) addPage();
+    }
+
+    function setFont(size, style) {
+      doc.setFont("helvetica", style || "normal");
+      doc.setFontSize(size);
+      color(black);
+    }
+
+    function textWrapped(txt, x, w, size, style, lineH, after, opts) {
+      txt = v32Clean(txt);
+      if (!txt) return;
+
+      opts = opts || {};
+      setFont(size, style || "normal");
+      if (opts.color) color(opts.color);
+
+      var lines = doc.splitTextToSize(txt, w);
+
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, x, y);
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function centered(txt, size, style, lineH, after) {
+      txt = v32Clean(txt);
+      if (!txt) return;
+
+      setFont(size, style || "normal");
+
+      var lines = doc.splitTextToSize(txt, contentW);
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, pageW / 2, y, { align: "center" });
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function section(title) {
+      title = v32Clean(title).toUpperCase();
+
+      // Évite un titre orphelin en bas de page.
+      ensure(14);
+
+      setFont(10.5, "bold");
+      doc.text(title, marginL, y);
+      y += 4.2;
+
+      doc.setDrawColor(120, 120, 120);
+      doc.setLineWidth(0.25);
+      doc.line(marginL, y, pageW - marginR, y);
+      y += 4.5;
+    }
+
+    function companyLine(txt) {
+      ensure(10);
+      textWrapped(txt, marginL, contentW, 9.7, "bold", 4.3, 0.8);
+    }
+
+    function roleLine(role, date) {
+      var left = v32Clean(role);
+      var right = v32Clean(date);
+
+      ensure(8);
+
+      setFont(9.1, "normal");
+      color(muted);
+
+      if (right) {
+        var rightW = Math.min(55, doc.getTextWidth(right) + 2);
+        var leftW = contentW - rightW - 3;
+        var lines = doc.splitTextToSize(left, leftW);
+
+        doc.text(lines, marginL, y);
+        doc.text(right, pageW - marginR, y, { align: "right" });
+
+        y += lines.length * 4.1 + 1.2;
+      } else {
+        textWrapped(left, marginL, contentW, 9.1, "normal", 4.1, 1.2, { color: muted });
+      }
+
+      color(black);
+    }
+
+    function paragraphTask(txt) {
+      textWrapped(v32CleanTask(txt), marginL, contentW, 8.65, "normal", 3.75, 1.05);
+    }
+
+    function drawHeader() {
+      centered(data.name || "MOUSSA YELLY FALL", 16.8, "bold", 6.2, 1);
+
+      if (data.profile) centered(data.profile, 10.2, "normal", 4.5, 1.2);
+
+      if (data.contacts && data.contacts.length) {
+        centered(data.contacts.join(" | "), 8.7, "normal", 4.0, 5);
+      } else {
+        y += 3;
+      }
+    }
+
+    function drawExperiences() {
+      if (!data.experiences.length) return;
+
+      section("EXPÉRIENCES PROFESSIONNELLES");
+
+      data.experiences.forEach(function(entry, idx) {
+        var h = v32ParseExperienceHeader(entry);
+
+        // Si une nouvelle expérience commence trop bas, on bascule sur page suivante.
+        ensure(22);
+
+        companyLine(h.company || h.role || "Expérience professionnelle");
+        roleLine(h.role, h.date);
+
+        var tasks = entry.tasks || [];
+        if (!tasks.length && entry.extra) tasks = entry.extra;
+
+        tasks.forEach(function(task) {
+          paragraphTask(task);
+        });
+
+        if (idx < data.experiences.length - 1) y += 2.8;
+      });
+
+      y += 2;
+    }
+
+    function drawFormations() {
+      if (!data.formations.length) return;
+
+      section("FORMATION");
+
+      data.formations.forEach(function(entry) {
+        var f = v32ParseFormation(entry);
+        ensure(13);
+
+        textWrapped(f.degree || "Formation", marginL, contentW, 9.4, "bold", 4.2, 0.5);
+
+        var schoolLine = f.school;
+        if (f.date) schoolLine += " | " + f.date;
+
+        textWrapped(schoolLine, marginL, contentW, 8.8, "normal", 3.9, 2.3, { color: muted });
+      });
+
+      y += 1;
+    }
+
+    function drawSoftware() {
+      if (!data.software.length) return;
+
+      section("COMPÉTENCES LOGICIELLES");
+
+      var line = data.software.join(" | ");
+      textWrapped(line, marginL, contentW, 8.8, "normal", 3.9, 3);
+    }
+
+    function drawTechnical() {
+      if (!data.technical.length) return;
+
+      section("COMPÉTENCES TECHNIQUES");
+
+      data.technical.forEach(function(item) {
+        textWrapped(item, marginL, contentW, 8.8, "normal", 3.9, 0.8);
+      });
+
+      y += 1;
+    }
+
+    function drawLanguages() {
+      if (!data.languages.length) return;
+
+      section("LANGUES");
+
+      textWrapped(data.languages.join(" | "), marginL, contentW, 8.9, "normal", 4.0, 0);
+    }
+
+    drawHeader();
+    drawExperiences();
+    drawFormations();
+    drawSoftware();
+    drawTechnical();
+    drawLanguages();
+
+    doc.save("cv_optimise.pdf");
+  } catch(e) {
+    console.error("Export PDF CV V32 impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
 </script>
 </body>
 </html>
