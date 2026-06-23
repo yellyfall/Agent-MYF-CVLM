@@ -2243,10 +2243,10 @@ async function generateAll(){
       +"2. Optimize only the wording of the professional profile, skills and experience tasks according to the job offer.\n"
       +"3. Integrate exact keywords from the job offer naturally, without inventing experience.\n"
       +"4. HEADER FORMAT: first non-empty line = candidate full name only. Second line = target professional profile / job title only. Third line = contact information, mobility and driving licence on ONE line separated with |, for example: Address | Phone | Email | LinkedIn | Mobility | Driving licence.\n"
-      +"5. SECTION ORDER: Expériences professionnelles, Formations, Skills, Logiciels, Langues, Contact if useful. Put Langues immediately under Skills / Logiciels when those sections exist.\n"
-      +"6. CREATE A CLEAR SECTION NAMED EXACTLY: Skills. Put all professional skills, technical skills, transversal skills, certifications, methods and non-academic training-related abilities there. Do not create a second Formation section.\n"
+      +"5. SECTION ORDER: Expériences professionnelles, Formations, Hard Skills, Soft Skills, Logiciels, Langues, Contact if useful. Put Langues immediately under Skills / Logiciels when those sections exist.\n"
+      +"6. CREATE TWO CLEAR SECTIONS NAMED EXACTLY: Hard Skills and Soft Skills. Put technical skills, PV methods, standards, software-related abilities, economic analysis, administrative/project methods and certifications in Hard Skills. Put communication, client relationship, coordination, stakeholder management, adaptability and teamwork in Soft Skills. Do not create a second Formation section.\n"
       +"7. EXPERIENCE FORMAT: section heading on its own line. For each job, put one header line exactly like: Job title | Company / organization - city | dates or duration. Then put tasks as bullet points starting with •. Make bullets dense and complete, but factual.\n"
-      +"8. EDUCATION FORMAT: use only one section named Formations, reserved strictly for academic studies/diplomas. For each education item, put the school/university/college and duration BEFORE the degree, exactly like: School / University - city | dates. Next line: degree / training title.\n"
+      +"8. EDUCATION FORMAT: use only one section named Formations, reserved strictly for academic studies/diplomas from university, high school, college or official academic institutions. For each education item, put the school/university/college and duration BEFORE the degree, exactly like: School / University - city | dates. Next line: degree / training title.\n"
       +"9. SKILLS / SOFTWARE / LANGUAGES FORMAT: use clear compact lines, no page numbers, no markdown tables, no decorative symbols except simple bullets when useful.\n"
       +"10. SECTION SEPARATION: make sure every section has its own heading and content clearly separated from the previous section. Do not merge sections.\n"
       +"11. All writing must remain professional, concise and ATS-friendly.\n\n"
@@ -6469,6 +6469,347 @@ async function dlCVPdf() {
     console.error("Export CV PDF impossible :", e);
     alert("Export PDF impossible : " + (e.message || e));
   }
+}
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V30 — FORMATIONS UNIQUES + HARD SKILLS / SOFT SKILLS
+   ========================================================================== */
+
+/*
+  Règles :
+  - Une seule section "Formations".
+  - "Formations" = uniquement études/diplômes : université, lycée, collège, école.
+  - Tout ce qui est compétence, méthode, norme, projet, relation client, veille, etc.
+    sort de Formations et va vers Hard Skills ou Soft Skills.
+*/
+
+function myfV30NormText(value) {
+  if (typeof cvNorm === "function") return cvNorm(value);
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function myfV30CleanText(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
+function myfV30IsEducationTitle(title) {
+  var t = myfV30NormText(title);
+  return /\b(formation|formations|education|etude|etudes|diplome|diplomes|parcours academique)\b/.test(t);
+}
+
+function myfV30IsSkillsTitle(title) {
+  var t = myfV30NormText(title);
+  return /\b(skill|skills|competence|competences|hard skills|soft skills|savoir|savoir-faire|expertise|aptitude|atout|methode|methodes|outil|outils|certification|habilitation|norme|normes)\b/.test(t);
+}
+
+function myfV30IsSoftSkillLine(line) {
+  var t = myfV30NormText(line);
+  return /(relation client|parties prenantes|stakeholder|coordination|communication|gestion des interfaces|support operationnel|support opérationnel|adaptation|veille technologique|travail en equipe|travail en équipe|autonomie|rigueur|organisation|leadership|collaboration|sens du service|gestion des priorites|gestion des priorités)/.test(t);
+}
+
+function myfV30IsAcademicEntry(entry) {
+  if (!entry) return false;
+
+  var combined = [
+    entry.school,
+    entry.degree,
+    (entry.extra || []).join(" "),
+    (entry.tasks || []).join(" ")
+  ].join(" ");
+
+  var t = myfV30NormText(combined);
+
+  return /(universite|université|lycee|lycée|college|collège|ecole|école|institut|ugb|upvd|perpignan via domitia|gaston berger|master|licence|bachelor|dut|bts|doctorat|ingenieur|ingénieur|diplome|diplôme|physique appliquee|physique appliquée|energie solaire|energies renouvelables|énergies renouvelables)/.test(t);
+}
+
+function myfV30PushUnique(arr, value) {
+  var v = myfV30CleanText(value);
+  if (!v) return;
+
+  var n = myfV30NormText(v);
+  var exists = arr.some(function(x) {
+    return myfV30NormText(x) === n;
+  });
+
+  if (!exists) arr.push(v);
+}
+
+function myfV30SplitStuckSkillLines(line) {
+  var raw = myfV30CleanText(line);
+  if (!raw) return [];
+
+  // Corrige certains collages fréquents observés dans le PDF :
+  // "UTEC 15-712Analyse économique"
+  // "chantierAnalyse de consommation"
+  // "prenantesVeille technologique"
+  raw = raw
+    .replace(/(UTEC\s*15-712)(Analyse)/gi, "$1\n$2")
+    .replace(/(chantier)(Analyse)/gi, "$1\n$2")
+    .replace(/(prenantes)(Veille)/gi, "$1\n$2")
+    .replace(/(projets)(Gestion)/gi, "$1\n$2")
+    .replace(/(charge)(Montage)/gi, "$1\n$2")
+    .replace(/(autoconsommation)(Relation)/gi, "$1\n$2");
+
+  return raw
+    .split(/\n|•|;/)
+    .map(myfV30CleanText)
+    .filter(Boolean);
+}
+
+function myfV30PostProcessSections(sections) {
+  var experiences = null;
+  var formations = {
+    title: "Formations",
+    entries: [],
+    tags: [],
+    lines: []
+  };
+  var hard = {
+    title: "Hard Skills",
+    entries: [],
+    tags: [],
+    lines: []
+  };
+  var soft = {
+    title: "Soft Skills",
+    entries: [],
+    tags: [],
+    lines: []
+  };
+  var logiciels = null;
+  var langues = null;
+  var contact = null;
+  var others = [];
+
+  (sections || []).forEach(function(sec) {
+    if (!sec || !sec.title) return;
+
+    var titleNorm = myfV30NormText(sec.title);
+    var isEducation = myfV30IsEducationTitle(sec.title);
+    var isSkills = myfV30IsSkillsTitle(sec.title);
+
+    if (/experience|expérience|professionnelle/.test(titleNorm)) {
+      if (!experiences) {
+        experiences = {
+          title: "Expériences professionnelles",
+          entries: [],
+          tags: [],
+          lines: []
+        };
+      }
+      experiences.entries = experiences.entries.concat(sec.entries || []);
+      experiences.tags = experiences.tags.concat(sec.tags || []);
+      experiences.lines = experiences.lines.concat(sec.lines || []);
+      return;
+    }
+
+    if (/logiciel|software|outils/.test(titleNorm)) {
+      if (!logiciels) {
+        logiciels = {
+          title: "Logiciels",
+          entries: [],
+          tags: [],
+          lines: []
+        };
+      }
+      logiciels.entries = logiciels.entries.concat(sec.entries || []);
+      logiciels.tags = logiciels.tags.concat(sec.tags || []);
+      logiciels.lines = logiciels.lines.concat(sec.lines || []);
+      return;
+    }
+
+    if (/langue|language/.test(titleNorm)) {
+      if (!langues) {
+        langues = {
+          title: "Langues",
+          entries: [],
+          tags: [],
+          lines: []
+        };
+      }
+      langues.entries = langues.entries.concat(sec.entries || []);
+      langues.tags = langues.tags.concat(sec.tags || []);
+      langues.lines = langues.lines.concat(sec.lines || []);
+      return;
+    }
+
+    if (/contact/.test(titleNorm)) {
+      if (!contact) {
+        contact = {
+          title: "Contact",
+          entries: [],
+          tags: [],
+          lines: []
+        };
+      }
+      contact.entries = contact.entries.concat(sec.entries || []);
+      contact.tags = contact.tags.concat(sec.tags || []);
+      contact.lines = contact.lines.concat(sec.lines || []);
+      return;
+    }
+
+    // Formation : garder uniquement les vraies études/diplômes.
+    if (isEducation) {
+      (sec.entries || []).forEach(function(entry) {
+        if (myfV30IsAcademicEntry(entry)) {
+          formations.entries.push(entry);
+        } else {
+          var entryText = [
+            entry.role,
+            entry.company,
+            entry.school,
+            entry.degree,
+            (entry.extra || []).join(" "),
+            (entry.tasks || []).join(" ")
+          ].filter(Boolean).join(" ");
+
+          myfV30SplitStuckSkillLines(entryText).forEach(function(line) {
+            if (myfV30IsSoftSkillLine(line)) myfV30PushUnique(soft.lines, line);
+            else myfV30PushUnique(hard.lines, line);
+          });
+        }
+      });
+
+      // Les lignes libres sous Formations sont presque toujours des compétences.
+      (sec.lines || []).forEach(function(line) {
+        myfV30SplitStuckSkillLines(line).forEach(function(piece) {
+          if (myfV30IsSoftSkillLine(piece)) myfV30PushUnique(soft.lines, piece);
+          else myfV30PushUnique(hard.lines, piece);
+        });
+      });
+
+      (sec.tags || []).forEach(function(tag) {
+        if (myfV30IsSoftSkillLine(tag)) myfV30PushUnique(soft.lines, tag);
+        else myfV30PushUnique(hard.lines, tag);
+      });
+
+      return;
+    }
+
+    // Skills générique : répartir en hard / soft.
+    if (isSkills) {
+      (sec.tags || []).forEach(function(tag) {
+        if (myfV30IsSoftSkillLine(tag)) myfV30PushUnique(soft.lines, tag);
+        else myfV30PushUnique(hard.tags, tag);
+      });
+
+      (sec.lines || []).forEach(function(line) {
+        myfV30SplitStuckSkillLines(line).forEach(function(piece) {
+          if (myfV30IsSoftSkillLine(piece)) myfV30PushUnique(soft.lines, piece);
+          else myfV30PushUnique(hard.lines, piece);
+        });
+      });
+
+      (sec.entries || []).forEach(function(entry) {
+        var entryText = [
+          entry.role,
+          entry.company,
+          entry.school,
+          entry.degree,
+          (entry.extra || []).join(" "),
+          (entry.tasks || []).join(" ")
+        ].filter(Boolean).join(" ");
+
+        myfV30SplitStuckSkillLines(entryText).forEach(function(piece) {
+          if (myfV30IsSoftSkillLine(piece)) myfV30PushUnique(soft.lines, piece);
+          else myfV30PushUnique(hard.lines, piece);
+        });
+      });
+
+      return;
+    }
+
+    // Autres sections non reconnues : si cela ressemble à des compétences, les mettre dans Hard/Soft.
+    var freeText = []
+      .concat(sec.lines || [])
+      .concat(sec.tags || []);
+
+    (sec.entries || []).forEach(function(entry) {
+      freeText.push([
+        entry.role,
+        entry.company,
+        entry.school,
+        entry.degree,
+        (entry.extra || []).join(" "),
+        (entry.tasks || []).join(" ")
+      ].filter(Boolean).join(" "));
+    });
+
+    if (freeText.length) {
+      freeText.forEach(function(line) {
+        myfV30SplitStuckSkillLines(line).forEach(function(piece) {
+          if (myfV30IsSoftSkillLine(piece)) myfV30PushUnique(soft.lines, piece);
+          else myfV30PushUnique(hard.lines, piece);
+        });
+      });
+    } else {
+      others.push(sec);
+    }
+  });
+
+  var out = [];
+
+  if (experiences && (experiences.entries.length || experiences.lines.length || experiences.tags.length)) out.push(experiences);
+  if (formations.entries.length || formations.lines.length) out.push(formations);
+  if (hard.entries.length || hard.lines.length || hard.tags.length) out.push(hard);
+  if (soft.entries.length || soft.lines.length || soft.tags.length) out.push(soft);
+  if (logiciels && (logiciels.entries.length || logiciels.lines.length || logiciels.tags.length)) out.push(logiciels);
+  if (langues && (langues.entries.length || langues.lines.length || langues.tags.length)) out.push(langues);
+  if (contact && (contact.entries.length || contact.lines.length || contact.tags.length)) out.push(contact);
+
+  return out.concat(others);
+}
+
+// Application au rendu PDF direct
+if (typeof cvPdfCollectData === "function") {
+  var __myf_v30_cvPdfCollectData_base = cvPdfCollectData;
+
+  cvPdfCollectData = function() {
+    var data = __myf_v30_cvPdfCollectData_base();
+
+    if (!data || !data.sections) return data;
+
+    data.sections = myfV30PostProcessSections(data.sections);
+
+    return data;
+  };
+}
+
+// Application au rendu visuel HTML du CV aussi
+if (typeof cvBuildSections === "function") {
+  var __myf_v30_cvBuildSections_base = cvBuildSections;
+
+  cvBuildSections = function(lines) {
+    var sections = __myf_v30_cvBuildSections_base(lines);
+
+    var converted = (sections || []).map(function(sec) {
+      return {
+        title: sec.title,
+        entries: [],
+        tags: [],
+        lines: sec.lines || []
+      };
+    });
+
+    var fixed = myfV30PostProcessSections(converted);
+
+    return fixed.map(function(sec) {
+      return {
+        title: sec.title,
+        lines: (sec.lines || []).concat(sec.tags || [])
+      };
+    });
+  };
 }
 
 
