@@ -8554,6 +8554,746 @@ async function dlCVPdf() {
 }
 
 
+
+/* ==========================================================================
+   CORRECTIF MYF V35 — CV PDF COMPLET, STRUCTURÉ, PAGINÉ A4
+   ========================================================================== */
+/*
+  Problème corrigé :
+  - Le PDF exporté pouvait perdre les expériences et la formation.
+  - Les sections étaient mélangées : formations, hard skills, logiciels, soft skills.
+  - Le PDF pouvait tout tasser sur une seule page.
+
+  Nouvelle logique :
+  - Le PDF repart du texte complet du CV optimisé (#cvOut), pas seulement du DOM visuel.
+  - Reconstruction propre :
+    NOM PRÉNOM
+    Titre professionnel
+    Coordonnées
+
+    EXPÉRIENCES PROFESSIONNELLES
+    Entreprise - Ville, Pays
+    Poste | Période
+    Missions sans puces lourdes
+
+    FORMATION
+    Diplôme
+    Université / école - Ville, Pays | Période
+
+    COMPÉTENCES LOGICIELLES
+    Logiciel 1 | Logiciel 2 | Logiciel 3
+
+    COMPÉTENCES TECHNIQUES
+    Compétence 1
+    Compétence 2
+    Compétence 3
+
+    LANGUES
+    Français | Anglais
+*/
+
+function v35Norm(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function v35Clean(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function v35Unstick(value) {
+  return String(value || "")
+    .replace(/(FORMATION|FORMATIONS|EXPÉRIENCES PROFESSIONNELLES|EXPERIENCES PROFESSIONNELLES|COMPÉTENCES LOGICIELLES|COMPETENCES LOGICIELLES|COMPÉTENCES TECHNIQUES|COMPETENCES TECHNIQUES|LANGUES|Hard Skills|Soft Skills|SKILLS)/g, "\n$1\n")
+    .replace(/(UTEC\s*15-712)(Analyse)/gi, "$1\n$2")
+    .replace(/(chantier)(Analyse)/gi, "$1\n$2")
+    .replace(/(prenantes)(Veille)/gi, "$1\n$2")
+    .replace(/(charge)(Montage)/gi, "$1\n$2")
+    .replace(/(autoconsommation)(Relation)/gi, "$1\n$2")
+    .replace(/(courant)(Anglais)/gi, "$1\nAnglais")
+    .replace(/(Solaire)(Université)/gi, "$1\nUniversité")
+    .replace(/(Énergétique)(Université)/gi, "$1\nUniversité")
+    .replace(/(Appliquée)(Hard Skills|Soft Skills|SKILLS)/gi, "$1\n$2");
+}
+
+function v35IsDateLike(value) {
+  var t = v35Norm(value);
+  return /(19|20)\d{2}|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre|present|présent|actuel|aujourd|maintenant/.test(t);
+}
+
+function v35IsSectionTitle(line) {
+  var t = v35Norm(line).replace(/[:|]+$/g, "");
+  if (/^(experiences professionnelles|experience professionnelle|expériences professionnelles|expérience professionnelle)$/.test(t)) return "experience";
+  if (/^(formation|formations|education|etudes|études|diplomes|diplômes)$/.test(t)) return "education";
+  if (/^(competences logicielles|compétences logicielles|logiciels|outils logiciels|software)$/.test(t)) return "software";
+  if (/^(competences techniques|compétences techniques|skills|hard skills|soft skills|competences|compétences)$/.test(t)) return "technical";
+  if (/^(langues|languages)$/.test(t)) return "languages";
+  return "";
+}
+
+function v35IsInstitution(line) {
+  var t = v35Norm(line);
+  return /(universite|université|lycee|lycée|college|collège|ecole|école|institut|faculte|faculté|ugb|upvd|perpignan via domitia|gaston berger|laboratoire|cnrs)/.test(t);
+}
+
+function v35IsDegree(line) {
+  var t = v35Norm(line);
+  return /(master|licence|bachelor|dut|bts|doctorat|diplome|diplôme|physique appliquee|physique appliquée|energie solaire|énergie solaire|energies renouvelables|énergies renouvelables|efficacite energetique|efficacité énergétique)/.test(t) && !v35IsInstitution(line);
+}
+
+function v35IsSoftware(line) {
+  var t = v35Norm(line);
+  return /(solaredge|sketchup|autocad|revit|archelios|archelios calc|qgis|pvsyst|pvgis|office|excel|word|powerpoint|latex|pleiades|pléiades|comsol|ees|matlab|python|javascript|node|render|github|sqlite|laragon)/.test(t);
+}
+
+function v35IsLanguage(line) {
+  var t = v35Norm(line);
+  return /(francais|français|anglais|english|espagnol|arabe|wolof|c2|b2|b1|a2|courant|intermediaire|intermédiaire)/.test(t);
+}
+
+function v35SplitInfo(line) {
+  return v35Unstick(line)
+    .split(/\n|[•;]| \| /)
+    .map(function(x) {
+      return v35Clean(x.replace(/^[-–—•]\s*/, ""));
+    })
+    .filter(Boolean);
+}
+
+function v35PushUnique(arr, value) {
+  var v = v35Clean(value);
+  if (!v) return;
+  var n = v35Norm(v);
+  if (!n) return;
+
+  for (var i = 0; i < arr.length; i++) {
+    if (v35Norm(arr[i]) === n) return;
+  }
+
+  arr.push(v);
+}
+
+function v35GetRawCvText() {
+  var out = document.getElementById("cvOut");
+  var txt = out ? v35Clean(out.textContent || out.innerText || "") : "";
+
+  // Si le texte brut existe, on l'utilise : c'est le plus fiable.
+  if (txt && txt.length > 120) return txt;
+
+  // Fallback : reconstruire depuis le rendu visuel.
+  var root = document.querySelector("#cvRender .cv-modern-page") ||
+             document.querySelector("#cvRender .cv-page") ||
+             document.querySelector("#cvRender");
+
+  return root ? v35Clean(root.innerText || root.textContent || "") : "";
+}
+
+function v35BuildSections(lines) {
+  var sections = [];
+  var current = null;
+
+  lines.forEach(function(line) {
+    var clean = v35Clean(line);
+    if (!clean) return;
+
+    var type = v35IsSectionTitle(clean);
+
+    if (type) {
+      if (type === "technical" && current && current.type === "technical") return;
+
+      current = {
+        type: type,
+        title: clean,
+        lines: []
+      };
+
+      sections.push(current);
+      return;
+    }
+
+    if (!current) {
+      current = {
+        type: "profile",
+        title: "Profil",
+        lines: []
+      };
+      sections.push(current);
+    }
+
+    current.lines.push(clean);
+  });
+
+  return sections;
+}
+
+function v35ExtractHeaderAndSections(raw) {
+  var cleanRaw = v35Unstick(String(raw || ""));
+
+  var lines = cleanRaw
+    .split(/\r?\n/)
+    .map(v35Clean)
+    .filter(Boolean)
+    .filter(function(line) {
+      return !/^📊?\s*Correspondance\s*:/i.test(line);
+    });
+
+  var firstSection = lines.findIndex(function(line) {
+    return !!v35IsSectionTitle(line);
+  });
+
+  if (firstSection < 0) firstSection = Math.min(lines.length, 4);
+
+  var headerLines = lines.slice(0, firstSection);
+  var bodyLines = lines.slice(firstSection);
+
+  var name = headerLines[0] || "";
+  var profile = headerLines[1] || "";
+  var contacts = [];
+
+  headerLines.slice(2).forEach(function(line) {
+    line.split(/\s*\|\s*/).map(v35Clean).filter(Boolean).forEach(function(p) {
+      v35PushUnique(contacts, p);
+    });
+  });
+
+  return {
+    name: name,
+    profile: profile,
+    contacts: contacts,
+    sections: v35BuildSections(bodyLines)
+  };
+}
+
+function v35ParseExpHeaderFromLine(line) {
+  var parts = String(line || "").split(/\s*\|\s*/).map(v35Clean).filter(Boolean);
+  var role = "";
+  var company = "";
+  var date = "";
+
+  if (parts.length >= 3) {
+    role = parts[0];
+    company = parts[1];
+    date = parts.slice(2).join(" | ");
+  } else if (parts.length === 2) {
+    role = parts[0];
+    if (v35IsDateLike(parts[1])) date = parts[1];
+    else company = parts[1];
+  } else {
+    role = v35Clean(line);
+  }
+
+  return { role: role, company: company, date: date };
+}
+
+function v35LooksLikeCompany(line) {
+  var t = v35Norm(line);
+  if (!line || line.length > 120) return false;
+  if (/^(master|licence|bachelor|dut|bts|hard skills|soft skills|skills)$/i.test(line)) return false;
+  if (v35IsSectionTitle(line)) return false;
+  return / - |dimeo|promes|cnrs|aeme|agence|laboratoire|entreprise|energie|énergie|sarl|sas|universite|université/.test(t);
+}
+
+function v35ParseExperiences(lines) {
+  var entries = [];
+  var current = null;
+
+  function flush() {
+    if (!current) return;
+
+    current.company = v35Clean(current.company);
+    current.role = v35Clean(current.role);
+    current.date = v35Clean(current.date);
+    current.tasks = (current.tasks || []).map(v35Clean).filter(Boolean);
+
+    if (current.company || current.role || current.tasks.length) entries.push(current);
+
+    current = null;
+  }
+
+  var i = 0;
+  while (i < lines.length) {
+    var line = v35Clean(lines[i]);
+    if (!line) { i++; continue; }
+
+    if (/^(hard skills|soft skills|skills)$/i.test(line)) {
+      i++;
+      continue;
+    }
+
+    var next = v35Clean(lines[i + 1] || "");
+
+    // Format demandé : Entreprise - Ville, Pays puis Poste | Période
+    if (v35LooksLikeCompany(line) && next && /\|/.test(next) && v35IsDateLike(next)) {
+      flush();
+      var p = v35ParseExpHeaderFromLine(next);
+
+      current = {
+        company: line,
+        role: p.role,
+        date: p.date || p.company,
+        tasks: []
+      };
+
+      i += 2;
+      continue;
+    }
+
+    // Format ancien : Poste | Entreprise - Ville, Pays | Période
+    if (/\|/.test(line) && v35IsDateLike(line)) {
+      flush();
+      var hp = v35ParseExpHeaderFromLine(line);
+
+      current = {
+        company: hp.company,
+        role: hp.role,
+        date: hp.date,
+        tasks: []
+      };
+
+      i++;
+      continue;
+    }
+
+    // Format : Poste, puis entreprise en ligne suivante, puis période ailleurs.
+    if (!current && next && v35LooksLikeCompany(next)) {
+      current = {
+        company: next,
+        role: line,
+        date: "",
+        tasks: []
+      };
+      i += 2;
+      continue;
+    }
+
+    if (!current) {
+      current = {
+        company: "",
+        role: "",
+        date: "",
+        tasks: []
+      };
+
+      if (v35LooksLikeCompany(line)) current.company = line;
+      else current.role = line;
+
+      i++;
+      continue;
+    }
+
+    // Si on trouve une entreprise alors que l'entrée actuelle a déjà des missions, on démarre une nouvelle entrée.
+    if (v35LooksLikeCompany(line) && current.tasks.length && next && (/\|/.test(next) || v35IsDateLike(next))) {
+      flush();
+      continue;
+    }
+
+    // Date isolée
+    if (!current.date && v35IsDateLike(line) && line.length < 80) {
+      current.date = line;
+      i++;
+      continue;
+    }
+
+    // Mission
+    current.tasks.push(line.replace(/^[-–—•]\s*/, ""));
+    i++;
+  }
+
+  flush();
+
+  return entries;
+}
+
+function v35ParseSchoolDate(line) {
+  var parts = String(line || "").split(/\s*\|\s*/).map(v35Clean).filter(Boolean);
+  if (parts.length >= 2) {
+    return {
+      school: parts[0],
+      date: parts.slice(1).join(" | ")
+    };
+  }
+
+  return {
+    school: v35Clean(line),
+    date: ""
+  };
+}
+
+function v35ParseFormations(lines, technical) {
+  var formations = [];
+  var i = 0;
+
+  while (i < lines.length) {
+    var line = v35Clean(lines[i]);
+    if (!line) { i++; continue; }
+
+    var next = v35Clean(lines[i + 1] || "");
+
+    if (/^(hard skills|soft skills|skills)$/i.test(line)) {
+      i++;
+      continue;
+    }
+
+    if (v35IsInstitution(line)) {
+      var sd = v35ParseSchoolDate(line);
+      var degree = "";
+
+      if (next && v35IsDegree(next)) {
+        degree = next;
+        i += 2;
+      } else {
+        i += 1;
+      }
+
+      formations.push({
+        degree: degree,
+        school: sd.school,
+        date: sd.date
+      });
+      continue;
+    }
+
+    if (v35IsDegree(line)) {
+      var school = "";
+      var date = "";
+
+      if (next && v35IsInstitution(next)) {
+        var sd2 = v35ParseSchoolDate(next);
+        school = sd2.school;
+        date = sd2.date;
+        i += 2;
+      } else {
+        i += 1;
+      }
+
+      formations.push({
+        degree: line,
+        school: school,
+        date: date
+      });
+      continue;
+    }
+
+    // Toute autre ligne présente dans Formation devient compétence technique.
+    v35SplitInfo(line).forEach(function(x) {
+      if (!v35IsSoftware(x) && !v35IsLanguage(x)) v35PushUnique(technical, x);
+    });
+
+    i++;
+  }
+
+  return formations;
+}
+
+function v35ParseCvData() {
+  var raw = v35GetRawCvText();
+  var parsed = v35ExtractHeaderAndSections(raw);
+
+  var data = {
+    name: parsed.name || "MOUSSA YELLY FALL",
+    profile: parsed.profile || "",
+    contacts: parsed.contacts || [],
+    experiences: [],
+    formations: [],
+    software: [],
+    technical: [],
+    languages: []
+  };
+
+  parsed.sections.forEach(function(sec) {
+    if (sec.type === "experience") {
+      data.experiences = data.experiences.concat(v35ParseExperiences(sec.lines));
+      return;
+    }
+
+    if (sec.type === "education") {
+      data.formations = data.formations.concat(v35ParseFormations(sec.lines, data.technical));
+      return;
+    }
+
+    if (sec.type === "software") {
+      sec.lines.forEach(function(line) {
+        v35SplitInfo(line).forEach(function(x) {
+          if (v35IsSoftware(x)) v35PushUnique(data.software, x);
+          else if (v35IsLanguage(x)) v35PushUnique(data.languages, x);
+          else v35PushUnique(data.software, x);
+        });
+      });
+      return;
+    }
+
+    if (sec.type === "languages") {
+      sec.lines.forEach(function(line) {
+        v35SplitInfo(line).forEach(function(x) {
+          if (v35IsLanguage(x) || /:/.test(x)) v35PushUnique(data.languages, x);
+        });
+      });
+      return;
+    }
+
+    // technical / skills / other
+    sec.lines.forEach(function(line) {
+      if (/^(hard skills|soft skills|skills)$/i.test(line)) return;
+
+      v35SplitInfo(line).forEach(function(x) {
+        if (v35IsSoftware(x)) v35PushUnique(data.software, x);
+        else if (v35IsLanguage(x)) v35PushUnique(data.languages, x);
+        else v35PushUnique(data.technical, x);
+      });
+    });
+  });
+
+  return data;
+}
+
+// On restaure aussi le rendu visuel futur pour éviter les sections sans type.
+if (typeof cvBuildSections === "function") {
+  cvBuildSections = function(lines) {
+    var sections = [];
+    var current = null;
+
+    lines.forEach(function(line) {
+      var clean = cvCleanLine ? cvCleanLine(line) : v35Clean(line);
+      if (!clean) return;
+
+      var kind = v35IsSectionTitle(clean);
+      if (kind) {
+        var type = kind === "technical" ? "skills" : kind;
+        current = {
+          type: type,
+          title:
+            kind === "experience" ? "Expériences professionnelles" :
+            kind === "education" ? "Formation" :
+            kind === "software" ? "Compétences logicielles" :
+            kind === "languages" ? "Langues" :
+            "Compétences techniques",
+          lines: []
+        };
+        sections.push(current);
+        return;
+      }
+
+      if (!current) {
+        current = { type: "profile", title: "Profil", lines: [] };
+        sections.push(current);
+      }
+
+      current.lines.push(clean);
+    });
+
+    return sections;
+  };
+}
+
+async function dlCVPdf() {
+  var data = v35ParseCvData();
+
+  if (!data || (!data.experiences.length && !data.formations.length && !data.technical.length && !data.software.length)) {
+    alert("Générez d'abord le CV optimisé avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+    var marginL = 15;
+    var marginR = 15;
+    var marginT = 15;
+    var marginB = 20;
+    var contentW = pageW - marginL - marginR;
+    var y = marginT;
+
+    var black = [20, 24, 35];
+    var blue = [26, 58, 110];
+    var muted = [70, 78, 92];
+
+    function setColor(c) {
+      doc.setTextColor(c[0], c[1], c[2]);
+    }
+
+    function bottom() {
+      return pageH - marginB;
+    }
+
+    function newPage() {
+      doc.addPage();
+      y = marginT + 4;
+    }
+
+    function ensure(h) {
+      if (y + h > bottom()) newPage();
+    }
+
+    function font(size, style, color) {
+      doc.setFont("helvetica", style || "normal");
+      doc.setFontSize(size);
+      setColor(color || black);
+    }
+
+    function write(txt, x, w, size, style, lineH, after, color) {
+      txt = v35Clean(txt);
+      if (!txt) return;
+
+      font(size, style || "normal", color || black);
+      var lines = doc.splitTextToSize(txt, w);
+
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, x, y);
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function center(txt, size, style, lineH, after, color) {
+      txt = v35Clean(txt);
+      if (!txt) return;
+
+      font(size, style || "normal", color || black);
+      var lines = doc.splitTextToSize(txt, contentW);
+
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, pageW / 2, y, { align: "center" });
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function sectionTitle(title) {
+      // On évite un titre orphelin en bas de page.
+      ensure(18);
+
+      font(10.8, "bold", blue);
+      doc.text(String(title || "").toUpperCase(), marginL, y);
+      y += 4.4;
+
+      doc.setDrawColor(150, 160, 175);
+      doc.setLineWidth(0.25);
+      doc.line(marginL, y, pageW - marginR, y);
+      y += 5;
+    }
+
+    function drawHeader() {
+      center(data.name || "MOUSSA YELLY FALL", 16.5, "bold", 6, 1, black);
+
+      if (data.profile) {
+        center(data.profile, 10.2, "normal", 4.4, 1.2, blue);
+      }
+
+      if (data.contacts.length) {
+        center(data.contacts.join(" | "), 8.6, "normal", 4, 5.5, muted);
+      } else {
+        y += 4;
+      }
+    }
+
+    function drawExperiences() {
+      if (!data.experiences.length) return;
+
+      sectionTitle("EXPÉRIENCES PROFESSIONNELLES");
+
+      data.experiences.forEach(function(exp, idx) {
+        // Ne pas commencer une expérience trop bas.
+        ensure(26);
+
+        write(exp.company || "Entreprise - Ville, Pays", marginL, contentW, 9.7, "bold", 4.3, 0.7, black);
+
+        var roleLine = (exp.role || "Poste") + (exp.date ? " | " + exp.date : "");
+        write(roleLine, marginL, contentW, 9.0, "normal", 4.0, 1.8, muted);
+
+        (exp.tasks || []).forEach(function(task) {
+          // Missions sans puces lourdes : paragraphes propres.
+          write(task, marginL, contentW, 8.55, "normal", 3.8, 1.2, black);
+        });
+
+        if (idx < data.experiences.length - 1) {
+          y += 3.2;
+        }
+      });
+
+      y += 2;
+    }
+
+    function drawFormations() {
+      if (!data.formations.length) return;
+
+      sectionTitle("FORMATION");
+
+      data.formations.forEach(function(f, idx) {
+        ensure(16);
+
+        write(f.degree || "Diplôme", marginL, contentW, 9.4, "bold", 4.2, 0.6, black);
+
+        var schoolLine = (f.school || "Université / école - Ville, Pays") + (f.date ? " | " + f.date : "");
+        write(schoolLine, marginL, contentW, 8.8, "normal", 3.9, 2.6, muted);
+
+        if (idx < data.formations.length - 1) y += 0.5;
+      });
+
+      y += 1;
+    }
+
+    function drawSoftware() {
+      if (!data.software.length) return;
+
+      sectionTitle("COMPÉTENCES LOGICIELLES");
+
+      write(data.software.join(" | "), marginL, contentW, 8.8, "normal", 4.0, 3.0, black);
+    }
+
+    function drawTechnical() {
+      if (!data.technical.length) return;
+
+      sectionTitle("COMPÉTENCES TECHNIQUES");
+
+      data.technical.forEach(function(skill) {
+        write(skill, marginL, contentW, 8.8, "normal", 3.95, 0.9, black);
+      });
+
+      y += 1.5;
+    }
+
+    function drawLanguages() {
+      if (!data.languages.length) return;
+
+      sectionTitle("LANGUES");
+
+      write(data.languages.join(" | "), marginL, contentW, 8.9, "normal", 4.0, 0, black);
+    }
+
+    drawHeader();
+    drawExperiences();
+    drawFormations();
+    drawSoftware();
+    drawTechnical();
+    drawLanguages();
+
+    doc.save("cv_optimise.pdf");
+  } catch(e) {
+    console.error("Export CV V35 impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
 </script>
 </body>
 </html>
