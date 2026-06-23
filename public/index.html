@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agent IA de MYF</title>
-<meta name="myf-build" content="v19-standalone-js-fixed">
+<meta name="myf-build" content="v20-cv-format-standalone">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -494,6 +494,189 @@ select:focus{border-color:var(--accent)}
 .cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px;font-family:Arial,Helvetica,sans-serif}
 @media(max-width:640px){.cv-preserve-inner{padding:24px 16px}}
 
+
+
+/* ─ CV OPTIMISÉ V20 : rendu professionnel demandé ─ */
+.cv-modern-page{
+  background:#fff;
+  color:#111827;
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:12px;
+  line-height:1.48;
+  width:100%;
+  box-sizing:border-box;
+}
+.cv-modern-header{
+  text-align:center;
+  border-bottom:2px solid #1a3a6e;
+  padding-bottom:12px;
+  margin-bottom:16px;
+}
+.cv-modern-name{
+  font-size:20px;
+  line-height:1.22;
+  font-weight:800;
+  color:#111827;
+  letter-spacing:.2px;
+  text-transform:uppercase;
+}
+.cv-modern-profile{
+  font-size:14px;
+  line-height:1.35;
+  font-weight:600;
+  color:#1a3a6e;
+  margin-top:5px;
+}
+.cv-modern-contact-row{
+  margin-top:6px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:0;
+  font-size:12px;
+  color:#374151;
+  line-height:1.35;
+}
+.cv-modern-contact-row span{
+  display:inline-flex;
+  align-items:center;
+  white-space:nowrap;
+}
+.cv-modern-contact-row span:not(:last-child)::after{
+  content:"|";
+  color:#9ca3af;
+  margin:0 8px;
+}
+.cv-modern-section{
+  margin:0 0 13px;
+  break-inside:auto;
+  page-break-inside:auto;
+}
+.cv-modern-section-title{
+  font-size:16px;
+  line-height:1.25;
+  font-weight:800;
+  color:#1a3a6e;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  border-bottom:1px solid #c7d2e5;
+  padding-bottom:3px;
+  margin:0 0 7px;
+}
+.cv-modern-entry{
+  margin:0 0 9px;
+  break-inside:avoid-page;
+  page-break-inside:avoid;
+}
+.cv-modern-exp-head,
+.cv-modern-edu-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:3px;
+}
+.cv-modern-exp-left{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:4px 8px;
+}
+.cv-modern-role,
+.cv-modern-company,
+.cv-modern-school{
+  font-size:14px;
+  line-height:1.3;
+  font-weight:800;
+  color:#1a3a6e;
+}
+.cv-modern-company{
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+.cv-modern-role:not(:last-child)::after{
+  content:"|";
+  color:#6b7280;
+  font-weight:500;
+  margin-left:8px;
+}
+.cv-modern-date{
+  font-size:13px;
+  line-height:1.35;
+  color:#374151;
+  font-weight:700;
+  white-space:nowrap;
+  text-align:right;
+}
+.cv-modern-degree,
+.cv-modern-extra,
+.cv-modern-text{
+  font-size:12px;
+  line-height:1.48;
+  color:#111827;
+}
+.cv-modern-degree{
+  margin-top:2px;
+}
+.cv-modern-extra{
+  margin:2px 0 2px;
+  color:#374151;
+}
+.cv-modern-tasks{
+  margin:4px 0 0 17px;
+  padding:0;
+}
+.cv-modern-tasks li{
+  font-size:12px;
+  line-height:1.5;
+  margin:0 0 2px;
+  padding-left:2px;
+  text-align:justify;
+  text-justify:inter-word;
+}
+.cv-modern-simple-list{
+  margin-top:2px;
+  margin-bottom:4px;
+}
+.cv-modern-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px 6px;
+  margin:3px 0 5px;
+}
+.cv-modern-tags span{
+  font-size:12px;
+  line-height:1.3;
+  color:#111827;
+  background:#eef3fb;
+  border:1px solid #d5e1f2;
+  border-radius:10px;
+  padding:2px 8px;
+}
+.cv-section-education .cv-modern-school{
+  color:#1a3a6e;
+}
+.cv-section-skills,
+.cv-section-software,
+.cv-section-languages,
+.cv-section-contact{
+  font-size:12px;
+}
+@media print{
+  .cv-modern-page{font-size:12px}
+  .cv-modern-section-title{font-size:16px}
+  .cv-modern-name{font-size:20px}
+  .cv-modern-profile{font-size:14px}
+  .cv-modern-role,.cv-modern-company,.cv-modern-school{font-size:14px}
+  .cv-modern-date{font-size:13px}
+  .cv-modern-tasks li,.cv-modern-degree,.cv-modern-text,.cv-modern-contact-row{font-size:12px}
+}
+@media(max-width:640px){
+  .cv-modern-exp-head,.cv-modern-edu-head{flex-direction:column;gap:2px}
+  .cv-modern-date{text-align:left;white-space:normal}
+  .cv-modern-contact-row span{white-space:normal}
+}
 
 /* ─ CHAT ARTIFACTS / FICHIERS TÉLÉCHARGEABLES ─ */
 .artifact-card{max-width:80%;align-self:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 22px rgba(0,0,0,.16)}
@@ -1064,7 +1247,9 @@ select:focus{border-color:var(--accent)}
     </div>
   </div>
 </div>
+
 <script>
+window.__MYF_APP_READY__ = true;
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // En prod (Render) : l'API est sur le même domaine → chemin relatif
 // En local (Laragon) : même chose si index.html est servi par node server.js
@@ -1643,24 +1828,21 @@ async function generateAll(){
     var sysCV="You are an expert CV optimizer. "
       +"CRITICAL LANGUAGE RULE: Rewrite the ENTIRE CV exclusively in "+lang+" ("+langLabel+"). "
       +"Do NOT mix languages. Do NOT write in French unless the selected language is French.\n\n"
-      +"ABSOLUTE LAYOUT RULE: You must keep the original CV layout as a text template. "
-      +"Do NOT redesign the CV. Do NOT reorder sections. Do NOT create a new CV format. "
-      +"Keep the same headings, same section order, same blocks, same line-break logic, same separators, same contact area, same dates and same candidate identity. "
-      +"Only improve wording inside existing skills, profile and experience descriptions. "
-      +"Do not add a new section unless the original CV already has that section.\n\n"
+      +"LAYOUT RULE: Build a clean, professional optimized CV using the standardized structure requested by the user. "
+      +"You may reorganize the CV into this clean structure, but NEVER invent facts, dates, employers, diplomas, certifications or software not supported by the original CV. "
+      +"Keep candidate identity and factual information exactly as in the uploaded CV.\n\n"
       +"Detected original structure:\n"
       +cvStructureHint+"\n\n"
-      +"METHOD:\n"
-      +"1. Keep candidate's real name, contacts, diplomas, employers, dates and locations exactly as in the original.\n"
-      +"2. Optimize only the content of skills, profile/summary and experience bullet points.\n"
+      +"METHOD AND REQUIRED CV ORDER:\n"
+      +"1. Keep the candidate's real name, contacts, diplomas, employers, dates, locations and software exactly as supported by the original CV.\n"
+      +"2. Optimize only the wording of the professional profile, skills and experience tasks according to the job offer.\n"
       +"3. Integrate exact keywords from the job offer naturally, without inventing experience.\n"
-      +"4. Preserve the original bullets/separators as much as possible.\n"
-      +"5. Do not shorten or expand the CV too much; keep a similar length and density.\n"
-      +"6. NEVER invent experiences, degrees, certifications, dates, employers or software not supported by the CV.\n"
-      +"7. CV HEADER FORMAT: first line = candidate name only. Then leave one blank line. Then put each profile/contact information on its own line: address, phone, email, LinkedIn, driving licence, mobility, etc. Do not merge them on one line.\n"
-      +"8. EXPERIENCE FORMAT: for each job, put the header on one line exactly like this: Job title | Company / organization - city | dates or duration. Then put tasks as bullet points starting with •. Make bullets dense, justified, and as complete as possible without inventing facts.\n"
-      +"9. EDUCATION FORMAT: keep school/university/training organization names clearly visible in each education line.\n"
-      +"10. SECTION ORDER RULE: place LANGUES / LANGUAGES immediately after COMPÉTENCES TECHNIQUES / TECHNICAL SKILLS if both sections exist.\n\n"
+      +"4. HEADER FORMAT: first non-empty line = candidate full name only. Second line = target professional profile / job title only. Third line = contact information, mobility and driving licence on ONE line separated with |, for example: Address | Phone | Email | LinkedIn | Mobility | Driving licence.\n"
+      +"5. SECTION ORDER: Expériences professionnelles, Formation, Compétences techniques, Logiciels, Langues, Contact if useful. Put Langues immediately under Compétences techniques / Logiciels when those sections exist.\n"
+      +"6. EXPERIENCE FORMAT: section heading on its own line. For each job, put one header line exactly like: Job title | Company / organization - city | dates or duration. Then put tasks as bullet points starting with •. Make bullets dense and complete, but factual.\n"
+      +"7. EDUCATION FORMAT: section heading on its own line. For each education item, put the school/university/training organization and duration BEFORE the degree, exactly like: School / University - city | dates. Next line: degree / training title.\n"
+      +"8. SKILLS / SOFTWARE / LANGUAGES FORMAT: use clear compact lines, no page numbers, no markdown tables, no decorative symbols except simple bullets when useful.\n"
+      +"9. All writing must remain professional, concise and ATS-friendly.\n\n"
       +"Start with one line: [MATCH RATE ESTIMATE: XX%]\n"
       +"Then return the optimized CV using the same text layout as the original.\n"
       +"Return ONLY the CV text, no comments, no markdown symbols.";
@@ -2007,7 +2189,7 @@ function fallbackPrintPdf(title, node) {
     return;
   }
   var css = "@page{size:A4;margin:12mm 0 20mm 0}body{margin:0;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}"
-    +"@page{ @bottom-center{content:'Page ' counter(page) ' / ' counter(pages);font-size:9px;color:#777} }"
+    +""
     +".letter-render{display:flex;background:#fff;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;font-size:13.5px;line-height:1.8}"
     +".letter-page{padding:16mm 25mm 18mm;box-sizing:border-box;width:210mm;min-height:auto;margin:0 auto}"
     +".letter-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;break-inside:avoid-page;page-break-inside:avoid}"
@@ -2052,17 +2234,16 @@ async function downloadNodeAsPdf(node, filename, title) {
   try {
     if (!(await ensureHtml2Pdf())) throw new Error("Librairie html2pdf indisponible");
 
-    // Marges A4 : on garde une vraie zone basse pour éviter de remplir la page jusqu'en bas.
-    // La numérotation est ajoutée dans cette zone par jsPDF.
+    // Marges A4 sans numérotation de page.
     var worker = window.html2pdf().set({
-      margin: [8, 0, 18, 0],
+      margin: [8, 0, 12, 0],
       filename: filename,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0, letterRendering: true },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       pagebreak: {
         mode: ["css", "legacy"],
-        avoid: [".letter-header", ".letter-subject", ".letter-body p", ".letter-closing", ".letter-signature", ".cv-preserve-score"]
+        avoid: [".letter-header", ".letter-subject", ".letter-body p", ".letter-closing", ".letter-signature", ".cv-preserve-score", ".cv-modern-header", ".cv-modern-entry"]
       }
     }).from(node).toPdf();
 
@@ -3542,6 +3723,385 @@ document.addEventListener("DOMContentLoaded", function(){
   updateImageQuotaStatus();
   setInterval(updateImageQuotaStatus, 30000);
 });
+
+
+/* ==========================================================================
+   CORRECTIF MYF V20 — RENDU CV OPTIMISÉ PROFESSIONNEL
+   ========================================================================== */
+
+function cvEsc(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function cvCleanLine(line) {
+  return String(line || "")
+    .replace(/\*\*/g, "")
+    .replace(/^#+\s*/, "")
+    .replace(/^\s*[-–—]\s*$/, "")
+    .trim();
+}
+
+function cvNorm(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function cvSectionType(line) {
+  var t = cvNorm(cvCleanLine(line)).replace(/[:|]+$/g, "").trim();
+
+  if (/^(experiences?|experience professionnelle|experiences professionnelles|parcours professionnel|emplois?|stages?)\b/.test(t)) return "experience";
+  if (/^(formation|formations|education|etudes|parcours academique|diplomes?|diplomes et formations?)\b/.test(t)) return "education";
+  if (/^(competences techniques|competence technique|competences|competence|savoir-faire|expertise technique)\b/.test(t)) return "skills";
+  if (/^(logiciels?|outils?|outils logiciels|environnement logiciel|logiciels et outils)\b/.test(t)) return "software";
+  if (/^(langues?|languages?)\b/.test(t)) return "languages";
+  if (/^(contact|coordonnees|informations personnelles)\b/.test(t)) return "contact";
+  if (/^(profil|profile|resume|summary|objectif|presentation)\b/.test(t)) return "profile";
+  if (/^(certifications?|certificats?|habilitations?)\b/.test(t)) return "certifications";
+  if (/^(centres d'interet|centres d’intérêt|interets|interets personnels|interests)\b/.test(t)) return "interests";
+
+  return "";
+}
+
+function cvSectionTitleFromType(type, original) {
+  var label = cvCleanLine(original).replace(/[:|]+$/g, "").trim();
+  if (label && label.length <= 60) {
+    var normalized = cvNorm(label);
+    if (!/^(profil|profile|resume|summary)$/.test(normalized)) return label;
+  }
+
+  var map = {
+    experience: "Expériences professionnelles",
+    education: "Formation",
+    skills: "Compétences techniques",
+    software: "Logiciels",
+    languages: "Langues",
+    contact: "Contact",
+    profile: "Profil",
+    certifications: "Certifications",
+    interests: "Centres d’intérêt"
+  };
+  return map[type] || label || "Section";
+}
+
+function cvLooksContact(line) {
+  var t = cvNorm(line);
+  return /@|linkedin|github|www\.|http|tel|telephone|phone|mobile|adresse|address|permis|driving|mobilite|mobility|\+?\d[\d .()/-]{7,}\d/.test(t);
+}
+
+function cvIsDateLike(value) {
+  var t = cvNorm(value);
+  return /(19|20)\d{2}|present|present|actuel|aujourd|maintenant|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|mois|ans|annee|stage|cdi|cdd/.test(t);
+}
+
+function cvSplitInfo(line) {
+  return String(line || "")
+    .split(/\s*(?:\||•|;|·)\s*/g)
+    .map(function(x){ return cvCleanLine(x); })
+    .filter(Boolean);
+}
+
+function cvSplitHeader(line) {
+  var clean = cvCleanLine(line).replace(/^[•*-]\s*/, "");
+  var parts = clean.split(/\s*\|\s*/).map(function(x){ return cvCleanLine(x); }).filter(Boolean);
+  if (parts.length > 1) return parts;
+
+  // Fallback raisonnable si l'IA utilise un tiret long.
+  parts = clean.split(/\s+[–—]\s+/).map(function(x){ return cvCleanLine(x); }).filter(Boolean);
+  return parts.length > 1 ? parts : [clean];
+}
+
+function cvParseExperienceHeader(line) {
+  var parts = cvSplitHeader(line);
+  var role = "", company = "", date = "";
+
+  if (parts.length >= 3) {
+    role = parts[0];
+    company = parts[1];
+    date = parts.slice(2).join(" | ");
+  } else if (parts.length === 2) {
+    role = parts[0];
+    if (cvIsDateLike(parts[1])) date = parts[1];
+    else company = parts[1];
+  } else {
+    role = parts[0] || "";
+    var m = role.match(/(.+?)\s+((?:19|20)\d{2}[\s\S]*)$/);
+    if (m) {
+      role = cvCleanLine(m[1]);
+      date = cvCleanLine(m[2]);
+    }
+  }
+
+  return { role: role, company: company, date: date };
+}
+
+function cvParseEducationHeader(line) {
+  var parts = cvSplitHeader(line);
+  var school = "", date = "", degree = "";
+
+  if (parts.length >= 3) {
+    school = parts[0];
+    date = cvIsDateLike(parts[1]) ? parts[1] : parts[2];
+    degree = cvIsDateLike(parts[1]) ? parts.slice(2).join(" | ") : parts[1];
+  } else if (parts.length === 2) {
+    school = parts[0];
+    if (cvIsDateLike(parts[1])) date = parts[1];
+    else degree = parts[1];
+  } else {
+    school = parts[0] || "";
+  }
+
+  return { school: school, date: date, degree: degree };
+}
+
+function cvBuildSections(lines) {
+  var sections = [];
+  var current = null;
+
+  lines.forEach(function(line) {
+    var clean = cvCleanLine(line);
+    if (!clean) return;
+
+    var type = cvSectionType(clean);
+    if (type) {
+      current = {
+        type: type,
+        title: cvSectionTitleFromType(type, clean),
+        lines: []
+      };
+      sections.push(current);
+      return;
+    }
+
+    if (!current) {
+      current = { type: "profile", title: "Profil", lines: [] };
+      sections.push(current);
+    }
+    current.lines.push(clean);
+  });
+
+  return sections;
+}
+
+function cvRenderExperience(lines) {
+  var html = "";
+  var current = null;
+
+  function flush() {
+    if (!current) return;
+    html += '<div class="cv-modern-entry cv-modern-exp">';
+    html += '<div class="cv-modern-exp-head">';
+    html += '<div class="cv-modern-exp-left">';
+    if (current.role) html += '<span class="cv-modern-role">' + cvEsc(current.role) + '</span>';
+    if (current.company) html += '<span class="cv-modern-company">' + cvEsc(current.company) + '</span>';
+    html += '</div>';
+    if (current.date) html += '<div class="cv-modern-date">' + cvEsc(current.date) + '</div>';
+    html += '</div>';
+
+    if (current.extra.length) {
+      html += '<div class="cv-modern-extra">' + current.extra.map(cvEsc).join("<br>") + '</div>';
+    }
+
+    if (current.tasks.length) {
+      html += '<ul class="cv-modern-tasks">';
+      current.tasks.forEach(function(task) {
+        html += '<li>' + cvEsc(task.replace(/^[•*-]\s*/, "")) + '</li>';
+      });
+      html += '</ul>';
+    }
+    html += '</div>';
+    current = null;
+  }
+
+  lines.forEach(function(line) {
+    var clean = cvCleanLine(line);
+    if (!clean) return;
+    var isBullet = /^[•*\-]\s+/.test(clean);
+
+    if (isBullet) {
+      if (!current) current = { role: "", company: "", date: "", tasks: [], extra: [] };
+      current.tasks.push(clean);
+      return;
+    }
+
+    // Une ligne non-puce après une entrée est considérée comme nouvelle expérience si elle contient séparateur/date.
+    if (!current || /\|/.test(clean) || cvIsDateLike(clean)) {
+      flush();
+      var parsed = cvParseExperienceHeader(clean);
+      current = {
+        role: parsed.role,
+        company: parsed.company,
+        date: parsed.date,
+        tasks: [],
+        extra: []
+      };
+    } else {
+      current.extra.push(clean);
+    }
+  });
+
+  flush();
+  return html;
+}
+
+function cvRenderEducation(lines) {
+  var html = "";
+  var i = 0;
+
+  while (i < lines.length) {
+    var line = cvCleanLine(lines[i]);
+    if (!line) { i++; continue; }
+
+    var parsed = cvParseEducationHeader(line);
+    var degreeLines = [];
+
+    if (parsed.degree) degreeLines.push(parsed.degree);
+
+    i++;
+    while (i < lines.length) {
+      var next = cvCleanLine(lines[i]);
+      if (!next) { i++; continue; }
+
+      // Nouvelle école si séparateur ou date et qu'on a déjà un intitulé.
+      if (degreeLines.length && (/\|/.test(next) || cvIsDateLike(next))) break;
+      degreeLines.push(next.replace(/^[•*\-]\s*/, ""));
+      i++;
+      if (degreeLines.length >= 2) break;
+    }
+
+    html += '<div class="cv-modern-entry cv-modern-edu">';
+    html += '<div class="cv-modern-edu-head">';
+    html += '<div class="cv-modern-school">' + cvEsc(parsed.school || line) + '</div>';
+    if (parsed.date) html += '<div class="cv-modern-date">' + cvEsc(parsed.date) + '</div>';
+    html += '</div>';
+    if (degreeLines.length) {
+      html += '<div class="cv-modern-degree">' + degreeLines.map(cvEsc).join("<br>") + '</div>';
+    }
+    html += '</div>';
+  }
+
+  return html;
+}
+
+function cvRenderSimpleLines(lines, type) {
+  var html = "";
+  var compact = type === "skills" || type === "software" || type === "languages";
+
+  lines.forEach(function(line) {
+    var clean = cvCleanLine(line);
+    if (!clean) return;
+
+    if (compact && /[,;|•]/.test(clean) && clean.length < 180) {
+      var items = cvSplitInfo(clean.replace(/^[•*-]\s*/, ""));
+      html += '<div class="cv-modern-tags">';
+      items.forEach(function(item) {
+        html += '<span>' + cvEsc(item) + '</span>';
+      });
+      html += '</div>';
+    } else if (/^[•*\-]\s+/.test(clean)) {
+      html += '<ul class="cv-modern-tasks cv-modern-simple-list"><li>' + cvEsc(clean.replace(/^[•*\-]\s*/, "")) + '</li></ul>';
+    } else {
+      html += '<div class="cv-modern-text">' + cvEsc(clean) + '</div>';
+    }
+  });
+
+  return html;
+}
+
+function renderCV(raw) {
+  var score = getCVScore(raw);
+  var text = stripCVScoreLine(raw);
+  var page = document.getElementById("cvPage");
+  if (!page) return;
+
+  var allLines = String(text || "")
+    .split(/\r?\n/)
+    .map(function(l){ return cvCleanLine(l); });
+
+  while (allLines.length && !allLines[0]) allLines.shift();
+
+  var firstSectionIndex = allLines.findIndex(function(line, idx) {
+    return idx > 0 && !!cvSectionType(line);
+  });
+  if (firstSectionIndex < 0) firstSectionIndex = Math.min(allLines.length, 4);
+
+  var headerLines = allLines.slice(0, firstSectionIndex).filter(Boolean);
+  var bodyLines = allLines.slice(firstSectionIndex).filter(Boolean);
+
+  var name = headerLines[0] || "";
+  var profile = "";
+  var contactParts = [];
+
+  for (var i = 1; i < headerLines.length; i++) {
+    var line = headerLines[i];
+    if (!profile && !cvLooksContact(line)) {
+      profile = line.replace(/^(profil|profile|poste|titre)\s*[:\-]\s*/i, "");
+    } else {
+      contactParts = contactParts.concat(cvSplitInfo(line));
+    }
+  }
+
+  // Si le profil n'a pas été trouvé dans l'en-tête, on cherche une courte ligne profil dans le corps.
+  if (!profile && bodyLines.length && cvSectionType(bodyLines[0]) === "profile") {
+    bodyLines.shift();
+    if (bodyLines.length) profile = bodyLines.shift();
+  }
+
+  contactParts = contactParts.filter(function(part, idx, arr) {
+    return part && arr.indexOf(part) === idx;
+  });
+
+  var sections = cvBuildSections(bodyLines);
+
+  var html = '<div class="cv-modern-page">';
+  if (score !== null) html += '<div class="cv-preserve-score">📊 Correspondance : ' + score + '%</div>';
+
+  html += '<div class="cv-modern-header">';
+  html += '<div class="cv-modern-name">' + cvEsc(name) + '</div>';
+  if (profile) html += '<div class="cv-modern-profile">' + cvEsc(profile) + '</div>';
+  if (contactParts.length) {
+    html += '<div class="cv-modern-contact-row">';
+    contactParts.forEach(function(part) {
+      html += '<span>' + cvEsc(part) + '</span>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  sections.forEach(function(sec) {
+    if (!sec.lines.length && sec.type !== "contact") return;
+    if (sec.type === "profile" && profile) return;
+
+    html += '<section class="cv-modern-section cv-section-' + cvEsc(sec.type) + '">';
+    html += '<h2 class="cv-modern-section-title">' + cvEsc(sec.title) + '</h2>';
+
+    if (sec.type === "experience") {
+      html += cvRenderExperience(sec.lines);
+    } else if (sec.type === "education") {
+      html += cvRenderEducation(sec.lines);
+    } else {
+      html += cvRenderSimpleLines(sec.lines, sec.type);
+    }
+
+    html += '</section>';
+  });
+
+  html += '</div>';
+
+  page.innerHTML = html;
+  document.getElementById("cvRender").classList.add("show");
+  document.getElementById("cvOut").style.display = "none";
+  switchCVView("visual");
+}
+
+// Pas de numérotation des pages du CV/PDF.
+function addPageNumbersToPdf(pdf) {
+  return;
+}
 
 </script>
 </body>
