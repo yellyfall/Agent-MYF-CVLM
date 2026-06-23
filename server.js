@@ -107,7 +107,22 @@ function sha256(value) {
 }
 
 function adminSecret() {
-  return process.env.ADMIN_KEY || getConfig("admin_key");
+  // Priorité à la variable d'environnement Render.
+  // On nettoie les espaces/guillemets pour éviter "clé admin incorrecte"
+  // à cause d'un espace copié-collé ou d'une valeur saisie avec guillemets.
+  const envKey = String(process.env.ADMIN_KEY || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+
+  if (envKey) return envKey;
+
+  const dbKey = String(getConfig("admin_key") || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+
+  return dbKey || null;
 }
 
 function splitKeys(value) {
@@ -744,8 +759,23 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+
+// Diagnostic admin sans exposer la clé.
+// Utile si Render dit "clé admin incorrecte".
+app.get("/api/admin/status", (req, res) => {
+  const hasEnvAdmin = !!String(process.env.ADMIN_KEY || "").trim();
+  const hasDbAdmin = !!String(getConfig("admin_key") || "").trim();
+
+  ok(res, {
+    configured: !!adminSecret(),
+    source: hasEnvAdmin ? "ENV_ADMIN_KEY" : (hasDbAdmin ? "SQLITE_CONFIG" : "NONE"),
+    admin_key_length: adminSecret() ? adminSecret().length : 0,
+    note: "La clé n'est jamais affichée pour des raisons de sécurité."
+  });
+});
+
 app.post("/api/admin/setup", (req, res) => {
-  const key = String(req.body?.key || "").trim();
+  const key = String(req.body?.key || "").trim().replace(/^[\"\']|[\"\']$/g, "").trim();
   if (!key || key.length < 8) return fail(res, "Clé admin manquante ou trop courte. Minimum 8 caractères.");
   if (adminSecret()) return fail(res, "L'accès admin est déjà configuré.", 409);
 
@@ -755,7 +785,7 @@ app.post("/api/admin/setup", (req, res) => {
 });
 
 app.post("/api/admin/login", (req, res) => {
-  const key = String(req.body?.key || "").trim();
+  const key = String(req.body?.key || "").trim().replace(/^[\"\']|[\"\']$/g, "").trim();
   if (!key) return fail(res, "Clé admin manquante.");
 
   const stored = adminSecret();
