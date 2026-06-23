@@ -5553,6 +5553,457 @@ function fallbackPrintPdf(title, node) {
 }
 
 
+
+/* ==========================================================================
+   CORRECTIF MYF V28 — PDF CV PROPRE VIA JSPDF DIRECT
+   ========================================================================== */
+/*
+  Problème constaté : html2pdf/html2canvas décale ou coupe parfois le CV à gauche.
+  Solution : pour le CV optimisé uniquement, on ne capture plus le HTML comme une image.
+  On reconstruit un PDF texte propre avec jsPDF :
+  - marges contrôlées ;
+  - largeur A4 stable ;
+  - pagination propre ;
+  - aucune coupure gauche/droite ;
+  - pages suivantes qui commencent avec une vraie marge haute.
+*/
+
+async function ensureJsPdfDirect() {
+  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+
+  await new Promise(function(resolve, reject) {
+    var existing = document.querySelector('script[data-myf-jspdf="1"]');
+    if (existing) {
+      existing.addEventListener("load", resolve);
+      existing.addEventListener("error", reject);
+      return;
+    }
+
+    var s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.async = true;
+    s.defer = true;
+    s.setAttribute("data-myf-jspdf", "1");
+    s.onload = resolve;
+    s.onerror = function() {
+      reject(new Error("Impossible de charger jsPDF."));
+    };
+    document.head.appendChild(s);
+  });
+
+  if (!(window.jspdf && window.jspdf.jsPDF)) {
+    throw new Error("jsPDF indisponible.");
+  }
+
+  return window.jspdf.jsPDF;
+}
+
+function cvPdfCleanText(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function cvPdfTextOf(el) {
+  return cvPdfCleanText(el ? el.textContent || "" : "");
+}
+
+function cvPdfCollectData() {
+  var root = document.querySelector("#cvRender .cv-modern-page") ||
+             document.querySelector("#cvRender .cv-page") ||
+             document.querySelector("#cvRender");
+
+  if (!root) return null;
+
+  var data = {
+    score: cvPdfTextOf(document.querySelector("#cvRender .cv-preserve-score")),
+    name: cvPdfTextOf(root.querySelector(".cv-modern-name")),
+    profile: cvPdfTextOf(root.querySelector(".cv-modern-profile")),
+    contacts: [],
+    sections: []
+  };
+
+  var contactSpans = root.querySelectorAll(".cv-modern-contact-row span");
+  contactSpans.forEach(function(span) {
+    var t = cvPdfTextOf(span);
+    if (t) data.contacts.push(t);
+  });
+
+  if (!data.contacts.length) {
+    var contactRow = cvPdfTextOf(root.querySelector(".cv-modern-contact-row"));
+    if (contactRow) {
+      data.contacts = contactRow.split("|").map(cvPdfCleanText).filter(Boolean);
+    }
+  }
+
+  root.querySelectorAll(".cv-modern-section").forEach(function(sec) {
+    var title = cvPdfTextOf(sec.querySelector(".cv-modern-section-title"));
+    if (!title) return;
+
+    var section = {
+      title: title,
+      entries: [],
+      tags: [],
+      lines: []
+    };
+
+    sec.querySelectorAll(".cv-modern-tags span").forEach(function(tag) {
+      var t = cvPdfTextOf(tag);
+      if (t) section.tags.push(t);
+    });
+
+    var entries = sec.querySelectorAll(".cv-modern-entry");
+
+    entries.forEach(function(entry) {
+      var item = {
+        role: cvPdfTextOf(entry.querySelector(".cv-modern-role")),
+        company: cvPdfTextOf(entry.querySelector(".cv-modern-company")),
+        school: cvPdfTextOf(entry.querySelector(".cv-modern-school")),
+        date: cvPdfTextOf(entry.querySelector(".cv-modern-date")),
+        degree: cvPdfTextOf(entry.querySelector(".cv-modern-degree")),
+        extra: [],
+        tasks: []
+      };
+
+      entry.querySelectorAll(".cv-modern-extra").forEach(function(extra) {
+        var t = cvPdfTextOf(extra);
+        if (t) item.extra.push(t);
+      });
+
+      entry.querySelectorAll(".cv-modern-tasks li").forEach(function(li) {
+        var t = cvPdfTextOf(li).replace(/^[-•]\s*/, "");
+        if (t) item.tasks.push(t);
+      });
+
+      // Si l'entrée n'a pas de listes structurées, récupérer du texte brut sans dupliquer.
+      if (!item.role && !item.company && !item.school && !item.degree && !item.tasks.length) {
+        var raw = cvPdfTextOf(entry);
+        if (raw) item.tasks.push(raw);
+      }
+
+      section.entries.push(item);
+    });
+
+    if (!section.entries.length && !section.tags.length) {
+      var clone = sec.cloneNode(true);
+      var st = clone.querySelector(".cv-modern-section-title");
+      if (st) st.remove();
+
+      clone.querySelectorAll(".cv-modern-tags").forEach(function(x) { x.remove(); });
+
+      var raw = cvPdfCleanText(clone.textContent || "");
+      if (raw) {
+        section.lines = raw.split(/\n|•/).map(cvPdfCleanText).filter(Boolean);
+      }
+    }
+
+    data.sections.push(section);
+  });
+
+  if (!data.name) {
+    var possible = cvPdfCleanText(root.textContent || "").split("\n").map(cvPdfCleanText).filter(Boolean);
+    data.name = possible[0] || "CV optimisé";
+  }
+
+  return data;
+}
+
+function cvPdfSplitTags(tags, maxPerLine) {
+  var lines = [];
+  var line = [];
+
+  tags.forEach(function(tag) {
+    line.push(tag);
+    if (line.length >= maxPerLine) {
+      lines.push(line);
+      line = [];
+    }
+  });
+
+  if (line.length) lines.push(line);
+  return lines;
+}
+
+async function dlCVPdf() {
+  var data = cvPdfCollectData();
+
+  if (!data || !data.sections.length) {
+    alert("Générez d'abord le CV optimisé avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+    var marginL = 14;
+    var marginR = 14;
+    var marginT = 15;
+    var marginB = 16;
+    var contentW = pageW - marginL - marginR;
+    var blue = [26, 58, 110];
+    var text = [17, 24, 39];
+    var muted = [75, 85, 99];
+    var lightBorder = [218, 226, 238];
+    var veryLight = [248, 250, 252];
+    var y = marginT;
+
+    function setTextColor(arr) {
+      doc.setTextColor(arr[0], arr[1], arr[2]);
+    }
+
+    function ensureSpace(h) {
+      if (y + h > pageH - marginB) {
+        doc.addPage();
+        y = marginT;
+      }
+    }
+
+    function drawLine(x1, y1, x2, y2, color) {
+      doc.setDrawColor(color[0], color[1], color[2]);
+      doc.line(x1, y1, x2, y2);
+    }
+
+    function writeWrapped(txt, x, maxW, options) {
+      options = options || {};
+      var size = options.size || 9;
+      var style = options.style || "normal";
+      var color = options.color || text;
+      var lineH = options.lineH || (size * 0.42);
+      var prefix = options.prefix || "";
+      var indent = options.indent || 0;
+      var after = options.after || 0;
+
+      doc.setFont("helvetica", style);
+      doc.setFontSize(size);
+      setTextColor(color);
+
+      var lines = doc.splitTextToSize(String(txt || ""), maxW - indent);
+
+      lines.forEach(function(line, idx) {
+        ensureSpace(lineH + 1);
+
+        var px = x + indent;
+        var rendered = idx === 0 && prefix ? prefix + line : line;
+
+        doc.text(rendered, px, y);
+        y += lineH;
+      });
+
+      y += after;
+    }
+
+    function writeInlineHeader(leftText, rightText, options) {
+      options = options || {};
+      var size = options.size || 10;
+      var leftW = contentW - 48;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(size);
+      setTextColor(options.color || blue);
+
+      var leftLines = doc.splitTextToSize(leftText || "", leftW);
+      var blockH = Math.max(leftLines.length * 4.4, 5) + 1;
+      ensureSpace(blockH + 2);
+
+      doc.text(leftLines, marginL, y);
+
+      if (rightText) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        setTextColor(muted);
+        doc.text(String(rightText), pageW - marginR, y, { align: "right" });
+      }
+
+      y += leftLines.length * 4.4 + 1.5;
+    }
+
+    function sectionTitle(title) {
+      ensureSpace(12);
+
+      doc.setFillColor(veryLight[0], veryLight[1], veryLight[2]);
+      doc.setDrawColor(lightBorder[0], lightBorder[1], lightBorder[2]);
+      doc.roundedRect(marginL, y, contentW, 8, 1.5, 1.5, "FD");
+
+      doc.setFillColor(blue[0], blue[1], blue[2]);
+      doc.rect(marginL, y, 2.2, 8, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11.5);
+      setTextColor(blue);
+      doc.text(String(title || "").toUpperCase(), marginL + 4, y + 5.5);
+
+      y += 10;
+    }
+
+    function separator() {
+      drawLine(marginL, y, pageW - marginR, y, [226, 232, 240]);
+      y += 2.5;
+    }
+
+    function drawHeader() {
+      if (data.score) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setFillColor(229, 247, 237);
+        doc.setDrawColor(190, 225, 204);
+        doc.roundedRect(marginL, y - 3.5, 35, 7, 3, 3, "FD");
+        doc.setTextColor(22, 101, 52);
+        doc.text(data.score.replace(/^📊\s*/, ""), marginL + 3, y + 1);
+        y += 7;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      setTextColor(text);
+      doc.text(data.name.toUpperCase(), pageW / 2, y, { align: "center" });
+      y += 6;
+
+      if (data.profile) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10.5);
+        setTextColor(blue);
+        var profileLines = doc.splitTextToSize(data.profile, contentW);
+        doc.text(profileLines, pageW / 2, y, { align: "center" });
+        y += profileLines.length * 4.5;
+      }
+
+      if (data.contacts.length) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.8);
+        setTextColor(muted);
+        var contact = data.contacts.join("  |  ");
+        var cLines = doc.splitTextToSize(contact, contentW);
+        doc.text(cLines, pageW / 2, y, { align: "center" });
+        y += cLines.length * 4.2;
+      }
+
+      y += 2;
+      drawLine(marginL, y, pageW - marginR, y, blue);
+      y += 7;
+    }
+
+    function drawEntry(entry) {
+      if (!entry) return;
+
+      var main = "";
+      var right = entry.date || "";
+
+      if (entry.school) {
+        main = entry.school;
+        writeInlineHeader(main, right, { size: 10.2, color: blue });
+
+        if (entry.degree) {
+          writeWrapped(entry.degree, marginL, contentW, {
+            size: 9,
+            style: "normal",
+            color: text,
+            lineH: 4,
+            after: 1
+          });
+        }
+      } else {
+        main = [entry.role, entry.company].filter(Boolean).join(" | ");
+        writeInlineHeader(main, right, { size: 10.2, color: blue });
+      }
+
+      entry.extra.forEach(function(extra) {
+        writeWrapped(extra, marginL, contentW, {
+          size: 8.8,
+          style: "bold",
+          color: blue,
+          lineH: 3.8,
+          after: 0.5
+        });
+      });
+
+      entry.tasks.forEach(function(task) {
+        writeWrapped(task, marginL, contentW, {
+          size: 8.6,
+          style: "normal",
+          color: text,
+          lineH: 3.7,
+          prefix: "- ",
+          indent: 3,
+          after: 0.5
+        });
+      });
+
+      y += 1.2;
+      if (y < pageH - marginB - 4) separator();
+    }
+
+    function drawTags(tags) {
+      if (!tags || !tags.length) return;
+
+      var lines = cvPdfSplitTags(tags, 6);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.7);
+      setTextColor(text);
+
+      lines.forEach(function(line) {
+        var txt = line.join("  •  ");
+        writeWrapped(txt, marginL, contentW, {
+          size: 8.8,
+          style: "normal",
+          color: text,
+          lineH: 4,
+          after: 1
+        });
+      });
+    }
+
+    drawHeader();
+
+    data.sections.forEach(function(section) {
+      sectionTitle(section.title);
+
+      if (section.entries && section.entries.length) {
+        section.entries.forEach(function(entry) {
+          drawEntry(entry);
+        });
+      }
+
+      if (section.tags && section.tags.length) {
+        drawTags(section.tags);
+      }
+
+      if (section.lines && section.lines.length) {
+        section.lines.forEach(function(line) {
+          writeWrapped(line, marginL, contentW, {
+            size: 8.8,
+            style: "normal",
+            color: text,
+            lineH: 3.9,
+            prefix: "- ",
+            indent: 3,
+            after: 0.5
+          });
+        });
+      }
+
+      y += 2;
+    });
+
+    // Sécurité : aucun numéro de page.
+    doc.save("cv_optimise.pdf");
+  } catch(e) {
+    console.error("Export CV PDF jsPDF impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
 </script>
 </body>
 </html>
