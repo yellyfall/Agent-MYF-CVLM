@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent IA de MYF</title>
+<title>MYF’s AI</title>
 <meta name="myf-build" content="v24-secure-session-proxy-standalone">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -1114,7 +1114,7 @@ select:focus{border-color:var(--accent)}
     <div class="login-logo">
       <div class="login-mark">MYF</div>
       <div>
-        <div class="login-title">Agent IA de MYF</div>
+        <div class="login-title">MYF’s AI</div>
         <div class="login-sub">Lettre de motivation + CV optimisé par IA</div>
       </div>
     </div>
@@ -1201,7 +1201,7 @@ select:focus{border-color:var(--accent)}
   <div class="modal">
     <div class="mhead">
       <div class="mtitle">Panneau Administrateur</div>
-      <div class="mbadge">Agent IA de MYF</div>
+      <div class="mbadge">MYF’s AI</div>
       <button class="mclose" onclick="closeModal()">✕ Fermer</button>
     </div>
     <div class="mbody">
@@ -1257,7 +1257,7 @@ select:focus{border-color:var(--accent)}
 <div id="appScreen" class="screen">
   <header>
     <div class="h-mark">MYF</div>
-    <div><div class="h-name">Agent IA de MYF</div><div class="h-sub">Lettre de motivation + CV optimisé</div></div>
+    <div><div class="h-name">MYF’s AI</div><div class="h-sub">Lettre de motivation + CV optimisé</div></div>
     <div class="h-right">
       <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
       <div class="h-pill"><div class="h-dot" id="hDot"></div><span id="hUser">-</span></div>
@@ -1353,10 +1353,17 @@ select:focus{border-color:var(--accent)}
           <div class="chip" onclick="tChip(this)">Sobre et direct</div>
           <div class="chip" onclick="tChip(this)">Recherche scientifique</div>
           <div class="chip" onclick="tChip(this)">Startup / innovant</div>
+          <div class="chip" onclick="tChip(this)">Convaincant</div>
+          <div class="chip" onclick="tChip(this)">Humain et naturel</div>
+          <div class="chip" onclick="tChip(this)">Technique</div>
+          <div class="chip" onclick="tChip(this)">Commercial</div>
+          <div class="chip" onclick="tChip(this)">Institutionnel</div>
+          <div class="chip" onclick="tChip(this)">Assertif mais respectueux</div>
         </div>
       </div>
       <div><div class="ol" style="margin-bottom:5px">Instructions personnalisées (optionnel)</div>
-        <textarea id="extra" rows="2" placeholder="Ex : Mettre en avant mon projet PV, insister sur PVsyst et Python, mentionner ma mobilité géographique..."></textarea>
+        <textarea id="extra" rows="4" placeholder="Ex : Insister sur mon expérience en autoconsommation collective, ne pas parler de salaire, adopter un ton convaincant mais sobre, mentionner ma mobilité nationale, valoriser PVSyst / Archelios / raccordement Enedis..."></textarea>
+        <div class="model-help" style="margin-top:6px">Ces consignes seront appliquées à la lettre : éléments à mettre en avant, sujets à éviter, style souhaité, disponibilité, mobilité, prétentions, outils, etc.</div>
       </div>
     </div>
 
@@ -1461,7 +1468,7 @@ select:focus{border-color:var(--accent)}
 <div id="chatScreen" class="screen">
   <header>
     <div class="h-mark">MYF</div>
-    <div><div class="h-name">Chat IA MYF</div><div class="h-sub">Assistant IA, fichiers, web temps réel, images et documents</div></div>
+    <div><div class="h-name">MYF’s AI Chat</div><div class="h-sub">Assistant IA, fichiers, web temps réel, images et documents</div></div>
     <div class="h-right">
       <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
       <div class="h-pill"><div class="h-dot dot-user" id="chatHDot"></div><span id="chatHUser">-</span></div>
@@ -2198,17 +2205,33 @@ async function generateAll(){
       +"  \"date\": \""+todayLabel+"\",\n"
       +"  \"subject\": \"precise subject line\",\n"
       +"  \"salutation\": \"opening greeting\",\n"
-      +"  \"body\": \"full letter body paragraphs separated by \\n\\n. Length: "+llen+". Tone: "+tones+". Use exact keywords from the job offer. Show concrete achievements.\",\n"
+      +"  \"body\": \"full letter body paragraphs separated by \\n\\n. Length: "+llen+". Required tone(s): "+tones+". The tone(s) must clearly influence the style, vocabulary, rhythm and level of assertiveness. Use exact keywords from the job offer. Show concrete achievements. Apply the custom instructions strictly when provided.\",\n"
       +"  \"closing\": \"formal closing sentence\",\n"
       +"  \"signature\": \"candidate full name\"\n"
       +"}\n"
       +(ptype?"Contract type: "+ptype+"\n":"")
-      +(extra?"Extra instructions: "+extra+"\n":"")
-      +"DO NOT invent information not in the CV. Return ONLY the JSON object.";
+      +"SELECTED TONE(S): "+tones+"\n"
+      +"TONE APPLICATION RULES:\n"
+      +"- The tone must shape the entire letter, not only one sentence.\n"
+      +"- If several tones are selected, blend them naturally without contradiction.\n"
+      +"- Keep the letter professional, credible and adapted to the job offer.\n"
+      +(extra?"CUSTOM INSTRUCTIONS FROM USER:\n"+extra+"\n":"CUSTOM INSTRUCTIONS FROM USER: none provided.\n")
+      +"CUSTOM INSTRUCTIONS RULES:\n"
+      +"- When custom instructions are provided, they have priority over generic wording.\n"
+      +"- Respect exclusions such as topics not to mention.\n"
+      +"- Emphasize requested skills, projects, tools, mobility, salary expectations or availability only if supported by the CV or user instructions.\n"
+      +"DO NOT invent information not in the CV or in the custom instructions. Return ONLY the JSON object.";
 
     var userLM="LANGUAGE: "+lang+" ("+langLabel+") — write all fields in "+lang+".\n\n"
-      +"=== CV ===\n"+cvText+"\n=== END CV ===\n\n=== JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
-      +"Return ONLY valid JSON, no markdown.";
+      +"=== LETTER GENERATION PARAMETERS ===\n"
+      +"Length: "+llen+"\n"
+      +"Contract type: "+(ptype || "automatic") +"\n"
+      +"Selected tone(s): "+tones+"\n"
+      +"Custom instructions: "+(extra || "none") +"\n"
+      +"=== END PARAMETERS ===\n\n"
+      +"=== CV ===\n"+cvText+"\n=== END CV ===\n\n"
+      +"=== JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
+      +"Write the cover letter by strictly applying the selected tone(s) and the custom instructions when provided. Return ONLY valid JSON, no markdown.";
 
     document.getElementById("resSection").classList.add("show");
     document.getElementById("lmOut").textContent="";
@@ -2628,7 +2651,7 @@ function fallbackPrintPdf(title, node) {
     +".cv-preserve-inner{padding:0;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box;orphans:3;widows:3}"
     +".cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px}";
   w.document.open();
-  w.document.write("<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+escapeHtml(title)+"</title><style>"+css+"</style></head><body>"+node.outerHTML+"<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},300)}<\/script></body></html>");
+  w.document.write("<!DOCTYPE html><html><head><meta charset='utf-8'><title>MYF’s AI</title><style>"+css+"</style></head><body>"+node.outerHTML+"<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},300)}<\/script></body></html>");
   w.document.close();
 }
 
@@ -3433,7 +3456,7 @@ async function sendChat() {
   }
 
   // ── Système ────────────────────────────────────────────────────────────────
-  var sysChat = "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. "
+  var sysChat = "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'MYF’s AI. "
     + "Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. "
     + "Tu es expert en énergie solaire, physique, ingénierie, rédaction professionnelle, programmation, carrière et tous les domaines généraux. "
     + "IMPORTANT : rédige tes réponses en texte naturel et clair. "
@@ -3647,7 +3670,7 @@ function addArtifactBubble(filename, blob, desc){
   card.appendChild(a); msgs.insertBefore(card, typing); msgs.scrollTop=msgs.scrollHeight;
 }
 function htmlDocFromText(title,text){
-  return "<!doctype html><html lang='fr'><head><meta charset='utf-8'><title>"+safeTxt(title)+"</title><style>body{font-family:Arial,sans-serif;line-height:1.6;margin:40px;color:#1f2937}h1{color:#16365f}pre{white-space:pre-wrap;font-family:Arial,sans-serif}</style></head><body><h1>"+safeTxt(title)+"</h1><pre>"+safeTxt(text)+"</pre></body></html>";
+  return "<!doctype html><html lang='fr'><head><meta charset='utf-8'><title>MYF’s AI</title><style>body{font-family:Arial,sans-serif;line-height:1.6;margin:40px;color:#1f2937}h1{color:#16365f}pre{white-space:pre-wrap;font-family:Arial,sans-serif}</style></head><body><h1>"+safeTxt(title)+"</h1><pre>"+safeTxt(text)+"</pre></body></html>";
 }
 async function createDownloadFromChat(msg, answer){
   var type=detectArtifactRequest(msg); if(!type) return;
@@ -3679,14 +3702,14 @@ async function createDownloadFromChat(msg, answer){
     if(type==="xlsx"){
       var rows=textToRows(content);
       if(window.XLSX){
-        var wb=XLSX.utils.book_new(); var ws=XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb,ws,"MYF IA");
+        var wb=XLSX.utils.book_new(); var ws=XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb,ws,"MYF’s AI");
         var arr=XLSX.write(wb,{bookType:"xlsx",type:"array"}); blob=new Blob([arr],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
       } else blob=new Blob([rows.map(function(r){return r.join(";");}).join("\n")],{type:"text/csv;charset=utf-8"});
       addArtifactBubble(filename,blob,"Fichier Excel généré."); return;
     }
     if(type==="pptx"){
       if(window.pptxgen){
-        var pptx=new pptxgen(); pptx.layout="LAYOUT_WIDE"; pptx.author="Agent IA de MYF";
+        var pptx=new pptxgen(); pptx.layout="LAYOUT_WIDE"; pptx.author="MYF’s AI";
         var parts=String(content||"").split(/\n\s*\n/).filter(Boolean).slice(0,8);
         if(!parts.length) parts=[String(content||"Présentation générée")];
         parts.forEach(function(part,i){var slide=pptx.addSlide(); slide.addText(i===0?"Présentation générée":"Partie "+i,{x:0.6,y:0.35,w:12,h:0.5,fontSize:22,bold:true,color:"16365F"}); slide.addText(part.replace(/```[\s\S]*?```/g,""),{x:0.7,y:1.1,w:12,h:5,fontSize:15,fit:"shrink"});});
@@ -3696,7 +3719,7 @@ async function createDownloadFromChat(msg, answer){
     if(type==="svg"){
       var title=normalizeSpaces(msg).slice(0,80)||"Image générée";
       var desc=normalizeSpaces(content).slice(0,260);
-      var svg='<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#16365f"/><stop offset="1" stop-color="#ff7043"/></linearGradient></defs><rect width="1400" height="900" fill="url(#g)"/><circle cx="1120" cy="160" r="220" fill="rgba(255,255,255,.12)"/><circle cx="150" cy="780" r="260" fill="rgba(255,255,255,.10)"/><text x="90" y="170" fill="#fff" font-family="Arial" font-size="52" font-weight="800">'+safeTxt(title)+'</text><foreignObject x="90" y="250" width="1180" height="470"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial;color:white;font-size:31px;line-height:1.45">'+safeTxt(desc)+'</div></foreignObject><text x="90" y="815" fill="rgba(255,255,255,.82)" font-family="Arial" font-size="24">Agent IA de MYF</text></svg>';
+      var svg='<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#16365f"/><stop offset="1" stop-color="#ff7043"/></linearGradient></defs><rect width="1400" height="900" fill="url(#g)"/><circle cx="1120" cy="160" r="220" fill="rgba(255,255,255,.12)"/><circle cx="150" cy="780" r="260" fill="rgba(255,255,255,.10)"/><text x="90" y="170" fill="#fff" font-family="Arial" font-size="52" font-weight="800">'+safeTxt(title)+'</text><foreignObject x="90" y="250" width="1180" height="470"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial;color:white;font-size:31px;line-height:1.45">'+safeTxt(desc)+'</div></foreignObject><text x="90" y="815" fill="rgba(255,255,255,.82)" font-family="Arial" font-size="24">MYF’s AI</text></svg>';
       blob=new Blob([svg],{type:"image/svg+xml;charset=utf-8"}); addArtifactBubble(filename,blob,"Image SVG générée. Pour une vraie image IA photoréaliste, ajoute une route backend image reliée à une API de génération d’images."); return;
     }
   }catch(e){console.warn("Création du fichier impossible",e);}
@@ -4105,7 +4128,7 @@ async function sendChat() {
     var artifactType=detectArtifactRequest(msg);
     var artifactRule=artifactType ? ("L'utilisateur demande un fichier téléchargeable de type "+artifactType+". Génère un contenu complet, propre et directement exploitable. Pour les fichiers de code ou données, mets idéalement le contenu dans un seul bloc de code adapté au format demandé. ") : "";
     var diagramRule=diagramInstructionForChat(msg);
-    var sysChat="Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. IMPORTANT : quand un contexte web, météo, URL ou fichier joint est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. Pour les nouveautés ou actualités, fais une synthèse courte avec les points clés, les dates/sources disponibles et ce qu'il faut retenir. N'invente pas de sources. N'utilise pas de caractères superflus de style markdown comme **, ***, __ ou ## dans tes réponses finales. "+artifactRule+"Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. "+diagramRule+urlContext+weatherContext+webContext+pdfContext;
+    var sysChat="Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'MYF’s AI. Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. IMPORTANT : quand un contexte web, météo, URL ou fichier joint est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. Pour les nouveautés ou actualités, fais une synthèse courte avec les points clés, les dates/sources disponibles et ce qu'il faut retenir. N'invente pas de sources. N'utilise pas de caractères superflus de style markdown comme **, ***, __ ou ## dans tes réponses finales. "+artifactRule+"Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. "+diagramRule+urlContext+weatherContext+webContext+pdfContext;
     var histMsg=msg; if(chatPdfText) histMsg=msg+"\n\n(voir le fichier joint dans le contexte système)"; chatHistory.push({role:"user",content:histMsg});
     var sourceNote=[urlNote,weatherNote,webNote,pdfNote].filter(Boolean).join(" · ");
     var aiInner=null; typing.classList.remove("show"); aiInner=addBubble("ai","",true,sourceNote); if(isSketchLikeRequest(msg)) aiInner.classList.add("diagram-mode");
@@ -4864,7 +4887,7 @@ async function sendChat() {
       "Ne prétends jamais avoir vérifié une information si aucune source n'a été récupérée. ";
 
     var sysChat =
-      "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. " +
+      "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'MYF’s AI. " +
       "Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. " +
       "Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. " +
       liveRule +
@@ -5143,9 +5166,7 @@ function fallbackPrintPdf(title, node) {
 
   w.document.open();
   w.document.write(
-    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" +
-      escapeHtml(title) +
-      "</title><style>" +
+    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>MYF’s AI</title><style>" +
       css +
       "</style></head><body>" +
       node.outerHTML +
@@ -5558,9 +5579,7 @@ function fallbackPrintPdf(title, node) {
 
   w.document.open();
   w.document.write(
-    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" +
-      escapeHtml(title) +
-      "</title><style>" +
+    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>MYF’s AI</title><style>" +
       css +
       "</style></head><body>" +
       node.outerHTML +
