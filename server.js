@@ -748,6 +748,487 @@ function formatWebContext(payload, clientContext) {
   return lines.join("\n");
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// V31 — RECHERCHE WEB AVANCÉE / MULTI-SOURCES / SPORT
+// ─────────────────────────────────────────────────────────────
+
+function advNorm(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function advUniqueByUrl(rows) {
+  const seen = new Set();
+  const out = [];
+
+  for (const r of rows || []) {
+    const url = normalizeResultUrl(r.url || "");
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push(Object.assign({}, r, { url }));
+  }
+
+  return out;
+}
+
+function advIsWorldCupQuery(query) {
+  const q = advNorm(query);
+  return /(coupe du monde|world cup|fifa|mondial|qualification coupe du monde|resultats? des matchs?|matches? a venir|calendrier des matchs?|classement groupe|phase de groupes)/.test(q);
+}
+
+function advIsSportsQuery(query) {
+  const q = advNorm(query);
+  return advIsWorldCupQuery(q) || /(football|soccer|ligue des champions|euro|can|premier league|liga|serie a|bundesliga|ligue 1|classement|resultats? sportifs?|score|matchs? a venir)/.test(q);
+}
+
+function advIsNewsOrResearchQuery(query) {
+  const q = advNorm(query);
+  return /(actualite|actualites|actu|news|aujourd'hui|maintenant|temps reel|recent|derniere|dernier|mise a jour|en ce moment|verifie|verification|sources?|rapport|synthese|analyse avancee|veille|regroupe|compare|resume)/.test(q);
+}
+
+function advDateYYYYMMDD(date) {
+  const d = new Date(date);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return "" + y + m + day;
+}
+
+function advDateRangeDays(daysBefore, daysAfter) {
+  const now = new Date();
+  const dates = [];
+
+  for (let i = -daysBefore; i <= daysAfter; i++) {
+    const d = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+    dates.push(advDateYYYYMMDD(d));
+  }
+
+  return dates;
+}
+
+function advBuildQueryVariants(query) {
+  const q = String(query || "").trim();
+  const variants = [q];
+
+  if (advIsWorldCupQuery(q)) {
+    variants.push("Coupe du Monde FIFA résultats matchs passés matchs à venir classement groupes site:fifa.com");
+    variants.push("FIFA World Cup latest scores fixtures standings results");
+    variants.push("Coupe du Monde calendrier résultats classement groupes site:lequipe.fr");
+    variants.push("World Cup scores fixtures standings ESPN");
+  } else if (advIsNewsOrResearchQuery(q)) {
+    variants.push(q + " actualités récentes sources officielles");
+    variants.push(q + " site officiel communiqué");
+    variants.push(q + " analyse synthèse dernières informations");
+  } else {
+    variants.push(q + " sources officielles");
+    variants.push(q + " vérification données récentes");
+  }
+
+  const seen = new Set();
+  return variants.filter((v) => {
+    const n = advNorm(v);
+    if (!n || seen.has(n)) return false;
+    seen.add(n);
+    return true;
+  }).slice(0, 5);
+}
+
+async function newsApiSearch(query, maxResults) {
+  const key = process.env.NEWSAPI_KEY || getConfig("newsapi_key");
+  if (!key) return [];
+
+  try {
+    const url = "https://newsapi.org/v2/everything?q=" +
+      encodeURIComponent(query) +
+      "&language=fr&sortBy=publishedAt&pageSize=" +
+      Math.min(maxResults || 6, 10);
+
+    const response = await fetchTimeout(url, {
+      headers: {
+        "X-Api-Key": key,
+        "User-Agent": "MYF-AI/1.0",
+      },
+    }, 9000);
+
+    if (!response.ok) return [];
+
+    const data = await response.json().catch(() => ({}));
+
+    return (data.articles || []).map((a) => ({
+      title: a.title || "",
+      url: normalizeResultUrl(a.url || ""),
+      snippet: stripHtml(a.description || a.content || "", 900),
+      source: a.source?.name ? "NewsAPI - " + a.source.name : "NewsAPI",
+      published_at: a.publishedAt || "",
+    })).filter((r) => r.url);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function gNewsSearch(query, maxResults) {
+  const key = process.env.GNEWS_API_KEY || getConfig("gnews_api_key");
+  if (!key) return [];
+
+  try {
+    const url = "https://gnews.io/api/v4/search?q=" +
+      encodeURIComponent(query) +
+      "&lang=fr&country=fr&max=" +
+      Math.min(maxResults || 6, 10) +
+      "&apikey=" + encodeURIComponent(key);
+
+    const response = await fetchTimeout(url, {
+      headers: {
+        "User-Agent": "MYF-AI/1.0",
+      },
+    }, 9000);
+
+    if (!response.ok) return [];
+
+    const data = await response.json().catch(() => ({}));
+
+    return (data.articles || []).map((a) => ({
+      title: a.title || "",
+      url: normalizeResultUrl(a.url || ""),
+      snippet: stripHtml(a.description || a.content || "", 900),
+      source: a.source?.name ? "GNews - " + a.source.name : "GNews",
+      published_at: a.publishedAt || "",
+    })).filter((r) => r.url);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function advMultiSearch(query, maxResults) {
+  const variants = advBuildQueryVariants(query);
+  let results = [];
+
+  for (const v of variants) {
+    const wanted = Math.max(4, Math.ceil(maxResults / 2));
+
+    try { results = results.concat(await braveSearch(v, wanted)); } catch (_) {}
+    if (advIsNewsOrResearchQuery(query) || advIsWorldCupQuery(query)) {
+      try { results = results.concat(await gdeltSearch(v, wanted)); } catch (_) {}
+      try { results = results.concat(await newsApiSearch(v, wanted)); } catch (_) {}
+      try { results = results.concat(await gNewsSearch(v, wanted)); } catch (_) {}
+    }
+    try { results = results.concat(await duckDuckGoSearch(v, wanted)); } catch (_) {}
+  }
+
+  return advUniqueByUrl(results).slice(0, maxResults);
+}
+
+async function espnWorldCupScoreboard() {
+  // API publique ESPN. Selon la compétition, certaines dates peuvent être vides.
+  const leagues = [
+    "fifa.world",
+    "fifa.wwc",
+    "fifa.worldq",
+    "uefa.euro",
+  ];
+
+  const dates = advDateRangeDays(14, 14);
+  const events = [];
+  const seen = new Set();
+
+  for (const league of leagues) {
+    for (const d of dates) {
+      try {
+        const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
+          encodeURIComponent(league) +
+          "/scoreboard?dates=" + d;
+
+        const response = await fetchTimeout(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; MYF-AI/1.0)",
+            "Accept": "application/json",
+            "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.7",
+          },
+        }, 6000);
+
+        if (!response.ok) continue;
+
+        const data = await response.json().catch(() => ({}));
+        const rows = Array.isArray(data.events) ? data.events : [];
+
+        for (const ev of rows) {
+          const id = ev.id || ev.uid || (ev.name + ev.date);
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+
+          const comp = ev.competitions && ev.competitions[0] ? ev.competitions[0] : {};
+          const competitors = comp.competitors || [];
+
+          const teams = competitors.map((c) => ({
+            name: c.team?.displayName || c.team?.name || c.team?.shortDisplayName || "",
+            abbreviation: c.team?.abbreviation || "",
+            score: c.score !== undefined && c.score !== null ? String(c.score) : "",
+            homeAway: c.homeAway || "",
+            winner: !!c.winner,
+          }));
+
+          events.push({
+            id: String(id),
+            league,
+            name: ev.name || ev.shortName || teams.map((t) => t.name).join(" vs "),
+            date: ev.date || comp.date || "",
+            status: comp.status?.type?.description || comp.status?.type?.name || ev.status?.type?.description || "",
+            state: comp.status?.type?.state || ev.status?.type?.state || "",
+            completed: !!(comp.status?.type?.completed || ev.status?.type?.completed),
+            venue: comp.venue?.fullName || "",
+            teams,
+            source_url: ev.links && ev.links[0] ? ev.links[0].href : "",
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  events.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  const now = Date.now();
+
+  const past = events.filter((e) => {
+    const ts = Date.parse(e.date);
+    return e.completed || (Number.isFinite(ts) && ts < now);
+  }).slice(-12);
+
+  const upcoming = events.filter((e) => {
+    const ts = Date.parse(e.date);
+    return !e.completed && Number.isFinite(ts) && ts >= now;
+  }).slice(0, 12);
+
+  const live = events.filter((e) => {
+    const s = advNorm(e.state + " " + e.status);
+    return /in|live|halftime|progress|1st|2nd/.test(s) && !e.completed;
+  });
+
+  return {
+    source: "ESPN public scoreboard",
+    checked_at: new Date().toISOString(),
+    past,
+    live,
+    upcoming,
+    events_count: events.length,
+  };
+}
+
+async function footballDataWorldCup(query) {
+  const key = process.env.FOOTBALL_DATA_API_KEY || getConfig("football_data_api_key");
+  if (!key) return null;
+
+  try {
+    const matchesRes = await fetchTimeout("https://api.football-data.org/v4/competitions/WC/matches", {
+      headers: { "X-Auth-Token": key },
+    }, 9000);
+
+    const standingsRes = await fetchTimeout("https://api.football-data.org/v4/competitions/WC/standings", {
+      headers: { "X-Auth-Token": key },
+    }, 9000);
+
+    const matches = matchesRes.ok ? await matchesRes.json().catch(() => ({})) : {};
+    const standings = standingsRes.ok ? await standingsRes.json().catch(() => ({})) : {};
+
+    return {
+      source: "football-data.org",
+      checked_at: new Date().toISOString(),
+      matches: matches.matches || [],
+      standings: standings.standings || [],
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function advSportsData(query) {
+  if (!advIsSportsQuery(query)) return null;
+
+  const out = {
+    kind: advIsWorldCupQuery(query) ? "world_cup_or_football" : "sports",
+    checked_at: new Date().toISOString(),
+    sources: [],
+  };
+
+  if (advIsWorldCupQuery(query)) {
+    const espn = await espnWorldCupScoreboard();
+    if (espn && (espn.past.length || espn.live.length || espn.upcoming.length)) {
+      out.sources.push(espn);
+    }
+
+    const fd = await footballDataWorldCup(query);
+    if (fd) out.sources.push(fd);
+  }
+
+  return out.sources.length ? out : null;
+}
+
+function advFormatMatch(e) {
+  const teams = e.teams || [];
+  const left = teams[0] || {};
+  const right = teams[1] || {};
+  const scoreReady = left.score !== "" || right.score !== "";
+
+  const score = scoreReady
+    ? (left.name || left.abbreviation || "Équipe 1") + " " + left.score + " - " + right.score + " " + (right.name || right.abbreviation || "Équipe 2")
+    : (left.name || left.abbreviation || "Équipe 1") + " vs " + (right.name || right.abbreviation || "Équipe 2");
+
+  return [
+    score,
+    e.date ? "Date : " + e.date : "",
+    e.status ? "Statut : " + e.status : "",
+    e.venue ? "Lieu : " + e.venue : "",
+    e.source_url ? "URL : " + e.source_url : "",
+  ].filter(Boolean).join(" | ");
+}
+
+function advFormatSportsData(sports) {
+  if (!sports || !sports.sources || !sports.sources.length) return "";
+
+  const lines = [
+    "DONNÉES SPORTIVES STRUCTURÉES",
+    "Vérifié le : " + sports.checked_at,
+    "Consigne : utiliser ces données structurées en priorité pour les scores, calendriers, matchs passés et à venir. Si elles sont vides ou incomplètes, compléter avec les sources web lues.",
+    "",
+  ];
+
+  for (const src of sports.sources) {
+    lines.push("SOURCE SPORT : " + src.source);
+    lines.push("Contrôle : " + (src.checked_at || sports.checked_at));
+
+    if (src.live && src.live.length) {
+      lines.push("Matchs en direct :");
+      src.live.forEach((e) => lines.push("- " + advFormatMatch(e)));
+    }
+
+    if (src.past && src.past.length) {
+      lines.push("Derniers matchs terminés :");
+      src.past.forEach((e) => lines.push("- " + advFormatMatch(e)));
+    }
+
+    if (src.upcoming && src.upcoming.length) {
+      lines.push("Matchs à venir :");
+      src.upcoming.forEach((e) => lines.push("- " + advFormatMatch(e)));
+    }
+
+    if (src.matches && src.matches.length) {
+      lines.push("Matches football-data.org : " + src.matches.length + " match(s) récupéré(s).");
+      src.matches.slice(0, 20).forEach((m) => {
+        lines.push("- " + [
+          m.utcDate,
+          m.homeTeam?.name,
+          m.score?.fullTime ? (m.score.fullTime.home + "-" + m.score.fullTime.away) : "vs",
+          m.awayTeam?.name,
+          m.status,
+        ].filter(Boolean).join(" "));
+      });
+    }
+
+    if (src.standings && src.standings.length) {
+      lines.push("Classements football-data.org récupérés : " + src.standings.length + " groupe(s)/table(s).");
+    }
+
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+// Remplacement avancé de liveSearch : multi-sources + lecture + sport.
+async function liveSearch(query, options = {}) {
+  const maxResults = Math.max(4, Math.min(Number(options.max_results || 10), 15));
+  const readTop = Math.max(3, Math.min(Number(options.read_top || 7), 10));
+
+  let results = await advMultiSearch(query, maxResults);
+
+  const seen = new Set();
+  results = results.filter((r) => {
+    const u = normalizeResultUrl(r.url || "");
+    if (!u || seen.has(u)) return false;
+    seen.add(u);
+    r.url = u;
+    return true;
+  }).slice(0, maxResults);
+
+  if (options.deep !== false) {
+    for (let i = 0; i < Math.min(results.length, readTop); i++) {
+      try {
+        const page = await readUrl(results[i].url, advIsWorldCupQuery(query) ? 6500 : 8000);
+        results[i].page_title = page.title || results[i].title;
+        results[i].page_text = page.text;
+        results[i].checked_at = page.fetched_at;
+      } catch (e) {
+        results[i].read_error = e.message;
+      }
+    }
+  }
+
+  const sports = await advSportsData(query);
+
+  return {
+    query,
+    checked_at: new Date().toISOString(),
+    mode: "advanced_multi_source",
+    classification: {
+      sports: advIsSportsQuery(query),
+      world_cup: advIsWorldCupQuery(query),
+      news_or_research: advIsNewsOrResearchQuery(query),
+    },
+    sports,
+    results,
+  };
+}
+
+// Remplacement avancé de formatWebContext : synthèse guidée + regroupement.
+function formatWebContext(payload, clientContext) {
+  const lines = [
+    "RECHERCHE WEB AVANCÉE MULTI-SOURCES",
+    "Requête : " + payload.query,
+    "Mode : " + (payload.mode || "advanced"),
+    "Vérifié le : " + payload.checked_at,
+    clientContext ? "Contexte utilisateur : " + clientContext : "",
+    "",
+    "RÈGLES DE SYNTHÈSE POUR L'IA :",
+    "- Regrouper les informations par thème : résultats, calendrier, classement, faits clés, sources, limites.",
+    "- Pour les actualités : distinguer faits confirmés, informations récentes, incertitudes et sources consultées.",
+    "- Pour le sport : séparer matchs passés, matchs en direct, matchs à venir, classement si disponible.",
+    "- Croiser les sources lorsque plusieurs sources donnent la même information.",
+    "- Signaler clairement les contradictions ou l'absence de données fiables.",
+    "- Citer les URLs importantes utilisées.",
+    "",
+  ].filter(Boolean);
+
+  const sportsBlock = advFormatSportsData(payload.sports);
+  if (sportsBlock) {
+    lines.push(sportsBlock);
+    lines.push("");
+  }
+
+  if (!payload.results || !payload.results.length) {
+    lines.push("Aucun résultat web exploitable trouvé par la recherche générale.");
+    return lines.join("\n");
+  }
+
+  lines.push("SOURCES WEB LUES / CONSULTÉES :");
+
+  payload.results.forEach((r, i) => {
+    lines.push("SOURCE WEB " + (i + 1));
+    lines.push("Titre : " + (r.page_title || r.title || "Sans titre"));
+    lines.push("URL : " + r.url);
+    lines.push("Moteur/source : " + (r.source || "Web"));
+    if (r.published_at) lines.push("Date source : " + r.published_at);
+    if (r.snippet) lines.push("Extrait recherche : " + r.snippet);
+    if (r.page_text) lines.push("Contenu lu : " + r.page_text.slice(0, 7000));
+    if (r.read_error) lines.push("Lecture page : impossible (" + r.read_error + ")");
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
 // ─────────────────────────────────────────────────────────────
 // ROUTES PUBLIQUES / ADMIN / UTILISATEUR
 // ─────────────────────────────────────────────────────────────
@@ -755,7 +1236,7 @@ app.get("/api/health", (req, res) => {
   ok(res, {
     configured: !!adminSecret(),
     mistral_keys_available: mistralKeys().length,
-    version: "2.5.0-secure-structured",
+    version: "3.1.0-secure-advanced-web-research",
   });
 });
 
