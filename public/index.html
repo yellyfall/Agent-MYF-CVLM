@@ -1,614 +1,1068 @@
-const express = require("express");
-const Database = require("better-sqlite3");
-const bcrypt = require("bcryptjs");
-const fetch = require("node-fetch");
-const path = require("path");
-const fs = require("fs");
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent IA de MYF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0A0C12;--surface:#13161F;--surface2:#1C2030;--surface3:#232840;
+  --accent:#FF7043;--accent2:#4F8EF7;--accent3:#A78BFA;
+  --accent-dim:rgba(255,112,67,.12);--accent-glow:rgba(255,112,67,.28);
+  --accent2-dim:rgba(79,142,247,.12);--accent2-glow:rgba(79,142,247,.28);
+  --text:#E8EBF4;--muted:#5C6478;--border:rgba(255,255,255,.06);
+  --success:#34D399;--error:#F87171;--warn:#FBBF24;
+  --radius:14px;--radius-sm:9px
+}
+/* ─ THÈME CLAIR ─ */
+[data-theme="light"]{
+  --bg:#F4F6FA;--surface:#FFFFFF;--surface2:#EEF1F8;--surface3:#E2E7F0;
+  --text:#1A1D2E;--muted:#7A8099;--border:rgba(0,0,0,.08);
+  --accent-dim:rgba(255,112,67,.10);--accent2-dim:rgba(79,142,247,.10);
+  --accent-glow:rgba(255,112,67,.20);--accent2-glow:rgba(79,142,247,.20)
+}
+[data-theme="ocean"]{
+  --bg:#0B1622;--surface:#0F2035;--surface2:#162840;--surface3:#1E3552;
+  --text:#C8E4FF;--muted:#4E7A9E;--border:rgba(79,180,255,.07);
+  --accent:#00C9FF;--accent2:#7B5EA7;--accent3:#30D5C8;
+  --accent-dim:rgba(0,201,255,.10);--accent-glow:rgba(0,201,255,.22)
+}
+[data-theme="forest"]{
+  --bg:#0C1510;--surface:#131F14;--surface2:#1A2B1B;--surface3:#223824;
+  --text:#D6F0D8;--muted:#4F7A52;--border:rgba(100,200,100,.07);
+  --accent:#4CAF50;--accent2:#81C784;--accent3:#A5D6A7;
+  --accent-dim:rgba(76,175,80,.10);--accent-glow:rgba(76,175,80,.22)
+}
+[data-theme="sunset"]{
+  --bg:#1A0A14;--surface:#250F1C;--surface2:#321525;--surface3:#3F1A2E;
+  --text:#FFE4F0;--muted:#7A4060;--border:rgba(255,100,150,.07);
+  --accent:#FF6B9D;--accent2:#C44569;--accent3:#F8A5C2;
+  --accent-dim:rgba(255,107,157,.10);--accent-glow:rgba(255,107,157,.25)
+}
+body{background:var(--bg);color:var(--text);font-family:"Inter",sans-serif;min-height:100vh;line-height:1.6;transition:background .3s,color .3s}
+.screen{display:none;min-height:100vh}
+.screen.active{display:block}
+#loginScreen{align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(255,112,67,.08),transparent 60%)}
+#loginScreen.active{display:flex}
 
-// ── BASE DE DONNÉES SQLite ──────────────────────────────────────────────────
-// Sur Render : monter un disque persistant sur /data
-// En local   : utilise ./data/myf.db
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+/* ─ THEME PICKER ─ */
+.theme-bar{display:flex;align-items:center;gap:6px;padding:10px 0 0;flex-wrap:wrap}
+.theme-label{font-size:10px;font-weight:600;color:var(--muted);margin-right:2px}
+.t-dot{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:all .2s;flex-shrink:0}
+.t-dot:hover,.t-dot.active{border-color:var(--text);transform:scale(1.15)}
+.t-dark{background:#0A0C12}
+.t-light{background:#EEF1F8;border-color:rgba(0,0,0,.15)}
+.t-ocean{background:#00C9FF}
+.t-forest{background:#4CAF50}
+.t-sunset{background:#FF6B9D}
+/* ─ LANG PICKER LOGIN ─ */
+.ui-lang-bar{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.ui-lang-bar select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:"Inter",sans-serif;font-size:11px;padding:3px 6px;outline:none;cursor:pointer}
+/* ─ INTERFACE CHOICE ─ */
+#ifaceScreen{align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(255,112,67,.06),transparent 60%)}
+#ifaceScreen.active{display:flex}
+.iface-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 44px;width:100%;max-width:520px;display:flex;flex-direction:column;gap:24px;box-shadow:0 24px 64px rgba(0,0,0,.4);text-align:center}
+.iface-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.iface-sub{font-size:12px;color:var(--muted)}
+.iface-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:480px){.iface-cards{grid-template-columns:1fr}}
+.iface-card{background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius);padding:26px 18px;cursor:pointer;transition:all .25s;display:flex;flex-direction:column;align-items:center;gap:10px}
+.iface-card:hover{border-color:var(--accent);background:var(--accent-dim);transform:translateY(-2px);box-shadow:0 8px 24px var(--accent-glow)}
+.iface-card.recruiter:hover{border-color:var(--accent2);background:var(--accent2-dim);box-shadow:0 8px 24px var(--accent2-glow)}
+.iface-icon{font-size:38px}
+.iface-name{font-size:14px;font-weight:700}
+.iface-desc{font-size:11px;color:var(--muted);line-height:1.5;text-align:center}
+/* ─ RECRUITER INTERFACE ─ */
+.rec-wrap{max-width:960px;margin:0 auto;padding:26px 22px 80px;display:flex;flex-direction:column;gap:18px}
+.rec-score-zone{grid-column:1/-1;display:none;flex-direction:column;gap:16px}
+.rec-score-zone.show{display:flex}
+.match-gauge-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px 28px;display:flex;flex-direction:column;gap:14px}
+.match-gauge-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.match-pct{font-size:42px;font-weight:800;letter-spacing:-2px}
+.match-pct.green{color:var(--success)}
+.match-pct.orange{color:var(--warn)}
+.match-pct.red{color:var(--error)}
+.match-verdict{font-size:15px;font-weight:700}
+.match-bar-bg{background:var(--surface2);border-radius:20px;height:10px;overflow:hidden;position:relative}
+.match-bar-fill{height:100%;border-radius:20px;transition:width 1s ease;background:linear-gradient(90deg,var(--accent),var(--warn))}
+.match-bar-fill.green{background:linear-gradient(90deg,#22c55e,var(--success))}
+.match-bar-fill.red{background:linear-gradient(90deg,var(--error),#f87171)}
+.threshold-line{position:absolute;top:0;bottom:0;width:2px;background:var(--text);border-radius:2px}
+.rec-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.rec-grid{grid-template-columns:1fr}}
+.rec-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.rec-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.rec-list{display:flex;flex-direction:column;gap:6px}
+.rec-item{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5}
+.rec-item-dot{width:7px;height:7px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.dot-green{background:var(--success)}
+.dot-red{background:var(--error)}
+.dot-warn{background:var(--warn)}
+.threshold-ctrl{display:flex;align-items:center;gap:12px;background:var(--surface2);border-radius:var(--radius-sm);padding:12px 16px;flex-wrap:wrap}
+.threshold-ctrl label{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.threshold-ctrl input[type="range"]{flex:1;min-width:120px;accent-color:var(--accent)}
+.threshold-val{font-size:16px;font-weight:800;color:var(--accent);min-width:40px}
+.contact-panel{display:none;flex-direction:column;gap:14px;background:var(--surface);border:2px solid var(--success);border-radius:var(--radius);padding:22px 24px}
+.contact-panel.show{display:flex}
+.contact-header{font-size:14px;font-weight:700;color:var(--success)}
+.contact-info{display:flex;gap:10px;flex-wrap:wrap}
+.contact-btn{display:flex;align-items:center;gap:7px;padding:10px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:13px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;text-decoration:none}
+.contact-btn.email{border-color:rgba(79,142,247,.3);color:var(--accent2)}
+.contact-btn.email:hover{background:var(--accent2-dim);border-color:var(--accent2)}
+.contact-btn.phone{border-color:rgba(52,211,153,.3);color:var(--success)}
+.contact-btn.phone:hover{background:rgba(52,211,153,.08);border-color:var(--success)}
+.date-pick{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.date-pick label{font-size:12px;font-weight:600;color:var(--muted)}
+.date-pick input[type="datetime-local"]{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13px;padding:7px 10px;outline:none}
+.date-pick input:focus{border-color:var(--accent2)}
+.rec-generate-btn{padding:13px 20px;background:linear-gradient(135deg,var(--accent2),#3a7bd5);border:none;border-radius:var(--radius);color:#fff;font-family:"Inter",sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 16px var(--accent2-glow);display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+.rec-generate-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 24px var(--accent2-glow)}
+.rec-generate-btn:disabled{opacity:.35;cursor:not-allowed}
+.rec-analysis-full{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap;word-wrap:break-word}
+/* ─ UI LANG ─ */
+.h-lang{padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11px;font-family:"Inter",sans-serif;cursor:pointer;outline:none}
+.h-lang:focus{border-color:var(--accent)}
 
-const DB_PATH = path.join(DATA_DIR, "myf.db");
-const db = new Database(DB_PATH);
+/* ─ LOGIN ─ */
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 44px;width:100%;max-width:430px;display:flex;flex-direction:column;gap:20px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+@media(max-width:480px){.login-box{padding:26px 20px;margin:14px}}
+.login-logo{display:flex;align-items:center;gap:12px}
+.login-mark{width:44px;height:44px;background:var(--accent);border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;box-shadow:0 6px 16px var(--accent-glow);flex-shrink:0}
+.login-title{font-size:18px;font-weight:800;letter-spacing:-.5px}
+.login-sub{font-size:11px;color:var(--muted);margin-top:-1px}
+.login-tabs{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px}
+.login-tab{flex:1;padding:8px;border:none;background:none;color:var(--muted);font-size:12.5px;font-family:"Inter",sans-serif;border-radius:7px;cursor:pointer;font-weight:600;transition:all .2s}
+.login-tab.active{background:var(--surface3);color:var(--text)}
+.ls{display:none;flex-direction:column;gap:13px}
+.ls.active{display:flex}
+.fl{display:flex;flex-direction:column;gap:5px}
+.fl-label{font-size:11.5px;font-weight:600;color:var(--muted)}
+.fi{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13.5px;padding:11px 13px;outline:none;transition:border-color .2s;width:100%}
+.fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.fi.err{border-color:var(--error)}
+.pw-w{position:relative}
+.pw-w .fi{padding-right:62px}
+.pw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;font-family:"Inter",sans-serif;padding:3px 5px;border-radius:4px}
+.pw-eye:hover{color:var(--text)}
+.lbtn{padding:13px;border:none;border-radius:var(--radius-sm);color:#fff;font-family:"Inter",sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.lbtn.orange{background:var(--accent);box-shadow:0 4px 12px var(--accent-glow)}
+.lbtn.blue{background:var(--accent2);box-shadow:0 4px 12px var(--accent2-glow)}
+.lbtn:hover:not(:disabled){transform:translateY(-1px)}
+.lbtn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.lerr{font-size:12.5px;color:var(--error);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:7px;padding:9px 12px;display:none;line-height:1.5}
+.lerr.show{display:block}
+.lspin{width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none;flex-shrink:0}
+.lspin.show{display:block}
+.info-ban{font-size:11px;color:var(--muted);background:rgba(255,112,67,.06);border:1px solid rgba(255,112,67,.14);border-radius:7px;padding:9px 12px;line-height:1.6}
 
-// Dossier public pour stocker temporairement les images générées
-const PUBLIC_DIR = path.join(__dirname, "public");
-const GENERATED_DIR = path.join(PUBLIC_DIR, "generated");
-if (!fs.existsSync(GENERATED_DIR)) fs.mkdirSync(GENERATED_DIR, { recursive: true });
+/* ─ HEADER ─ */
+header{padding:14px 34px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:linear-gradient(180deg,rgba(255,112,67,.04),transparent);position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
+@media(max-width:600px){header{padding:12px 14px}}
+.h-mark{width:33px;height:33px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;box-shadow:0 4px 10px var(--accent-glow);flex-shrink:0}
+.h-name{font-size:14.5px;font-weight:700;letter-spacing:-.3px}
+.h-sub{font-size:10px;color:var(--muted)}
+.h-right{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.h-pill{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:11.5px}
+.h-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-admin{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.dot-user{background:var(--accent2);box-shadow:0 0 6px var(--accent2)}
+.h-btn{padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500}
+.h-btn:hover{border-color:var(--error);color:var(--error)}
+.h-btn.adm{border-color:rgba(167,139,250,.3);color:var(--accent3)}
+.h-btn.adm:hover{background:rgba(167,139,250,.1);border-color:var(--accent3)}
 
-// Activation WAL pour meilleures performances
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+/* ─ APP WRAP ─ */
+.app-wrap{max-width:1160px;margin:0 auto;padding:26px 22px 80px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:800px){.app-wrap{grid-template-columns:1fr;padding:14px}}
 
-// ── SCHÉMA ──────────────────────────────────────────────────────────────────
-db.exec(`
-  CREATE TABLE IF NOT EXISTS config (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
+/* ─ PIPELINE ─ */
+.pipeline{grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 22px;display:flex;align-items:center}
+.ps{display:flex;align-items:center;gap:7px;flex:1;position:relative}
+.ps:not(:last-child)::after{content:"";position:absolute;left:110px;right:0;top:50%;transform:translateY(-50%);height:1px;background:var(--border);transition:background .4s}
+.ps.active:not(:last-child)::after{background:var(--accent)}
+.pdot{width:27px;height:27px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;transition:all .4s}
+.ps.active .pdot{border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 3px var(--accent-glow)}
+.ps.done .pdot{border-color:var(--success);background:rgba(52,211,153,.1);color:var(--success)}
+.pl{font-size:10.5px;font-weight:500;color:var(--muted)}
+.ps.active .pl,.ps.done .pl{color:var(--text)}
 
-  CREATE TABLE IF NOT EXISTS users (
-    id         TEXT PRIMARY KEY,
-    username   TEXT UNIQUE NOT NULL,
-    password   TEXT NOT NULL,
-    fullname   TEXT NOT NULL DEFAULT '',
-    status     TEXT NOT NULL DEFAULT 'active',
-    expires_at TEXT DEFAULT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    last_login TEXT DEFAULT NULL
-  );
-`);
+/* ─ CARDS ─ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:13px}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);display:flex;align-items:center;gap:7px}
+.cbadge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--accent-dim);color:var(--accent);font-weight:600;margin-left:auto}
 
-// ── MIDDLEWARES ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "35mb" }));
-app.use(express.static(path.join(__dirname, "public")));
+/* ─ UPLOAD ─ */
+.uz{border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:17px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--surface2)}
+.uz:hover,.uz.dg{border-color:var(--accent);background:var(--accent-dim)}
+.uz input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.uz-icon{font-size:20px;margin-bottom:3px}
+.uz-text{font-size:12.5px;color:var(--muted)}
+.uz-text strong{color:var(--accent)}
+.uz-hint{font-size:10px;color:var(--muted);margin-top:2px}
+.fbadge{display:none;align-items:center;gap:7px;background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.2);border-radius:7px;padding:6px 10px;font-size:12px;color:var(--success)}
+.fbadge.show{display:flex}
+.fbadge button{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0}
+.fbadge button:hover{color:var(--error)}
+.fload{display:none;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:4px 0}
+.fload.show{display:flex}
+.mspin{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
 
-// CORS
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  next();
-});
+/* ─ TABS ─ */
+.tabs{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px}
+.tab{flex:1;padding:7px 8px;border:none;background:none;color:var(--muted);font-size:12px;font-family:"Inter",sans-serif;border-radius:7px;cursor:pointer;transition:all .2s;font-weight:500}
+.tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tab-c{display:none;flex-direction:column;gap:10px}
+.tab-c.active{display:flex}
 
-// ── HELPERS GÉNÉRAUX ────────────────────────────────────────────────────────
-function ok(res, data = {}, message = "") {
-  return res.json({ success: true, message, data });
+textarea,input[type="url"]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13.5px;padding:10px 12px;resize:vertical;transition:border-color .2s;outline:none}
+textarea:focus,input[type="url"]:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+textarea::placeholder,input[type="url"]::placeholder{color:var(--muted)}
+.orow{display:flex;gap:10px;flex-wrap:wrap}
+.og{flex:1;min-width:110px;display:flex;flex-direction:column;gap:5px}
+.ol{font-size:11px;font-weight:600;color:var(--muted)}
+select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13px;padding:7px 10px;outline:none;cursor:pointer;width:100%}
+select:focus{border-color:var(--accent)}
+.model-help{font-size:10.8px;color:var(--muted);line-height:1.45;margin-top:5px;background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:9px;padding:7px 9px}
+.model-help strong{color:var(--text);font-weight:700}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:11px;cursor:pointer;transition:all .2s;font-family:"Inter",sans-serif;user-select:none}
+.chip.on{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
+.div{height:1px;background:var(--border)}
+.info-note{font-size:11px;color:var(--muted);line-height:1.5;background:var(--surface2);border-radius:6px;padding:7px 10px}
+.tip-note{font-size:11px;color:var(--muted);background:rgba(255,112,67,.05);border:1px solid rgba(255,112,67,.12);border-radius:6px;padding:7px 10px;line-height:1.5}
+
+/* ─ GENERATE BTN ─ */
+.gen-btn{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:linear-gradient(135deg,var(--accent),#e8622f);border:none;border-radius:var(--radius);color:#fff;font-family:"Inter",sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px var(--accent-glow)}
+.gen-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 28px var(--accent-glow)}
+.gen-btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+.bspin{width:17px;height:17px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+.gen-btn.loading .bspin{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─ PROGRESS ─ */
+.prg{grid-column:1/-1;display:none;flex-direction:column;gap:7px}
+.prg.show{display:flex}
+.pi{display:flex;align-items:center;gap:9px;padding:9px 13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;color:var(--muted)}
+.pi.act{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
+.pi.done{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.06);color:var(--success)}
+.pispin{width:13px;height:13px;border:2px solid rgba(255,112,67,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+.piicon{width:14px;text-align:center;flex-shrink:0}
+
+/* ─ RESULTS ─ */
+.res{grid-column:1/-1;display:none;flex-direction:column;gap:14px}
+.res.show{display:flex}
+.rtabs{display:flex;gap:4px;background:var(--surface2);border-radius:var(--radius-sm);padding:4px;width:fit-content}
+.rtab{padding:8px 16px;border:none;background:none;color:var(--muted);font-size:13px;font-family:"Inter",sans-serif;border-radius:7px;cursor:pointer;transition:all .2s;font-weight:600;display:flex;align-items:center;gap:6px}
+.rtab.lm.active{background:var(--accent);color:#fff;box-shadow:0 2px 10px var(--accent-glow)}
+.rtab.cv.active{background:var(--accent2);color:#fff;box-shadow:0 2px 10px var(--accent2-glow)}
+.rpanel{display:none;flex-direction:column;gap:12px}
+.rpanel.active{display:flex}
+.rhead{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.racts{display:flex;gap:6px;flex-wrap:wrap}
+.abtn{display:flex;align-items:center;gap:5px;padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:12px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500}
+.abtn:hover{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.abtn.bl:hover{background:var(--accent2-dim);border-color:var(--accent2);color:var(--accent2)}
+.abtn.copied{border-color:var(--success);color:var(--success)}
+.outbox{background:#0D0F17;border:1px solid var(--border);border-radius:var(--radius);padding:26px 30px;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.95;color:#CDD2E8;white-space:pre-wrap;word-wrap:break-word;min-height:60px}
+.outbox.cv{border-color:rgba(79,142,247,.2)}
+
+/* ─ LETTRE VISUELLE ─ */
+.letter-render{display:none;flex-direction:column;gap:0;background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;font-family:"Georgia",serif;font-size:13.5px;line-height:1.8}
+.letter-render.show{display:flex}
+.letter-page{padding:52px 60px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box}
+@media(max-width:640px){.letter-page{padding:28px 20px}}
+.letter-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:40px;
 }
 
-function fail(res, message, status = 400) {
-  return res.status(status).json({ success: false, message, data: {} });
+.letter-sender{
+    width:45%;
+    text-align:left;
 }
 
-function getConfig(key) {
-  const row = db.prepare("SELECT value FROM config WHERE key = ?").get(key);
-  return row ? row.value : null;
+.letter-right{
+    width:45%;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
 }
 
-function setConfig(key, value) {
-  db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)").run(key, value);
+.letter-recipient{
+    text-align:right;
+    width:100%;
 }
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-function checkAdminKey(req, res) {
-  const key = req.headers["x-admin-key"] || req.body?.admin_key;
-  const stored = getConfig("admin_key");
-
-  if (!stored) {
-    res.status(401).json({
-      success: false,
-      message: "Aucune clé admin configurée.",
-    });
-    return false;
-  }
-
-  if (key !== stored) {
-    res.status(401).json({
-      success: false,
-      message: "Non autorisé.",
-    });
-    return false;
-  }
-
-  return true;
-}
-
-function getMistralKey() {
-  return process.env.MISTRAL_API_KEY || getConfig("admin_key");
-}
-
-function checkAppAccess(req, res) {
-  const supplied =
-    req.headers["x-admin-key"] ||
-    (req.headers.authorization || "").replace(/^Bearer\s+/i, "") ||
-    req.body?.api_key;
-
-  const stored = getConfig("admin_key");
-
-  if (!stored) {
-    res.status(503).json({
-      success: false,
-      message: "L'administrateur n'a pas encore configuré l'accès principal.",
-      data: {},
-    });
-    return false;
-  }
-
-  if (supplied !== stored) {
-    res.status(401).json({
-      success: false,
-      message: "Non autorisé. Connectez-vous avant d'utiliser l'IA.",
-      data: {},
-    });
-    return false;
-  }
-
-  return true;
-}
-
-// ── HELPERS MISTRAL IMAGE ───────────────────────────────────────────────────
-async function parseJsonSafe(response) {
-  const raw = await response.text();
-  try {
-    return {
-      ok: true,
-      data: JSON.parse(raw),
-      raw,
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      data: null,
-      raw,
-    };
-  }
-}
-
-async function mistralJson(pathname, options = {}) {
-  const apiKey = getMistralKey();
-  if (!apiKey) {
-    throw new Error("Clé API Mistral introuvable.");
-  }
-
-  const response = await fetch("https://api.mistral.ai" + pathname, {
-    method: options.method || "GET",
-    headers: Object.assign(
-      {
-        Authorization: "Bearer " + apiKey,
-        "Content-Type": "application/json",
-      },
-      options.headers || {}
-    ),
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  const parsed = await parseJsonSafe(response);
-
-  if (!response.ok) {
-    const msg =
-      parsed.data?.message ||
-      parsed.data?.detail ||
-      parsed.raw ||
-      "Erreur Mistral HTTP " + response.status;
-
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-  }
-
-  if (!parsed.ok) {
-    throw new Error("Réponse JSON Mistral illisible.");
-  }
-
-  return parsed.data;
-}
-
-async function ensureMistralImageAgent() {
-  const cached = getConfig("mistral_image_agent_id");
-
-  if (cached) {
-    try {
-      const agent = await mistralJson("/v1/agents/" + encodeURIComponent(cached));
-      if (agent && agent.id) return agent.id;
-    } catch (e) {
-      // Agent supprimé ou inaccessible : on le recrée.
-    }
-  }
-
-  const agent = await mistralJson("/v1/agents", {
-    method: "POST",
-    body: {
-      model: process.env.MISTRAL_IMAGE_AGENT_MODEL || "mistral-medium-latest",
-      name: "MYF Image Agent",
-      description: "Agent de génération d'images pour l'application MYF.",
-      instructions:
-        "You are an image generation agent. Use the image_generation tool whenever the user asks to create an image, illustration, visual, poster, logo or artistic rendering. Do not generate images for text diagrams, one-line electrical diagrams, sketches, chemistry mechanisms or technical schemas unless the user explicitly asks for an image file.",
-      tools: [{ type: "image_generation" }],
-      completion_args: {
-        temperature: 0.3,
-        top_p: 0.95,
-      },
-    },
-  });
-
-  if (!agent || !agent.id) {
-    throw new Error("Création de l'agent image Mistral impossible.");
-  }
-
-  setConfig("mistral_image_agent_id", agent.id);
-  return agent.id;
-}
-
-function findToolFileChunk(node) {
-  if (!node) return null;
-
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const found = findToolFileChunk(item);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  if (typeof node === "object") {
-    if (node.type === "tool_file" && node.file_id) return node;
-
-    for (const key of Object.keys(node)) {
-      const found = findToolFileChunk(node[key]);
-      if (found) return found;
-    }
-  }
-
-  return null;
-}
-
-function collectTextChunks(node, bag = []) {
-  if (!node) return bag;
-
-  if (Array.isArray(node)) {
-    node.forEach((item) => collectTextChunks(item, bag));
-    return bag;
-  }
-
-  if (typeof node === "object") {
-    if (node.type === "text" && typeof node.text === "string") {
-      bag.push(node.text);
-    }
-
-    for (const key of Object.keys(node)) {
-      collectTextChunks(node[key], bag);
-    }
-  }
-
-  return bag;
-}
-
-async function downloadMistralFileContent(fileId) {
-  const apiKey = getMistralKey();
-  if (!apiKey) {
-    throw new Error("Clé API Mistral introuvable.");
-  }
-
-  const response = await fetch(
-    "https://api.mistral.ai/v1/files/" + encodeURIComponent(fileId) + "/content",
-    {
-      headers: {
-        Authorization: "Bearer " + apiKey,
-      },
-    }
-  );
-
-  const raw = await response.text();
-
-  if (!response.ok) {
-    let msg = raw;
-    try {
-      const j = JSON.parse(raw);
-      msg = j.message || j.detail || raw;
-    } catch (e) {}
-
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-  }
-
-  let base64Data = raw.trim();
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === "string") base64Data = parsed;
-  } catch (e) {}
-
-  return Buffer.from(base64Data, "base64");
-}
-
-async function runMistralImageJob(prompt) {
-  const agentId = await ensureMistralImageAgent();
-
-  const data = await mistralJson("/v1/conversations", {
-    method: "POST",
-    body: {
-      agent_id: agentId,
-      inputs: prompt,
-      store: false,
-    },
-  });
-
-  const fileChunk = findToolFileChunk(data);
-
-  if (!fileChunk || !fileChunk.file_id) {
-    const txt = collectTextChunks(data).join(" ").trim();
-    throw new Error(txt || "Aucun fichier image n'a été retourné par Mistral.");
-  }
-
-  const bytes = await downloadMistralFileContent(fileChunk.file_id);
-
-  const ext =
-    fileChunk.file_type === "jpeg"
-      ? "jpg"
-      : fileChunk.file_type || "png";
-
-  const filename =
-    "image-" +
-    Date.now() +
-    "-" +
-    Math.random().toString(36).slice(2, 8) +
-    "." +
-    ext;
-
-  const filepath = path.join(GENERATED_DIR, filename);
-  fs.writeFileSync(filepath, bytes);
-
-  const assistantText = collectTextChunks(data).join("\n").trim();
-
-  return {
-    filename,
-    mime: "image/" + (ext === "jpg" ? "jpeg" : ext),
-    image_url: "/generated/" + filename,
-    download_url: "/generated/" + filename,
-    revised_prompt: assistantText,
-    provider: "mistral",
-    file_id: fileChunk.file_id,
-    file_name: fileChunk.file_name || filename,
-    file_type: fileChunk.file_type || ext,
-  };
-}
-
-// ── ROUTES ───────────────────────────────────────────────────────────────────
-
-// Santé
-app.get("/api/health", (req, res) => {
-  const configured = !!getConfig("admin_key");
-  return ok(res, {
-    configured,
-    version: "1.0.0-mistral-image-no-edit",
-  });
-});
-
-// Admin : configurer / vérifier la clé API Mistral
-app.post("/api/admin/setup", async (req, res) => {
-  const { key } = req.body;
-  if (!key) return fail(res, "Clé API manquante.");
-
-  try {
-    const response = await fetch("https://api.mistral.ai/v1/models", {
-      headers: {
-        Authorization: "Bearer " + key,
-      },
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const msg =
-        errData.message ||
-        errData.detail ||
-        "Clé invalide (HTTP " + response.status + ")";
-
-      return fail(res, typeof msg === "string" ? msg : JSON.stringify(msg));
-    }
-  } catch (e) {
-    return fail(res, "Impossible de joindre api.mistral.ai : " + e.message);
-  }
-
-  setConfig("admin_key", key);
-  return ok(res, {}, "Clé API vérifiée et sauvegardée.");
-});
-
-// Admin : connexion
-app.post("/api/admin/login", async (req, res) => {
-  const { key } = req.body;
-  if (!key) return fail(res, "Clé API manquante.");
-
-  const stored = getConfig("admin_key");
-
-  if (!stored) {
-    try {
-      const response = await fetch("https://api.mistral.ai/v1/models", {
-        headers: {
-          Authorization: "Bearer " + key,
-        },
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const msg =
-          errData.message ||
-          errData.detail ||
-          "Clé invalide (HTTP " + response.status + ")";
-
-        return fail(res, typeof msg === "string" ? msg : JSON.stringify(msg));
-      }
-    } catch (e) {
-      return fail(res, "Impossible de joindre api.mistral.ai : " + e.message);
-    }
-
-    setConfig("admin_key", key);
-    return ok(res, { role: "admin" }, "Première connexion : clé enregistrée.");
-  }
-
-  if (key !== stored) {
-    return fail(res, "Clé API incorrecte.", 401);
-  }
-
-  return ok(res, { role: "admin" });
-});
-
-// Admin : liste des utilisateurs
-app.get("/api/admin/users", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const users = db
-    .prepare(
-      "SELECT id, username, fullname, status, expires_at, created_at, last_login FROM users ORDER BY created_at DESC"
-    )
-    .all();
-
-  return ok(res, { users });
-});
-
-// Admin : créer un utilisateur
-app.post("/api/admin/users", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { username, password, fullname, expires_at } = req.body;
-
-  if (!username || !password) {
-    return fail(res, "Nom d'utilisateur et mot de passe requis.");
-  }
-
-  const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
-  if (existing) {
-    return fail(res, "Ce nom d'utilisateur existe déjà.");
-  }
-
-  const hashed = bcrypt.hashSync(password, 10);
-  const id = generateId();
-  const now = new Date().toLocaleDateString("fr-FR");
-
-  db.prepare(
-    "INSERT INTO users (id, username, password, fullname, status, expires_at, created_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
-  ).run(
-    id,
-    username.trim(),
-    hashed,
-    fullname || username.trim(),
-    expires_at || null,
-    now
-  );
-
-  return ok(res, { id }, "Utilisateur créé avec succès.");
-});
-
-// Admin : modifier un utilisateur
-app.patch("/api/admin/users/:id", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { id } = req.params;
-  const { op, expires_at, new_password } = req.body;
-
-  const user = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
-  if (!user) return fail(res, "Utilisateur introuvable.", 404);
-
-  if (op === "pause") {
-    db.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(id);
-  } else if (op === "resume") {
-    db.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(id);
-  } else if (op === "set_expiry") {
-    db.prepare("UPDATE users SET expires_at = ? WHERE id = ?").run(expires_at || null, id);
-  } else if (op === "reset_password") {
-    if (!new_password) return fail(res, "Nouveau mot de passe requis.");
-    const hashed = bcrypt.hashSync(new_password, 10);
-    db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashed, id);
-  } else {
-    return fail(res, "Opération inconnue.");
-  }
-
-  return ok(res, {}, "Mise à jour effectuée.");
-});
-
-// Admin : supprimer un utilisateur
-app.delete("/api/admin/users/:id", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { id } = req.params;
-  db.prepare("DELETE FROM users WHERE id = ?").run(id);
-
-  return ok(res, {}, "Utilisateur supprimé.");
-});
-
-// Utilisateur : connexion
-app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return fail(res, "Identifiants manquants.");
-  }
-
-  const adminKey = getConfig("admin_key");
-
-  if (!adminKey) {
-    return fail(
-      res,
-      "L'administrateur n'a pas encore configuré son accès. Veuillez le contacter.",
-      503
-    );
-  }
-
-  const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username.trim());
-
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return fail(res, "Nom d'utilisateur ou mot de passe incorrect.", 401);
-  }
-
-  if (user.status === "paused") {
-    return fail(
-      res,
-      "Votre accès est temporairement suspendu. Contactez l'administrateur.",
-      403
-    );
-  }
-
-  if (user.expires_at) {
-    const expDate = new Date(user.expires_at);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    if (expDate < now) {
-      return fail(
-        res,
-        "Votre accès a expiré le " +
-          expDate.toLocaleDateString("fr-FR") +
-          ". Contactez l'administrateur.",
-        403
-      );
-    }
-  }
-
-  db.prepare("UPDATE users SET last_login = datetime('now','localtime') WHERE id = ?").run(user.id);
-
-  return ok(res, {
-    username: user.username,
-    fullname: user.fullname || user.username,
-    role: "user",
-    api_key: adminKey,
-  });
-});
-
-// IA : génération d'image Mistral
-app.post("/api/generate-image", async (req, res) => {
-  if (!checkAppAccess(req, res)) return;
-
-  try {
-    const prompt = (req.body.prompt || "").trim();
-
-    if (!prompt) {
-      return fail(res, "Prompt image manquant.");
-    }
-
-    if (prompt.length > 6000) {
-      return fail(res, "Prompt trop long. Limitez-le à 6000 caractères.");
-    }
-
-    const result = await runMistralImageJob(prompt);
-    return ok(res, result);
-  } catch (e) {
-    return fail(res, "Erreur génération image : " + e.message, 500);
-  }
-});
-
-// Fallback SPA
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// ── DÉMARRAGE ────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log("✅ Agent IA de MYF — Serveur démarré sur le port " + PORT);
-  console.log("📂 Base de données : " + DB_PATH);
-});
+.letter-date{
+    margin-top:20px;
+    width:100%;
+    text-align:right;
+}.letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}
+.letter-subject span{font-weight:400;font-style:italic;color:#444}
+.letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word;text-align:justify;text-align-last:left;hyphens:auto}
+.letter-body p{margin-bottom:16px;text-align:justify;text-align-last:left;break-inside:avoid-page;page-break-inside:avoid}
+.letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8}
+.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111;text-align:right}
+.letter-toolbar{display:flex;gap:6px;padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap}
+.letter-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;width:fit-content}
+.lv-btn{padding:5px 12px;border:none;background:none;color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s}
+.lv-btn.active{background:var(--surface);color:var(--text)}
+
+/* ─ CV VISUEL ─ */
+.cv-render{display:none;flex-direction:column;background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid rgba(79,142,247,.2);overflow:hidden;font-family:"Arial",sans-serif;font-size:13px;line-height:1.7}
+.cv-render.show{display:flex}
+.cv-page{padding:40px 50px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box}
+@media(max-width:640px){.cv-page{padding:24px 16px}}
+.cv-header-zone{border-bottom:3px solid #1a3a6e;margin-bottom:22px;padding-bottom:18px}
+.cv-name{font-size:22px;font-weight:700;color:#1a3a6e;letter-spacing:-.3px}
+.cv-title{font-size:14px;color:#555;margin-top:2px;font-style:italic}
+.cv-contacts{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:#444}
+.cv-contacts span{display:flex;align-items:center;gap:4px}
+.cv-section{margin-bottom:20px}
+.cv-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#1a3a6e;border-bottom:1px solid #d0daea;padding-bottom:5px;margin-bottom:12px}
+.cv-entry{margin-bottom:12px}
+.cv-entry-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px}
+.cv-entry-title{font-weight:700;font-size:13px;color:#111}
+.cv-entry-date{font-size:11.5px;color:#666;white-space:nowrap}
+.cv-entry-sub{font-size:12px;color:#555;font-style:italic;margin-bottom:4px}
+.cv-entry-desc{font-size:12.5px;color:#333;line-height:1.6;white-space:pre-wrap;word-wrap:break-word}
+.cv-skills-grid{display:flex;flex-wrap:wrap;gap:6px}
+.cv-skill-tag{padding:3px 10px;background:#eef2fa;border:1px solid #c8d6ef;border-radius:12px;font-size:11.5px;color:#1a3a6e;font-weight:500}
+.cv-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px}
+.cv-raw{white-space:pre-wrap;word-wrap:break-word;font-family:"JetBrains Mono",monospace;font-size:12.5px;color:#CDD2E8;padding:20px;background:#0D0F17}
+.cv-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;width:fit-content;margin-bottom:8px}
+.score-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--success);font-weight:600}
+.tcursor{display:inline-block;width:2px;height:1em;background:var(--accent);vertical-align:text-bottom;animation:blink 1s step-end infinite}
+.tcursor.blue{background:var(--accent2)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.errmsg{display:none;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.22);border-radius:var(--radius-sm);padding:13px 16px;color:var(--error);font-size:13px;grid-column:1/-1;line-height:1.6;white-space:pre-wrap}
+.errmsg.show{display:block}
+
+/* ─ CHAT ─ */
+.chat-wrap{max-width:900px;margin:0 auto;padding:22px 22px 80px;display:flex;flex-direction:column;gap:14px;height:calc(100vh - 70px)}
+.chat-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px;scroll-behavior:smooth}
+.chat-msgs::-webkit-scrollbar{width:5px}
+.chat-msgs::-webkit-scrollbar-track{background:transparent}
+.chat-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+.chat-bubble{max-width:80%;display:flex;flex-direction:column;gap:4px}
+.chat-bubble.user{align-self:flex-end;align-items:flex-end}
+.chat-bubble.ai{align-self:flex-start;align-items:flex-start}
+.bubble-inner{padding:12px 16px;border-radius:16px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;word-wrap:break-word}
+.chat-bubble.user .bubble-inner{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.chat-bubble.ai .bubble-inner{background:var(--surface);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
+.bubble-time{font-size:10px;color:var(--muted);padding:0 4px}
+.chat-bubble.ai .bubble-icon{width:28px;height:28px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;margin-bottom:3px;flex-shrink:0}
+.chat-typing{display:none;align-self:flex-start;align-items:flex-start;gap:8px;flex-direction:column}
+.chat-typing.show{display:flex}
+.typing-dots{display:flex;gap:5px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;border-bottom-left-radius:4px}
+.typing-dots span{width:7px;height:7px;background:var(--muted);border-radius:50%;animation:tdot 1.2s ease-in-out infinite}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.chat-input-bar{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:border-color .2s}
+.chat-input-bar:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.chat-input-bar textarea{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:"Inter",sans-serif;font-size:13.5px;resize:none;max-height:140px;line-height:1.6;padding:2px 0}
+.chat-input-bar textarea::placeholder{color:var(--muted)}
+.chat-send{width:38px;height:38px;background:var(--accent);border:none;border-radius:10px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;transition:all .2s;flex-shrink:0;box-shadow:0 3px 10px var(--accent-glow)}
+.chat-send:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 5px 14px var(--accent-glow)}
+.chat-send:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.chat-model-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chat-model-bar .ol{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
+.chat-model-bar select{flex:1;min-width:140px;max-width:220px}
+.chat-model-select-wrap{display:flex;flex-direction:column;gap:4px;flex:1;min-width:220px;max-width:390px}
+.chat-model-select-wrap select{max-width:none;width:100%}
+.chat-model-select-wrap .model-help{margin-top:0}
+.chat-clear{padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
+.chat-clear:hover{border-color:var(--error);color:var(--error)}
+.chat-welcome{text-align:center;padding:40px 20px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:14px}
+.chat-welcome-icon{font-size:44px}
+.chat-welcome h3{font-size:17px;font-weight:700;color:var(--text)}
+.chat-welcome p{font-size:13px;line-height:1.7;max-width:420px}
+.chat-suggestions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}
+.chat-sug{padding:7px 13px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--muted);font-size:11.5px;cursor:pointer;transition:all .2s;font-family:"Inter",sans-serif}
+.chat-sug:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+
+/* ─ CHAT EXTRAS ─ */
+.chat-pdf-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chat-pdf-btn{padding:5px 11px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;display:flex;align-items:center;gap:5px}
+.chat-pdf-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.chat-pdf-badge{display:none;align-items:center;gap:6px;background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.25);border-radius:var(--radius-sm);padding:4px 10px;font-size:11.5px;color:var(--accent2)}
+.chat-pdf-badge.show{display:flex}
+.chat-pdf-badge button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 0 0 4px}
+.chat-pdf-badge button:hover{color:var(--error)}
+.chat-web-toggle{padding:5px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500;display:flex;align-items:center;gap:5px;user-select:none}
+.chat-web-toggle.on{border-color:rgba(52,211,153,.4);color:var(--success);background:rgba(52,211,153,.07)}
+.web-indicator{display:none;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding-left:4px;margin-bottom:2px}
+.web-indicator.show{display:flex}
+.wspin{width:10px;height:10px;border:1.5px solid var(--border);border-top-color:var(--success);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+/* Rendu enrichi des bulles IA */
+.bubble-inner b,.bubble-inner strong{font-weight:700;color:var(--text)}
+.bubble-inner code{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-family:"JetBrains Mono",monospace;font-size:12px}
+.bubble-inner pre{background:#0D0F17;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;overflow-x:auto;margin:6px 0;font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.6;white-space:pre}
+.bubble-inner.diagram-mode{font-family:"JetBrains Mono",Consolas,monospace;font-size:12.2px;line-height:1.45;white-space:pre;overflow-x:auto;max-width:100%;background:#0D0F17;color:#e8edf7;border-color:rgba(77,208,225,.28)}
+.bubble-inner ul,.bubble-inner ol{padding-left:18px;margin:4px 0;display:flex;flex-direction:column;gap:2px}
+.bubble-inner li{line-height:1.6}
+.bubble-source{font-size:10px;color:var(--muted);padding:3px 4px 0;font-style:italic}
+
+/* ─ NAV ─ */
+.app-nav{display:flex;gap:4px;padding:0 34px;border-bottom:1px solid var(--border);background:var(--surface);margin-top:-1px}
+@media(max-width:600px){.app-nav{padding:0 14px}}
+.nav-btn{padding:11px 16px;border:none;border-bottom:2px solid transparent;background:none;color:var(--muted);font-family:"Inter",sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.nav-btn:hover{color:var(--text)}
+.nav-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-view{display:none}
+.nav-view.active{display:block}
+
+/* ─ ADMIN MODAL ─ */
+.moverlay{display:none;position:fixed;inset:0;background:rgba(10,12,18,.88);backdrop-filter:blur(6px);z-index:100;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+.moverlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;width:100%;max-width:800px;box-shadow:0 32px 80px rgba(0,0,0,.6)}
+.mhead{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.mtitle{font-size:15px;font-weight:700}
+.mbadge{font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(167,139,250,.15);color:var(--accent3);font-weight:600}
+.mclose{margin-left:auto;background:none;border:1px solid var(--border);border-radius:7px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:"Inter",sans-serif;transition:all .2s}
+.mclose:hover{border-color:var(--error);color:var(--error)}
+.mbody{padding:22px 24px;display:flex;flex-direction:column;gap:20px}
+
+.sec-title{font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sec-count{font-size:10px;padding:1px 7px;border-radius:10px;background:var(--surface2);color:var(--muted)}
+.cform{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;display:flex;flex-direction:column;gap:11px}
+.frow{display:flex;gap:10px;flex-wrap:wrap}
+.fg{flex:1;min-width:130px;display:flex;flex-direction:column;gap:5px}
+.flbl{font-size:11px;font-weight:600;color:var(--muted)}
+.finp{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:"Inter",sans-serif;font-size:13px;padding:8px 11px;outline:none;transition:border-color .2s;width:100%}
+.finp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.gbtn{padding:7px 13px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-family:"Inter",sans-serif;font-size:11.5px;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
+.gbtn:hover{border-color:var(--accent2);color:var(--accent2)}
+.cbtn{padding:9px 18px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;font-family:"Inter",sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.cbtn:hover:not(:disabled){background:#e8622f}
+.cbtn:disabled{opacity:.4;cursor:not-allowed}
+.cbtn .cspin{width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:none}
+.cbtn.loading .cspin{display:block}
+.fok{font-size:12px;color:var(--success);background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.2);border-radius:6px;padding:8px 11px;display:none;line-height:1.6}
+.fok.show{display:block}
+.ferr{font-size:12px;color:var(--error);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:6px;padding:8px 11px;display:none}
+.ferr.show{display:block}
+
+.ulist{display:flex;flex-direction:column;gap:7px;max-height:420px;overflow-y:auto;padding-right:2px}
+.ucard{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.uavatar{width:31px;height:31px;border-radius:50%;background:var(--accent2-dim);border:1.5px solid rgba(79,142,247,.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent2);flex-shrink:0}
+.uinfo{flex:1;min-width:100px}
+.uname{font-size:13px;font-weight:600}
+.umeta{font-size:10.5px;color:var(--muted);margin-top:1px}
+.uexp{font-size:10.5px;margin-top:1px}
+.exp-ok{color:var(--success)}.exp-warn{color:var(--warn)}.exp-expired{color:var(--error)}
+.ull{font-size:10.5px;color:var(--muted);margin-top:1px}
+.ustatus{display:flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600}
+.ustatus.active{background:rgba(52,211,153,.1);color:var(--success)}
+.ustatus.paused{background:rgba(251,191,36,.1);color:var(--warn)}
+.ustatus.expired{background:rgba(248,113,113,.1);color:var(--error)}
+.ucreds{font-size:10.5px;color:var(--muted);background:var(--surface);border-radius:5px;padding:4px 8px;font-family:"JetBrains Mono",monospace;cursor:pointer;position:relative}
+.ucreds:hover{color:var(--text)}
+.uacts{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.ubtn{padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--muted);font-size:10.5px;font-family:"Inter",sans-serif;cursor:pointer;transition:all .2s;font-weight:500}
+.ubtn:hover{background:var(--surface3)}
+.ubtn.pause:hover{border-color:var(--warn);color:var(--warn)}
+.ubtn.resume:hover{border-color:var(--success);color:var(--success)}
+.ubtn.del:hover{border-color:var(--error);color:var(--error)}
+.ubtn.pw:hover{border-color:var(--accent2);color:var(--accent2)}
+.empty-state{text-align:center;padding:28px;color:var(--muted);font-size:13px;line-height:1.7}
+.loading-state{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+
+/* ─ EXPORT PDF / CV CONSERVÉ ─ */
+.pdf-export-temp{position:fixed;left:0;top:0;width:210mm;background:#fff;color:#111;z-index:-10;pointer-events:none}
+.pdf-export-temp *{box-sizing:border-box}
+.pdf-export-temp p,.pdf-export-temp .letter-header,.pdf-export-temp .letter-subject,.pdf-export-temp .letter-closing,.pdf-export-temp .letter-signature{break-inside:avoid-page;page-break-inside:avoid}
+.pdf-export-temp .letter-body,.pdf-export-temp .letter-body p{text-align:justify;text-align-last:left;hyphens:auto}
+.pdf-export-temp .letter-signature{text-align:right}
+.pdf-export-temp .cv-preserve-inner{orphans:3;widows:3}
+.cv-preserve-page{background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid rgba(79,142,247,.2);overflow:hidden;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.55}
+.cv-preserve-inner{padding:40px 50px;max-width:780px;margin:0 auto;white-space:pre-wrap;word-wrap:break-word;box-sizing:border-box}
+.cv-preserve-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:4px 12px;font-size:12px;color:#2d7a4f;font-weight:700;margin-bottom:14px;font-family:Arial,Helvetica,sans-serif}
+@media(max-width:640px){.cv-preserve-inner{padding:24px 16px}}
+
+
+/* ─ CHAT ARTIFACTS / FICHIERS TÉLÉCHARGEABLES ─ */
+.artifact-card{max-width:80%;align-self:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 22px rgba(0,0,0,.16)}
+.artifact-card-title{font-size:13px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px}
+.artifact-card-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
+.artifact-download{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:max-content;padding:8px 13px;background:var(--accent2);color:#fff;border-radius:var(--radius-sm);font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 4px 14px var(--accent2-glow)}
+.artifact-download:hover{transform:translateY(-1px)}
+.chat-image-btn{border-color:rgba(167,139,250,.35);color:var(--accent3)}
+.chat-image-btn:hover{border-color:var(--accent3);color:var(--accent3);background:rgba(167,139,250,.10)}
+.chat-image-status{display:none;width:100%;font-size:11.2px;line-height:1.55;color:var(--warning);background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.22);border-radius:var(--radius-sm);padding:7px 10px}
+.chat-image-status.show{display:block}
+.chat-image-btn.disabled-soft{opacity:.55;cursor:not-allowed;border-color:rgba(245,158,11,.35);color:var(--warning)}
+.generated-image-card{max-width:min(80%,620px)}
+.generated-image-card img{display:block;width:100%;max-height:520px;object-fit:contain;border-radius:12px;border:1px solid var(--border);background:#0D0F17}
+.generated-image-actions{display:flex;gap:8px;flex-wrap:wrap}
+.chat-file-note{font-size:10.5px;color:var(--muted);line-height:1.4;margin-left:2px}
+
+/* ─ CV PROFESSIONNEL OPTIMISÉ ─ */
+.cv-pro{background:#fff;color:#1a1a1a;border-radius:0;font-family:Arial,Helvetica,sans-serif;line-height:1.55;display:grid;grid-template-columns:34% 66%;min-height:980px;overflow:hidden}
+.cv-pro-side{background:#16365f;color:#fff;padding:34px 24px;display:flex;flex-direction:column;gap:20px}
+.cv-pro-main{padding:34px 36px;background:#fff;color:#222;display:flex;flex-direction:column;gap:18px}
+.cv-pro-name{font-size:28px;font-weight:900;line-height:1.12;letter-spacing:-.45px;text-transform:uppercase;margin-bottom:14px}
+.cv-pro-title{font-size:14px;line-height:1.6;color:#eaf2ff;font-weight:600;white-space:pre-line;margin-top:4px}
+.cv-pro-contact{font-size:12.2px;line-height:1.75;color:#f5f7fb;white-space:pre-line;word-break:break-word}
+.cv-pro-side-section{border-top:1px solid rgba(255,255,255,.28);padding-top:14px;break-inside:avoid;page-break-inside:avoid}
+.cv-pro-side-title{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:800;margin-bottom:9px;color:#fff}
+.cv-pro-side-content{font-size:11.5px;line-height:1.65;white-space:pre-wrap;color:#eef5ff}
+.cv-pro-section{break-inside:auto;page-break-inside:auto}
+.cv-pro-section-title{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:#16365f;font-weight:800;border-bottom:2px solid #16365f;padding-bottom:5px;margin-bottom:10px}
+.cv-pro-section-content{font-size:12.7px;color:#2a2a2a;white-space:normal;line-height:1.68;text-align:justify}
+.cv-pro-section-content .cv-pro-line{display:block;margin:0 0 6px;text-align:justify}
+.cv-pro-section-content .cv-pro-bullet{display:block;margin:0 0 6px;padding-left:15px;position:relative;text-align:justify}
+.cv-pro-section-content .cv-pro-bullet:before{content:'•';position:absolute;left:0;color:#16365f;font-weight:700}
+.cv-pro-score{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:20px;padding:5px 12px;font-size:12px;color:#2d7a4f;font-weight:800;margin-bottom:2px;align-self:flex-start}
+.cv-pro-exp-head{display:block;color:#16365f;font-weight:800;font-size:13px;line-height:1.45;margin:9px 0 5px;text-align:left}
+.cv-pro-company{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+.cv-pro-school{display:block;color:#16365f;font-weight:700;margin:0 0 6px;text-align:left}
+.cv-pro-side-section.langues{order:30}
+.cv-pro-side-section.skills{order:20}
+
+@media(max-width:720px){.cv-pro{grid-template-columns:1fr}.cv-pro-side{padding:26px 20px}.cv-pro-main{padding:26px 20px}}
+@media print{.cv-pro{min-height:0;grid-template-columns:34% 66%;break-inside:auto}.cv-pro-section,.cv-pro-side-section{break-inside:avoid;page-break-inside:avoid}.artifact-card{display:none}}
+
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="loginScreen" class="screen active">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-mark">MYF</div>
+      <div>
+        <div class="login-title">Agent IA de MYF</div>
+        <div class="login-sub">Lettre de motivation + CV optimisé par IA</div>
+      </div>
+    </div>
+    <div class="theme-bar" aria-label="Choix du thème">
+      <span class="theme-label">Thème</span>
+      <button type="button" class="t-dot t-dark active" data-theme-choice="dark" onclick="setTheme('dark')" title="Thème sombre"></button>
+      <button type="button" class="t-dot t-light" data-theme-choice="light" onclick="setTheme('light')" title="Thème clair"></button>
+      <button type="button" class="t-dot t-ocean" data-theme-choice="ocean" onclick="setTheme('ocean')" title="Thème océan"></button>
+      <button type="button" class="t-dot t-forest" data-theme-choice="forest" onclick="setTheme('forest')" title="Thème forêt"></button>
+      <button type="button" class="t-dot t-sunset" data-theme-choice="sunset" onclick="setTheme('sunset')" title="Thème sunset"></button>
+    </div>
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLTab('user')">Utilisateur</button>
+      <button class="login-tab" onclick="switchLTab('admin')">Administrateur</button>
+    </div>
+
+    <!-- USER -->
+    <div class="ls active" id="ls-user">
+      <div class="fl"><div class="fl-label">Nom d'utilisateur</div>
+        <input class="fi" id="uname" type="text" placeholder="Votre identifiant" autocomplete="username">
+      </div>
+      <div class="fl"><div class="fl-label">Mot de passe</div>
+        <div class="pw-w"><input class="fi" id="upw" type="password" placeholder="Votre mot de passe" autocomplete="current-password">
+          <button class="pw-eye" onclick="tpw('upw',this)">Voir</button>
+        </div>
+      </div>
+      <div class="lerr" id="uerr"></div>
+      <button class="lbtn blue" id="uLoginBtn" onclick="loginUser()">
+        <div class="lspin" id="uSpin"></div><span>Se connecter</span>
+      </button>
+    </div>
+
+    <!-- ADMIN -->
+    <div class="ls" id="ls-admin">
+      <div class="info-ban">Connectez-vous.</div>
+      <div class="fl"><div class="fl-label">Admin</div>
+        <div class="pw-w"><input class="fi" id="akey" type="password" placeholder="Admin..." autocomplete="off">
+          <button class="pw-eye" onclick="tpw('akey',this)">Voir</button>
+        </div>
+      </div>
+      <div class="lerr" id="aerr"></div>
+      <button class="lbtn orange" id="aLoginBtn" onclick="loginAdmin()">
+        <div class="lspin" id="aSpin"></div><span>Connexion Administrateur</span>
+      </button>
+    </div>
+  </div>
+</div>
+<!-- ══ INTERFACE CHOICE SCREEN ══ -->
+<div id="ifaceScreen" class="screen">
+  <div class="iface-box">
+    <div>
+      <div class="iface-title">Choisissez votre interface</div>
+      <div class="iface-sub">Vous pourrez revenir à ce choix depuis chaque espace.</div>
+    </div>
+    <div class="iface-cards">
+      <button type="button" class="iface-card" onclick="selectInterface('candidate')">
+        <div class="iface-icon">💼</div>
+        <div class="iface-name">Demandeur d'emploi</div>
+        <div class="iface-desc">Générer une lettre de motivation et optimiser un CV pour une offre.</div>
+      </button>
+      <button type="button" class="iface-card recruiter" onclick="selectInterface('recruiter')">
+        <div class="iface-icon">🎯</div>
+        <div class="iface-name">Recruteur</div>
+        <div class="iface-desc">Comparer un CV avec une offre et obtenir un score de compatibilité.</div>
+      </button>
+      <button type="button" class="iface-card chat-choice" onclick="selectInterface('chat')">
+        <div class="iface-icon">💬</div>
+        <div class="iface-name">Chat IA</div>
+        <div class="iface-desc">Discuter avec l’IA, analyser des fichiers, chercher sur le web et générer des images ou documents.</div>
+      </button>
+    </div>
+    <div class="theme-bar" style="justify-content:center" aria-label="Choix du thème">
+      <span class="theme-label">Thème</span>
+      <button type="button" class="t-dot t-dark active" data-theme-choice="dark" onclick="setTheme('dark')" title="Thème sombre"></button>
+      <button type="button" class="t-dot t-light" data-theme-choice="light" onclick="setTheme('light')" title="Thème clair"></button>
+      <button type="button" class="t-dot t-ocean" data-theme-choice="ocean" onclick="setTheme('ocean')" title="Thème océan"></button>
+      <button type="button" class="t-dot t-forest" data-theme-choice="forest" onclick="setTheme('forest')" title="Thème forêt"></button>
+      <button type="button" class="t-dot t-sunset" data-theme-choice="sunset" onclick="setTheme('sunset')" title="Thème sunset"></button>
+    </div>
+  </div>
+</div>
+<!-- ══ ADMIN MODAL ══ -->
+<div class="moverlay" id="adminModal">
+  <div class="modal">
+    <div class="mhead">
+      <div class="mtitle">Panneau Administrateur</div>
+      <div class="mbadge">Agent IA de MYF</div>
+      <button class="mclose" onclick="closeModal()">✕ Fermer</button>
+    </div>
+    <div class="mbody">
+
+      <!-- Créer utilisateur -->
+      <div>
+        <div class="sec-title">Créer un nouvel accès utilisateur</div>
+        <div class="cform">
+          <div class="frow">
+            <div class="fg"><div class="flbl">Nom d'utilisateur *</div>
+              <input class="finp" id="nUser" type="text" placeholder="ex: jean.dupont">
+            </div>
+            <div class="fg"><div class="flbl">Mot de passe *</div>
+              <div style="display:flex;gap:6px">
+                <input class="finp" id="nPw" type="text" placeholder="Mot de passe" style="flex:1">
+                <button class="gbtn" onclick="genPw()">🔀 Générer</button>
+              </div>
+            </div>
+          </div>
+          <div class="frow">
+            <div class="fg"><div class="flbl">Nom complet (optionnel)</div>
+              <input class="finp" id="nFull" type="text" placeholder="ex: Jean Dupont">
+            </div>
+            <div class="fg"><div class="flbl">Date d'expiration (optionnel)</div>
+              <input class="finp" id="nExp" type="date">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="cbtn" id="createBtn" onclick="createUser()">
+              <div class="cspin"></div>+ Créer l'accès
+            </button>
+            <div class="ferr" id="cErr" style="flex:1;margin:0"></div>
+          </div>
+          <div class="fok" id="cOk"></div>
+        </div>
+      </div>
+
+      <!-- Liste utilisateurs -->
+      <div>
+        <div class="sec-title">
+          Utilisateurs enregistrés
+          <span class="sec-count" id="uCount">0</span>
+          <button class="gbtn" onclick="loadUsers()" style="margin-left:auto;font-size:11px">↻ Actualiser</button>
+        </div>
+        <div class="ulist" id="uList"><div class="loading-state">Chargement...</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP SCREEN ══ -->
+<div id="appScreen" class="screen">
+  <header>
+    <div class="h-mark">MYF</div>
+    <div><div class="h-name">Agent IA de MYF</div><div class="h-sub">Lettre de motivation + CV optimisé</div></div>
+    <div class="h-right">
+      <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
+      <div class="h-pill"><div class="h-dot" id="hDot"></div><span id="hUser">-</span></div>
+      <button class="h-btn adm" id="adminBtn" style="display:none" onclick="openModal()">⚙ Admin</button>
+      <button class="h-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <!-- ══ VUE CV & LETTRE ══ -->
+  <div class="nav-view active" id="view-cv">
+  <div class="app-wrap">
+
+    <div class="pipeline">
+      <div class="ps" id="st1"><div class="pdot">CV</div><div class="pl">CV fourni</div></div>
+      <div class="ps" id="st2"><div class="pdot">OF</div><div class="pl">Offre analysée</div></div>
+      <div class="ps" id="st3"><div class="pdot">LM</div><div class="pl">Lettre générée</div></div>
+      <div class="ps" id="st4"><div class="pdot">CV+</div><div class="pl">CV optimisé</div></div>
+    </div>
+
+    <!-- CV -->
+    <div class="card">
+      <div class="card-title">Votre CV <span class="cbadge">Source</span></div>
+      <div class="uz" id="cvZone">
+        <input type="file" id="cvFile" accept=".txt,.pdf" onchange="uploadCV(this)">
+        <div class="uz-icon">📂</div>
+        <div class="uz-text">Glissez votre CV ou <strong>cliquez</strong></div>
+        <div class="uz-hint">PDF (texte natif) ou TXT</div>
+      </div>
+      <div class="fload" id="cvLoad"><div class="mspin"></div>Extraction du PDF...</div>
+      <div class="fbadge" id="cvBadge"><span>✅</span><span id="cvName">-</span><button onclick="clearCV()">✕</button></div>
+      <div class="div"></div>
+      <div class="ol" style="font-size:11px;color:var(--muted)">Ou collez le texte de votre CV :</div>
+      <textarea id="cvText" rows="7" placeholder="Nom, coordonnées, formations, expériences, compétences, logiciels..."></textarea>
+      <div class="tip-note">💡 Pour les PDF, le texte est extrait automatiquement. Si vide, copiez-collez manuellement.</div>
+    </div>
+
+    <!-- OFFRE -->
+    <div class="card">
+      <div class="card-title">Offre d'emploi <span class="cbadge">Cible</span></div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('text')">Texte</button>
+        <button class="tab" onclick="switchTab('link')">URL</button>
+        <button class="tab" onclick="switchTab('file')">Fichier</button>
+      </div>
+      <div class="tab-c active" id="tab-text">
+        <textarea id="ofText" rows="10" placeholder="Collez ici le contenu de l'offre : intitulé, missions, profil recherché, compétences..."></textarea>
+      </div>
+      <div class="tab-c" id="tab-link">
+        <input type="url" id="ofUrl" placeholder="https://www.linkedin.com/jobs/view/..." oninput="updPipeline()">
+        <div class="info-note">LinkedIn et Indeed bloquent l'accès automatique. Copiez-collez le texte dans l'onglet Texte pour de meilleurs résultats.</div>
+      </div>
+      <div class="tab-c" id="tab-file">
+        <div class="uz" id="ofZone">
+          <input type="file" id="ofFile" accept=".txt,.pdf" onchange="uploadOf(this)">
+          <div class="uz-icon">📎</div>
+          <div class="uz-text">Glissez le fichier de l'offre ou <strong>cliquez</strong></div>
+          <div class="uz-hint">TXT ou PDF</div>
+        </div>
+        <div class="fload" id="ofLoad"><div class="mspin"></div>Extraction du PDF...</div>
+        <div class="fbadge" id="ofBadge"><span>✅</span><span id="ofName">-</span><button onclick="clearOf()">✕</button></div>
+      </div>
+    </div>
+
+    <!-- PARAMS -->
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title">Paramètres de génération</div>
+      <div class="orow">
+        <div class="og"><div class="ol">Langue</div>
+          <select id="lang">
+            <option value="français">🇫🇷 Français</option>
+            <option value="anglais">🇬🇧 Anglais</option>
+            <option value="espagnol">🇪🇸 Espagnol</option>
+            <option value="allemand">🇩🇪 Allemand</option>
+            <option value="italien">🇮🇹 Italien</option>
+            <option value="russe">🇷🇺 Russe</option>
+            <option value="arabe">🇸🇦 Arabe</option>
+            <option value="mandarin (chinois simplifié)">🇨🇳 Mandarin</option>
+            <option value="japonais">🇯🇵 Japonais</option>
+          </select></div>
+        <div class="og"><div class="ol">Longueur</div>
+          <select id="llen"><option value="concise (3 paragraphes)">Concise</option><option value="standard (4-5 paragraphes)" selected>Standard</option><option value="détaillée (5-6 paragraphes)">Détaillée</option></select></div>
+        <div class="og"><div class="ol">Type de contrat</div>
+          <select id="ptype"><option value="">Automatique</option><option value="stage">Stage</option><option value="alternance">Alternance</option><option value="CDI">CDI</option><option value="CDD">CDD</option><option value="thèse / doctorat">Thèse / Doctorat</option><option value="post-doctorat">Post-doctorat</option><option value="ingénieur de recherche">Ingénieur de recherche</option><option value="VIE">VIE</option></select></div>
+        <div class="og"><div class="ol">Modèle Mistral</div>
+          <select id="model" onchange="updateModelHelp('model','modelHelp')"><option value="mistral-large-latest">mistral-large</option><option value="mistral-medium-latest" selected>mistral-medium</option><option value="mistral-small-latest">mistral-small</option><option value="open-mistral-7b">open-mistral-7b</option></select><div class="model-help" id="modelHelp"></div></div>
+      </div>
+      <div><div class="ol" style="margin-bottom:7px">Ton de la lettre</div>
+        <div class="chips">
+          <div class="chip on" onclick="tChip(this)">Professionnel</div>
+          <div class="chip" onclick="tChip(this)">Dynamique</div>
+          <div class="chip" onclick="tChip(this)">Académique</div>
+          <div class="chip" onclick="tChip(this)">Enthousiaste</div>
+          <div class="chip" onclick="tChip(this)">Sobre et direct</div>
+          <div class="chip" onclick="tChip(this)">Recherche scientifique</div>
+          <div class="chip" onclick="tChip(this)">Startup / innovant</div>
+        </div>
+      </div>
+      <div><div class="ol" style="margin-bottom:5px">Instructions personnalisées (optionnel)</div>
+        <textarea id="extra" rows="2" placeholder="Ex : Mettre en avant mon projet PV, insister sur PVsyst et Python, mentionner ma mobilité géographique..."></textarea>
+      </div>
+    </div>
+
+    <button class="gen-btn" id="genBtn" onclick="generateAll()">
+      <div class="bspin"></div>
+      <span class="btn-text">Générez votre lettre de motivation et optimisez votre CV</span>
+    </button>
+
+    <div class="errmsg" id="errMsg"></div>
+
+    <div class="prg" id="prgSteps">
+      <div class="pi" id="pi1"><span class="piicon">1</span>Génération de la lettre de motivation...</div>
+      <div class="pi" id="pi2"><span class="piicon">2</span>Rédaction en cours...</div>
+      <div class="pi" id="pi3"><span class="piicon">3</span>Optimisation du CV pour +90% de correspondance...</div>
+    </div>
+
+    <div class="res" id="resSection">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div class="rtabs">
+          <button class="rtab lm active" onclick="switchRTab('lm')">📝 Lettre de motivation</button>
+          <button class="rtab cv" onclick="switchRTab('cv')">📄 CV optimisé <span style="font-size:10px;background:rgba(255,255,255,.15);border-radius:8px;padding:1px 5px">+90%</span></button>
+        </div>
+        <div id="scoreZone"></div>
+      </div>
+      <div class="rpanel active" id="panel-lm">
+        <div class="rhead">
+          <div class="card-title">📝 Lettre de motivation personnalisée</div>
+          <div class="racts">
+            <div class="letter-view-toggle">
+              <button class="lv-btn active" id="lvBtnVisual" onclick="switchLetterView('visual')">👁 Aperçu</button>
+              <button class="lv-btn" id="lvBtnRaw" onclick="switchLetterView('raw')">📄 Texte brut</button>
+            </div>
+            <button class="abtn" id="cpLm" onclick="cpLmText()">Copier</button>
+            <button class="abtn" onclick="dlTxt('lmOut','lettre_motivation.txt')">⬇ .txt</button>
+            <button class="abtn" onclick="dlLetterDoc()">📝 .doc</button>
+            <button class="abtn" onclick="dlLetterPdf()">⬇ PDF</button>
+          </div>
+        </div>
+        <!-- Aperçu visuel de la lettre -->
+<div class="letter-render show" id="letterRender">
+  <div class="letter-page">
+
+    <div class="letter-header">
+
+      <!-- Expéditeur à gauche -->
+      <div class="letter-sender" id="lmSender"></div>
+
+      <div class="letter-right">
+
+        <!-- Destinataire à droite -->
+        <div class="letter-recipient" id="lmRecipient"></div>
+
+        <!-- Date sous le destinataire -->
+        <div class="letter-date" id="lmDate"></div>
+
+      </div>
+
+    </div>
+
+    <div class="letter-subject" id="lmSubject"></div>
+
+    <div class="letter-body" id="lmBody"></div>
+
+    <div class="letter-closing" id="lmClosing"></div>
+
+    <div class="letter-signature" id="lmSignature"></div>
+
+  </div>
+</div>
+        <!-- Texte brut (caché par défaut) -->
+        <div class="outbox" id="lmOut" style="display:none"></div>
+      </div>
+
+      <div class="rpanel" id="panel-cv">
+        <div class="rhead">
+          <div class="card-title">📄 CV optimisé et reformulé</div>
+          <div class="racts">
+            <div class="cv-view-toggle">
+              <button class="lv-btn active" id="cvBtnVisual" onclick="switchCVView('visual')">👁 Aperçu</button>
+              <button class="lv-btn" id="cvBtnRaw" onclick="switchCVView('raw')">📄 Texte brut</button>
+            </div>
+            <button class="abtn bl" id="cpCv" onclick="cpText('cvOut','cpCv')">Copier</button>
+            <button class="abtn bl" onclick="dlTxt('cvOut','cv_optimise.txt')">⬇ .txt</button>
+            <button class="abtn bl" onclick="dlDoc('cvOut','cv_optimise.doc')">📝 .doc</button>
+            <button class="abtn bl" onclick="dlCVPdf()">⬇ PDF</button>
+          </div>
+        </div>
+        <!-- Aperçu visuel CV -->
+        <div class="cv-render show" id="cvRender">
+          <div class="cv-page" id="cvPage"></div>
+        </div>
+        <!-- Texte brut CV -->
+        <div class="outbox cv" id="cvOut" style="display:none"></div>
+      </div>
+    </div>
+
+  </div>
+  </div><!-- /view-cv -->
+
+</div>
+<!-- ══ CHAT IA SCREEN ══ -->
+<div id="chatScreen" class="screen">
+  <header>
+    <div class="h-mark">MYF</div>
+    <div><div class="h-name">Chat IA MYF</div><div class="h-sub">Assistant IA, fichiers, web, images et documents</div></div>
+    <div class="h-right">
+      <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
+      <div class="h-pill"><div class="h-dot dot-user" id="chatHDot"></div><span id="chatHUser">-</span></div>
+      <button class="h-btn adm" id="chatAdminBtn" style="display:none" onclick="openModal()">⚙ Admin</button>
+      <button class="h-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+  <!-- ══ CHAT IA AUTONOME ══ -->
+    <div class="chat-wrap">
+
+      <div class="chat-model-bar">
+        <div class="ol">Modèle :</div>
+        <div class="chat-model-select-wrap">
+          <select id="chatModel" onchange="updateModelHelp('chatModel','chatModelHelp')">
+            <option value="mistral-large-latest">mistral-large</option>
+            <option value="mistral-medium-latest" selected>mistral-medium</option>
+            <option value="mistral-small-latest">mistral-small</option>
+            <option value="open-mistral-7b">open-mistral-7b</option>
+          </select>
+          <div class="model-help" id="chatModelHelp"></div>
+        </div>
+        <button class="chat-web-toggle" id="webToggle" onclick="toggleWeb()" title="Activer la recherche web">🌐 Web</button>
+        <button class="chat-clear" onclick="clearChat()">🗑 Effacer</button>
+      </div>
+
+      <div class="chat-pdf-bar">
+        <label class="chat-pdf-btn" for="chatPdfFile">📎 Joindre un fichier
+          <input type="file" id="chatPdfFile" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.rtf,.html,.htm,.css,.js,.json,.yml,.yaml,.xml,.svg,.jpg,.jpeg,.png,.webp,.gif,.bmp" style="display:none" onchange="loadChatFile(this)">
+        </label>
+        <button type="button" class="chat-pdf-btn chat-image-btn" id="chatImageBtn" onclick="promptImageGeneration()" title="Générer une image IA">🎨 Générer une image</button>
+        <div class="chat-pdf-badge" id="chatPdfBadge">
+          <span>📄</span><span id="chatPdfName">-</span>
+          <button onclick="clearChatFile()" title="Retirer le fichier">✕</button>
+        </div>
+        <div class="fload" id="chatPdfLoad" style="display:none"><div class="mspin"></div><span id="chatPdfLoadText">Lecture du fichier…</span></div>
+        <div class="chat-file-note">Formats acceptés : PDF, Word, PowerPoint, Excel, images, HTML, CSS, JS, JSON, YAML, TXT, CSV…</div>
+        <div class="chat-image-status" id="chatImageStatus"></div>
+      </div>
+
+      <div class="chat-msgs" id="chatMsgs">
+        <div class="chat-welcome" id="chatWelcome">
+          <div class="chat-welcome-icon">🤖</div>
+          <h3>Assistant IA MYF</h3>
+          <p>Posez-moi n'importe quelle question : énergie solaire, rédaction, code, carrière, science, langues… Je suis là pour vous aider !</p>
+          <div class="chat-suggestions">
+            <button class="chat-sug" onclick="chatSuggest(this)">🌞 Expliquer le rendement d'une cellule PV</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">📝 Comment rédiger un email professionnel ?</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">🐍 Exemple de script Python avec NumPy</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">💡 Quelles sont les aides pour le solaire en France ?</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">🎓 Conseils pour une soutenance de master</button>
+            <button class="chat-sug" onclick="chatSuggest(this)">⚡ Différence entre onduleur string et micro-onduleur</button><button class="chat-sug" onclick="chatSuggest(this)">🎨 Génère une image d’une centrale photovoltaïque futuriste</button><button class="chat-sug" onclick="chatSuggest(this)">📐 Fais le schéma unifilaire d’une installation PV 100 kWc en autoconsommation</button>
+          </div>
+        </div>
+        <div class="chat-typing" id="chatTyping">
+          <div class="web-indicator" id="webIndicator"><div class="wspin"></div><span>Lecture du lien…</span></div>
+          <div style="font-size:11px;color:var(--muted);padding-left:4px">🤖 En train d'écrire…</div>
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="chat-input-bar">
+        <textarea id="chatInput" rows="1" placeholder="Posez votre question…" oninput="autoGrow(this)" onkeydown="chatKey(event)"></textarea>
+        <button class="chat-send" id="chatSendBtn" onclick="sendChat()" title="Envoyer">➤</button>
+      </div>
+
+    </div>
+
+</div>
+<!-- ══ RECRUITER SCREEN ══ -->
+<div id="recScreen" class="screen">
+  <header>
+    <div class="h-mark">MYF</div>
+    <div><div class="h-name">Interface recruteur</div><div class="h-sub">Analyse CV / Offre et score de compatibilité</div></div>
+    <div class="h-right">
+      <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
+      <div class="h-pill"><div class="h-dot dot-user" id="recHDot"></div><span id="recHUser">-</span></div>
+      <button class="h-btn adm" id="recAdminBtn" style="display:none" onclick="openModal()">⚙ Admin</button>
+      <button class="h-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+  <div class="rec-wrap">
+        <div class="rec-grid">
+      <div class="rec-card">
+        <div class="rec-card-title">CV du candidat <span class="cbadge">PDF ou texte</span></div>
+        <div class="uz" id="recCvZone">
+          <input type="file" id="recCvFile" accept=".pdf,application/pdf" onchange="uploadRecCV(this)">
+          <div class="uz-icon">📂</div>
+          <div class="uz-text">Téléversez le CV PDF ou <strong>cliquez</strong></div>
+          <div class="uz-hint">PDF texte natif recommandé</div>
+        </div>
+        <div class="fload" id="recCvLoad"><div class="mspin"></div>Lecture du CV PDF...</div>
+        <div class="fbadge" id="recCvBadge"><span>✅</span><span id="recCvName">-</span><button onclick="clearRecCV()">✕</button></div>
+        <div class="div"></div>
+        <div class="ol" style="font-size:11px;color:var(--muted)">Ou collez / complétez le CV :</div>
+        <textarea id="recCvText" rows="7" placeholder="Collez ici le CV du candidat : expériences, compétences, formations, coordonnées..."></textarea>
+      </div>
+      <div class="rec-card">
+        <div class="rec-card-title">Offre / fiche de poste <span class="cbadge">PDF, lien ou texte</span></div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchRecOfferTab('text')" id="rec-tab-text">Texte</button>
+          <button class="tab" onclick="switchRecOfferTab('link')" id="rec-tab-link">Lien</button>
+          <button class="tab" onclick="switchRecOfferTab('file')" id="rec-tab-file">PDF</button>
+        </div>
+        <div class="tab-c active" id="rec-offer-text">
+          <textarea id="recOfferText" rows="9" placeholder="Collez ici l'offre : missions, compétences obligatoires, niveau d'expérience, localisation..."></textarea>
+        </div>
+        <div class="tab-c" id="rec-offer-link">
+          <input type="url" id="recOfferUrl" placeholder="https://www.linkedin.com/jobs/view/...">
+          <div class="info-note">L'agent tentera de lire le contenu du lien. Si le site bloque l'accès, collez le texte dans l'onglet Texte.</div>
+        </div>
+        <div class="tab-c" id="rec-offer-file">
+          <div class="uz" id="recOfZone">
+            <input type="file" id="recOfFile" accept=".pdf,application/pdf" onchange="uploadRecOffer(this)">
+            <div class="uz-icon">📎</div>
+            <div class="uz-text">Téléversez l'offre PDF ou <strong>cliquez</strong></div>
+            <div class="uz-hint">PDF texte natif recommandé</div>
+          </div>
+          <div class="fload" id="recOfLoad"><div class="mspin"></div>Lecture de l'offre PDF...</div>
+          <div class="fbadge" id="recOfBadge"><span>✅</span><span id="recOfName">-</span><button onclick="clearRecOffer()">✕</button></div>
+        </div>
+      </div>
+    </div><div class="threshold-ctrl">
+      <label for="recThreshold">Seuil de contact</label>
+      <input id="recThreshold" type="range" min="40" max="95" value="70" oninput="document.getElementById('recThresholdVal').textContent=this.value+'%'; updateRecContactPanel();">
+      <span class="threshold-val" id="recThresholdVal">70%</span>
+      <select id="recModel" style="max-width:210px">
+        <option value="mistral-large-latest">mistral-large</option>
+        <option value="mistral-medium-latest" selected>mistral-medium</option>
+        <option value="mistral-small-latest">mistral-small</option>
+      </select>
+    </div>
+
+    <button class="rec-generate-btn" id="recAnalyzeBtn" onclick="analyzeRecruiterMatch()">
+      <div class="bspin"></div><span>Analyser la compatibilité</span>
+    </button>
+
+    <div class="rec-score-zone" id="recScoreZone">
+      <div class="match-gauge-wrap">
+        <div class="match-gauge-header">
+          <div>
+            <div class="rec-card-title">Score de compatibilité</div>
+            <div class="match-verdict" id="recVerdict">-</div>
+          </div>
+          <div class="match-pct" id="recPct">0%</div>
+        </div>
+        <div class="match-bar-bg">
+          <div class="match-bar-fill" id="recBar" style="width:0%"></div>
+          <div class="threshold-line" id="recThresholdLine" style="left:70%"></div>
+        </div>
+      </div>
+
+      <div class="rec-grid">
+        <div class="rec-card"><div class="rec-card-title">Points forts</div><div class="rec-list" id="recStrengths"></div></div>
+        <div class="rec-card"><div class="rec-card-title">Écarts / risques</div><div class="rec-list" id="recGaps"></div></div>
+      </div>
+
+      <div class="contact-panel" id="recContactPanel">
+        <div class="contact-header">Candidat au-dessus du seuil : prise de contact recommandée</div>
+        <div class="contact-info" id="recContactInfo"></div>
+        <div class="date-pick">
+          <label for="recMeetingDate">Créneau proposé</label>
+          <input id="recMeetingDate" type="datetime-local">
+        </div>
+      </div>
+
+      <div class="rec-analysis-full" id="recAnalysisFull"></div>
+    </div>
+  </div>
+</div>
+<script src="app_v16.js"></script>
+</body>
+</html>
