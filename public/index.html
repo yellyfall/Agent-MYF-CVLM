@@ -8069,6 +8069,491 @@ async function dlCVPdf() {
 }
 
 
+
+/* ==========================================================================
+   CORRECTIF MYF V34 — CV PDF A4 : ORDRE ET FORMAT EXACT DES SECTIONS
+   ========================================================================== */
+/*
+  Structure imposée :
+  NOM PRÉNOM
+  Titre professionnel
+  Coordonnées
+
+  EXPÉRIENCES PROFESSIONNELLES
+  Entreprise - Ville, Pays
+  Poste | Période
+  Missions sans puces lourdes
+
+  FORMATION
+  Diplôme
+  Université / école - Ville, Pays | Période
+
+  COMPÉTENCES LOGICIELLES
+  Logiciel 1 | Logiciel 2 | Logiciel 3
+
+  COMPÉTENCES TECHNIQUES
+  Compétence 1
+  Compétence 2
+  Compétence 3
+
+  LANGUES
+  Français | Anglais
+*/
+
+function v34Norm(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function v34Clean(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function v34SplitPieces(value) {
+  var raw = v34Clean(value)
+    .replace(/(UTEC\s*15-712)(Analyse)/gi, "$1\n$2")
+    .replace(/(chantier)(Analyse)/gi, "$1\n$2")
+    .replace(/(prenantes)(Veille)/gi, "$1\n$2")
+    .replace(/(charge)(Montage)/gi, "$1\n$2")
+    .replace(/(autoconsommation)(Relation)/gi, "$1\n$2")
+    .replace(/(courant)(Anglais)/gi, "$1 | Anglais");
+
+  return raw
+    .split(/\n|•|;/)
+    .map(function(x) {
+      return v34Clean(x.replace(/^[-–—•]\s*/, ""));
+    })
+    .filter(Boolean);
+}
+
+function v34PushUnique(arr, value) {
+  var v = v34Clean(value);
+  if (!v) return;
+
+  var n = v34Norm(v);
+  if (!n) return;
+
+  for (var i = 0; i < arr.length; i++) {
+    if (v34Norm(arr[i]) === n) return;
+  }
+
+  arr.push(v);
+}
+
+function v34IsAcademic(entry) {
+  var txt = [
+    entry && entry.school,
+    entry && entry.degree,
+    entry && entry.role,
+    entry && entry.company,
+    entry && entry.date,
+    entry && entry.extra ? entry.extra.join(" ") : "",
+    entry && entry.tasks ? entry.tasks.join(" ") : ""
+  ].join(" ");
+
+  var t = v34Norm(txt);
+
+  return /(universite|université|lycee|lycée|college|collège|ecole|école|institut|faculte|faculté|ugb|upvd|perpignan via domitia|gaston berger|master|licence|bachelor|dut|bts|doctorat|diplome|diplôme|physique appliquee|physique appliquée|energie solaire|énergie solaire|energies renouvelables|énergies renouvelables)/.test(t);
+}
+
+function v34IsSoftware(value) {
+  var t = v34Norm(value);
+  return /(solaredge|sketchup|autocad|revit|archelios|qgis|pvsyst|pvgis|office|excel|word|powerpoint|latex|pleiades|pléiades|comsol|ees|matlab|python|javascript|node|render|github|sqlite|laragon)/.test(t);
+}
+
+function v34IsLanguage(value) {
+  var t = v34Norm(value);
+  return /(francais|français|anglais|english|espagnol|arabe|wolof|c2|b2|b1|a2|courant|intermediaire|intermédiaire)/.test(t);
+}
+
+function v34SectionKind(title) {
+  var t = v34Norm(title);
+
+  if (/experience|expérience|professionnelle/.test(t)) return "experience";
+  if (/formation|education|etude|étude|diplome|diplôme/.test(t)) return "education";
+  if (/logiciel|software|outils/.test(t)) return "software";
+  if (/langue|language/.test(t)) return "language";
+  if (/skill|competence|compétence|technique|hard|soft|savoir|expertise|aptitude|atout|certification|habilitation|norme|methode|méthode/.test(t)) return "skill";
+
+  return "other";
+}
+
+function v34Organize(raw) {
+  var data = {
+    name: raw.name || "MOUSSA YELLY FALL",
+    profile: raw.profile || "",
+    contacts: raw.contacts || [],
+    experiences: [],
+    formations: [],
+    software: [],
+    technical: [],
+    languages: []
+  };
+
+  (raw.sections || []).forEach(function(sec) {
+    var kind = v34SectionKind(sec.title);
+
+    if (kind === "experience") {
+      (sec.entries || []).forEach(function(e) {
+        data.experiences.push(e);
+      });
+      return;
+    }
+
+    if (kind === "education") {
+      (sec.entries || []).forEach(function(e) {
+        if (v34IsAcademic(e)) {
+          data.formations.push(e);
+        } else {
+          var entryText = [
+            e.role,
+            e.company,
+            e.school,
+            e.degree,
+            (e.extra || []).join(" "),
+            (e.tasks || []).join(" ")
+          ].filter(Boolean).join(" ");
+
+          v34SplitPieces(entryText).forEach(function(x) {
+            if (v34IsSoftware(x)) v34PushUnique(data.software, x);
+            else if (v34IsLanguage(x)) v34PushUnique(data.languages, x);
+            else v34PushUnique(data.technical, x);
+          });
+        }
+      });
+
+      (sec.lines || []).forEach(function(line) {
+        v34SplitPieces(line).forEach(function(x) {
+          if (v34IsSoftware(x)) v34PushUnique(data.software, x);
+          else if (v34IsLanguage(x)) v34PushUnique(data.languages, x);
+          else v34PushUnique(data.technical, x);
+        });
+      });
+
+      (sec.tags || []).forEach(function(x) {
+        if (v34IsSoftware(x)) v34PushUnique(data.software, x);
+        else if (v34IsLanguage(x)) v34PushUnique(data.languages, x);
+        else v34PushUnique(data.technical, x);
+      });
+
+      return;
+    }
+
+    if (kind === "software") {
+      (sec.tags || []).forEach(function(x) { v34PushUnique(data.software, x); });
+      (sec.lines || []).forEach(function(line) {
+        v34SplitPieces(line).forEach(function(x) { v34PushUnique(data.software, x); });
+      });
+      return;
+    }
+
+    if (kind === "language") {
+      (sec.tags || []).forEach(function(x) { v34PushUnique(data.languages, x); });
+      (sec.lines || []).forEach(function(line) {
+        v34SplitPieces(line).forEach(function(x) { v34PushUnique(data.languages, x); });
+      });
+      return;
+    }
+
+    // Skills et autres sections : tri propre
+    (sec.tags || []).forEach(function(x) {
+      if (v34IsSoftware(x)) v34PushUnique(data.software, x);
+      else if (v34IsLanguage(x)) v34PushUnique(data.languages, x);
+      else v34PushUnique(data.technical, x);
+    });
+
+    (sec.lines || []).forEach(function(line) {
+      v34SplitPieces(line).forEach(function(x) {
+        if (v34IsSoftware(x)) v34PushUnique(data.software, x);
+        else if (v34IsLanguage(x)) v34PushUnique(data.languages, x);
+        else v34PushUnique(data.technical, x);
+      });
+    });
+
+    (sec.entries || []).forEach(function(e) {
+      var entryText = [
+        e.role,
+        e.company,
+        e.school,
+        e.degree,
+        (e.extra || []).join(" "),
+        (e.tasks || []).join(" ")
+      ].filter(Boolean).join(" ");
+
+      v34SplitPieces(entryText).forEach(function(x) {
+        if (v34IsSoftware(x)) v34PushUnique(data.software, x);
+        else if (v34IsLanguage(x)) v34PushUnique(data.languages, x);
+        else v34PushUnique(data.technical, x);
+      });
+    });
+  });
+
+  return data;
+}
+
+function v34ParseExperience(entry) {
+  var role = v34Clean(entry.role || "");
+  var company = v34Clean(entry.company || "");
+  var date = v34Clean(entry.date || "");
+
+  // Cas fréquent : "Poste | Entreprise - Ville"
+  if (!company && role.indexOf("|") !== -1) {
+    var parts = role.split("|").map(v34Clean).filter(Boolean);
+    role = parts[0] || role;
+    company = parts.slice(1).join(" | ");
+  }
+
+  if (!company && entry.school) company = v34Clean(entry.school);
+
+  return {
+    company: company || "Entreprise - Ville, Pays",
+    role: role || "Poste",
+    date: date,
+    tasks: (entry.tasks && entry.tasks.length ? entry.tasks : entry.extra || [])
+      .map(function(x) { return v34Clean(String(x || "").replace(/^[-–—•]\s*/, "")); })
+      .filter(Boolean)
+  };
+}
+
+function v34ParseFormation(entry) {
+  var degree = v34Clean(entry.degree || entry.role || "");
+  var school = v34Clean(entry.school || entry.company || "");
+  var date = v34Clean(entry.date || "");
+
+  // Corrige inversion éventuelle
+  if (/universit|lycee|lycée|college|collège|ecole|école|institut|gaston|perpignan|ugb|upvd/i.test(degree) &&
+      /master|licence|bachelor|dut|bts|doctorat|diplome|diplôme/i.test(school)) {
+    var tmp = degree;
+    degree = school;
+    school = tmp;
+  }
+
+  return {
+    degree: degree || "Diplôme",
+    school: school || "Université / école - Ville, Pays",
+    date: date
+  };
+}
+
+async function dlCVPdf() {
+  var raw = typeof cvPdfCollectData === "function" ? cvPdfCollectData() : null;
+
+  if (!raw || !raw.sections || !raw.sections.length) {
+    alert("Générez d'abord le CV optimisé avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var data = v34Organize(raw);
+
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+    var marginL = 15;
+    var marginR = 15;
+    var marginT = 14;
+    var marginB = 16;
+    var contentW = pageW - marginL - marginR;
+    var y = marginT;
+
+    var black = [20, 24, 35];
+    var blue = [26, 58, 110];
+    var muted = [70, 78, 92];
+
+    function setColor(c) {
+      doc.setTextColor(c[0], c[1], c[2]);
+    }
+
+    function bottom() {
+      return pageH - marginB;
+    }
+
+    function newPage() {
+      doc.addPage();
+      y = marginT + 3;
+    }
+
+    function ensure(h) {
+      if (y + h > bottom()) newPage();
+    }
+
+    function font(size, style, color) {
+      doc.setFont("helvetica", style || "normal");
+      doc.setFontSize(size);
+      setColor(color || black);
+    }
+
+    function write(txt, x, w, size, style, lineH, after, color) {
+      txt = v34Clean(txt);
+      if (!txt) return;
+
+      font(size, style || "normal", color || black);
+      var lines = doc.splitTextToSize(txt, w);
+
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, x, y);
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function center(txt, size, style, lineH, after, color) {
+      txt = v34Clean(txt);
+      if (!txt) return;
+
+      font(size, style || "normal", color || black);
+      var lines = doc.splitTextToSize(txt, contentW);
+
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, pageW / 2, y, { align: "center" });
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function sectionTitle(title) {
+      ensure(13);
+
+      font(10.5, "bold", blue);
+      doc.text(String(title || "").toUpperCase(), marginL, y);
+      y += 4.2;
+
+      doc.setDrawColor(150, 160, 175);
+      doc.setLineWidth(0.25);
+      doc.line(marginL, y, pageW - marginR, y);
+      y += 4.8;
+    }
+
+    function drawHeader() {
+      center(data.name || "MOUSSA YELLY FALL", 16.5, "bold", 6.0, 1.0, black);
+
+      if (data.profile) {
+        center(data.profile, 10.2, "normal", 4.4, 1.2, blue);
+      }
+
+      if (data.contacts && data.contacts.length) {
+        center(data.contacts.join(" | "), 8.7, "normal", 4.0, 5.2, muted);
+      } else {
+        y += 3;
+      }
+    }
+
+    function drawExperiences() {
+      if (!data.experiences.length) return;
+
+      sectionTitle("EXPÉRIENCES PROFESSIONNELLES");
+
+      data.experiences.forEach(function(entry, idx) {
+        var exp = v34ParseExperience(entry);
+
+        // Évite de commencer une expérience trop bas.
+        ensure(24);
+
+        // Entreprise - Ville, Pays
+        write(exp.company, marginL, contentW, 9.7, "bold", 4.3, 0.6, black);
+
+        // Poste | Période
+        var roleDate = exp.role + (exp.date ? " | " + exp.date : "");
+        write(roleDate, marginL, contentW, 9.0, "normal", 4.0, 1.6, muted);
+
+        // Missions sans puces lourdes : paragraphes simples, pas de gros bullet points.
+        exp.tasks.forEach(function(task) {
+          write(task, marginL, contentW, 8.55, "normal", 3.75, 1.0, black);
+        });
+
+        if (idx < data.experiences.length - 1) {
+          y += 2.8;
+        }
+      });
+
+      y += 2;
+    }
+
+    function drawFormations() {
+      if (!data.formations.length) return;
+
+      sectionTitle("FORMATION");
+
+      data.formations.forEach(function(entry, idx) {
+        var f = v34ParseFormation(entry);
+
+        ensure(14);
+
+        // Diplôme
+        write(f.degree, marginL, contentW, 9.4, "bold", 4.2, 0.5, black);
+
+        // Université / école - Ville, Pays | Période
+        var schoolLine = f.school + (f.date ? " | " + f.date : "");
+        write(schoolLine, marginL, contentW, 8.8, "normal", 3.9, 2.3, muted);
+
+        if (idx < data.formations.length - 1) y += 0.5;
+      });
+
+      y += 1;
+    }
+
+    function drawSoftware() {
+      if (!data.software.length) return;
+
+      sectionTitle("COMPÉTENCES LOGICIELLES");
+
+      write(data.software.join(" | "), marginL, contentW, 8.8, "normal", 4.0, 3.0, black);
+    }
+
+    function drawTechnical() {
+      if (!data.technical.length) return;
+
+      sectionTitle("COMPÉTENCES TECHNIQUES");
+
+      data.technical.forEach(function(skill) {
+        write(skill, marginL, contentW, 8.8, "normal", 3.9, 0.7, black);
+      });
+
+      y += 1.5;
+    }
+
+    function drawLanguages() {
+      if (!data.languages.length) return;
+
+      sectionTitle("LANGUES");
+
+      write(data.languages.join(" | "), marginL, contentW, 8.9, "normal", 4.0, 0, black);
+    }
+
+    drawHeader();
+    drawExperiences();
+    drawFormations();
+    drawSoftware();
+    drawTechnical();
+    drawLanguages();
+
+    doc.save("cv_optimise.pdf");
+  } catch(e) {
+    console.error("Export CV V34 impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
 </script>
 </body>
 </html>
