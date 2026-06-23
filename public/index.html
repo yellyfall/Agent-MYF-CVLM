@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agent IA de MYF</title>
-<meta name="myf-build" content="v21-cv-skills-sections-standalone">
+<meta name="myf-build" content="v22-live-web-standalone">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1133,7 +1133,7 @@ select:focus{border-color:var(--accent)}
 <div id="chatScreen" class="screen">
   <header>
     <div class="h-mark">MYF</div>
-    <div><div class="h-name">Chat IA MYF</div><div class="h-sub">Assistant IA, fichiers, web, images et documents</div></div>
+    <div><div class="h-name">Chat IA MYF</div><div class="h-sub">Assistant IA, fichiers, web temps réel, images et documents</div></div>
     <div class="h-right">
       <button class="h-btn adm" onclick="backToIface()">Interfaces</button>
       <div class="h-pill"><div class="h-dot dot-user" id="chatHDot"></div><span id="chatHUser">-</span></div>
@@ -1177,7 +1177,7 @@ select:focus{border-color:var(--accent)}
         <div class="chat-welcome" id="chatWelcome">
           <div class="chat-welcome-icon">🤖</div>
           <h3>Assistant IA MYF</h3>
-          <p>Posez-moi n'importe quelle question : énergie solaire, rédaction, code, carrière, science, langues… Je suis là pour vous aider !</p>
+          <p>Posez-moi n'importe quelle question : énergie solaire, actualités à jour, web temps réel, rédaction, code, carrière, science… Je suis là pour vous aider !</p>
           <div class="chat-suggestions">
             <button class="chat-sug" onclick="chatSuggest(this)">🌞 Expliquer le rendement d'une cellule PV</button>
             <button class="chat-sug" onclick="chatSuggest(this)">📝 Comment rédiger un email professionnel ?</button>
@@ -4220,6 +4220,387 @@ cvSectionType = function(line) {
   }
   return __myf_cvSectionType_base(line);
 };
+
+
+/* ==========================================================================
+   CORRECTIF MYF V22 — WEB TEMPS RÉEL + DATE/HEURE UTILISATEUR
+   ========================================================================== */
+
+function getClientTimeInfo() {
+  var now = new Date();
+  var tz = "";
+  try {
+    tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch(e) {}
+
+  return {
+    timezone: tz,
+    locale: navigator.language || "fr-FR",
+    local_time: now.toLocaleString(navigator.language || "fr-FR", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZoneName: "short"
+    }),
+    iso: now.toISOString(),
+    timestamp_ms: now.getTime()
+  };
+}
+
+function buildLocalTimeContext() {
+  var c = getClientTimeInfo();
+  return [
+    "Date/heure actuelle à utiliser pour répondre :",
+    "- Date/heure locale utilisateur : " + c.local_time,
+    "- Fuseau horaire utilisateur : " + (c.timezone || "non détecté"),
+    "- Date/heure ISO navigateur : " + c.iso,
+    "- Locale navigateur : " + c.locale
+  ].join("\n");
+}
+
+function extractUrls(msg) {
+  var m = String(msg || "").match(/https?:\/\/[^\s<>"')]+/g);
+  return m ? m.map(function(u){ return u.replace(/[.,;:!?]+$/, ""); }) : [];
+}
+
+// Lecture URL côté serveur : contourne mieux le CORS que le navigateur.
+async function fetchUrlContent(url) {
+  try {
+    var res = await fetch(BASE + "/api/read-url", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": API_KEY
+      },
+      body: JSON.stringify({
+        url: url,
+        max_chars: 9000
+      })
+    });
+
+    var data = await res.json().catch(function(){ return null; });
+    if (!res.ok || !data || !data.success) {
+      throw new Error((data && data.message) || "Lecture impossible");
+    }
+
+    var d = data.data || {};
+    return [
+      "Titre : " + (d.title || "Sans titre"),
+      "URL : " + (d.url || url),
+      "Date de vérification : " + (d.fetched_at || new Date().toISOString()),
+      "",
+      d.text || ""
+    ].join("\n");
+  } catch(e) {
+    return null;
+  }
+}
+
+// Recherche internet temps réel côté serveur.
+// Le serveur cherche des sources, lit les premières pages et renvoie un contexte exploitable par Mistral.
+async function doWebSearch(query) {
+  try {
+    var res = await fetch(BASE + "/api/live-search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": API_KEY
+      },
+      body: JSON.stringify({
+        query: query,
+        max_results: 6,
+        read_top: 4,
+        deep: true,
+        client: getClientTimeInfo()
+      })
+    });
+
+    var data = await res.json().catch(function(){ return null; });
+    if (!res.ok || !data || !data.success) {
+      throw new Error((data && data.message) || "Recherche web impossible");
+    }
+
+    var d = data.data || {};
+    return d.context_text || "";
+  } catch(e) {
+    return null;
+  }
+}
+
+// Détection plus large des questions qui nécessitent des infos actuelles.
+function needsWeb(msg) {
+  var low = String(msg || "").toLowerCase();
+
+  var triggers = [
+    "actualité", "actualités", "actu", "news", "aujourd'hui", "aujourd hui",
+    "maintenant", "en ce moment", "temps réel", "temps reel", "récent", "recent",
+    "dernier", "dernière", "derniere", "nouveau", "nouvelle", "sortie",
+    "mis à jour", "mise à jour", "a jour", "à jour", "vérifie", "verifie",
+    "recherche sur internet", "cherche sur internet", "trouve sur internet",
+    "source", "sources", "site officiel", "prix", "tarif", "coût", "cout",
+    "bourse", "cours", "météo", "meteo", "résultat", "resultat",
+    "classement", "calendrier", "programme", "date limite", "horaire",
+    "heure actuelle", "quelle heure", "quelle date", "on est quel jour",
+    "2026", "2027"
+  ];
+
+  if (triggers.some(function(t){ return low.indexOf(t) !== -1; })) return true;
+
+  // Rôles/faits susceptibles de changer.
+  if (/\b(président|president|ministre|maire|directeur|ceo|pdg|fondateur|entraîneur|entraineur|champion|vainqueur|gagnant|classement)\b/i.test(low)) {
+    return true;
+  }
+
+  // Questions qui demandent explicitement une vérification.
+  if (/\b(est-ce vrai|est ce vrai|confirme|confirmer|vérification|verification|à vérifier|a verifier)\b/i.test(low)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isNewsLikeQuery(msg) {
+  return /(actualité|actualités|actu|news|aujourd'hui|aujourd hui|maintenant|en ce moment|récent|recent|derni[eè]re|breaking|nouvelle|nouvelles|mise à jour|mis à jour)/i.test(String(msg || ""));
+}
+
+// Remplace sendChat pour inclure systématiquement date/heure locale et web vérifié quand nécessaire.
+async function sendChat() {
+  var input = document.getElementById("chatInput");
+  var msg = input.value.trim();
+
+  if (!msg) return;
+
+  if (!API_KEY) {
+    alert("Vous devez être connecté pour utiliser le chat.");
+    return;
+  }
+
+  var model = document.getElementById("chatModel").value;
+
+  input.value = "";
+  input.style.height = "auto";
+  document.getElementById("chatSendBtn").disabled = true;
+
+  var displayMsg = msg;
+  if (chatPdfName) displayMsg += "\n📎 " + chatPdfName;
+
+  addBubble("user", displayMsg);
+
+  var typing = document.getElementById("chatTyping");
+  typing.classList.add("show");
+
+  document.getElementById("chatMsgs").scrollTop =
+    document.getElementById("chatMsgs").scrollHeight;
+
+  // Génération image uniquement pour les vraies demandes d'image, jamais pour croquis/schéma.
+  if (!isSketchLikeRequest(msg) && isImageGenerationRequest(msg)) {
+    try {
+      var imagePrompt = imagePromptFromMessage(msg);
+
+      setWebStatus("Génération de l’image IA avec Mistral…");
+
+      var imageData = await generateImageFromBackend(imagePrompt);
+
+      hideWebStatus();
+      typing.classList.remove("show");
+
+      addGeneratedImageBubble(imageData, imagePrompt, "generate");
+
+      chatHistory.push({ role: "user", content: msg });
+      chatHistory.push({
+        role: "assistant",
+        content: "Image IA générée : " + (imageData.image_url || imageData.download_url || "")
+      });
+
+      if (chatPdfText) clearChatFile();
+    } catch (imgErr) {
+      hideWebStatus();
+      typing.classList.remove("show");
+      addBubble("ai", imageRateLimitFriendlyMessage(imgErr.message));
+    } finally {
+      document.getElementById("chatSendBtn").disabled = false;
+      input.focus();
+    }
+
+    return;
+  }
+
+  var timeContext = "\n\n[DATE ET HEURE ACTUELLES]\n" + buildLocalTimeContext() + "\n[FIN DATE ET HEURE]";
+  var urlContext = "";
+  var urlNote = "";
+  var urls = extractUrls(msg);
+
+  try {
+    if (urls.length) {
+      setWebStatus("Lecture et vérification du lien…");
+
+      var urlTexts = [];
+
+      for (var u = 0; u < Math.min(urls.length, 4); u++) {
+        var uc = await fetchUrlContent(urls[u]);
+        if (uc) {
+          urlTexts.push("[CONTENU VÉRIFIÉ DE " + urls[u] + "]\n" + uc.slice(0, 9000) + "\n[FIN]");
+        }
+      }
+
+      hideWebStatus();
+
+      if (urlTexts.length) {
+        urlContext = "\n\n" + urlTexts.join("\n\n");
+        urlNote = "🔗 " + urlTexts.length + " lien(s) vérifié(s)";
+      }
+    }
+
+    var weatherContext = "";
+    var weatherNote = "";
+
+    if (extractWeatherLocation(msg)) {
+      setWebStatus("Récupération météo…");
+
+      var wc = await getWeatherContext(msg);
+
+      hideWebStatus();
+
+      if (wc) {
+        weatherContext =
+          "\n\n[CONTEXTE MÉTÉO EN TEMPS RÉEL]\n" +
+          wc +
+          "\n[FIN MÉTÉO]";
+        weatherNote = "🌦️ Météo temps réel";
+      }
+    }
+
+    var webContext = "";
+    var webNote = "";
+
+    if (webSearchEnabled || needsWeb(msg)) {
+      setWebStatus(
+        isNewsLikeQuery(msg)
+          ? "Recherche d’actualités à jour et vérification des sources…"
+          : "Recherche web temps réel et lecture des sources…"
+      );
+
+      var sn = await doWebSearch(msg);
+
+      hideWebStatus();
+
+      if (sn) {
+        webContext =
+          "\n\n[CONTEXTE WEB TEMPS RÉEL — SOURCES LUES ET VÉRIFIÉES]\n" +
+          sn.slice(0, 22000) +
+          "\n[FIN WEB]";
+        webNote = "🌐 Web temps réel";
+      } else {
+        webContext =
+          "\n\n[CONTEXTE WEB]\nAucune source web exploitable n'a pu être récupérée automatiquement. Réponds prudemment et indique clairement que la vérification web n'a pas abouti.\n[FIN WEB]";
+        webNote = "🌐 Web non concluant";
+      }
+    }
+
+    var pdfContext = "";
+    var pdfNote = "";
+
+    if (chatPdfText) {
+      var extract = chatPdfText.slice(0, 10000);
+
+      pdfContext =
+        "\n\n[CONTENU DU FICHIER JOINT « " +
+        chatPdfName +
+        " »]\n" +
+        extract +
+        "\n[FIN FICHIER]";
+
+      pdfNote = "📎 Basé sur le fichier " + chatPdfName;
+    }
+
+    var artifactType = detectArtifactRequest(msg);
+
+    var artifactRule = artifactType
+      ? "L'utilisateur demande un fichier téléchargeable de type " +
+        artifactType +
+        ". Génère un contenu complet, propre et directement exploitable. Pour les fichiers de code ou données, mets idéalement le contenu dans un seul bloc de code adapté au format demandé. "
+      : "";
+
+    var diagramRule = diagramInstructionForChat(msg);
+
+    var liveRule =
+      "RÈGLE TEMPS RÉEL : utilise toujours le contexte [DATE ET HEURE ACTUELLES] pour te situer dans le temps. " +
+      "Quand un contexte web est fourni, base ta réponse sur les sources lues. " +
+      "Croise les informations entre plusieurs sources quand c'est possible. " +
+      "Indique les URLs importantes en fin de réponse ou dans le texte. " +
+      "Si les sources se contredisent ou sont insuffisantes, dis-le clairement. " +
+      "Ne prétends jamais avoir vérifié une information si aucune source n'a été récupérée. ";
+
+    var sysChat =
+      "Tu es un assistant IA polyvalent, intelligent et bienveillant, intégré dans l'Agent IA de MYF. " +
+      "Tu réponds en français par défaut sauf si l'utilisateur écrit dans une autre langue. " +
+      "Tu es expert en énergie solaire, actualités, météo, analyse de pages web, rédaction professionnelle, programmation et création de fichiers. " +
+      liveRule +
+      "IMPORTANT : quand un contexte web, météo, URL ou fichier joint est fourni, fonde ta réponse dessus et indique clairement les limites si les données sont insuffisantes. " +
+      "Pour les nouveautés ou actualités, fais une synthèse claire avec les points clés, les dates, les sources disponibles et ce qu'il faut retenir. " +
+      "N'invente pas de sources. " +
+      "N'utilise pas de caractères superflus de style markdown comme **, ***, __ ou ## dans tes réponses finales. " +
+      artifactRule +
+      "Rédige de manière claire et structurée. Pour le code uniquement, tu peux utiliser des blocs ```...```. " +
+      diagramRule +
+      timeContext +
+      urlContext +
+      weatherContext +
+      webContext +
+      pdfContext;
+
+    var histMsg = msg;
+
+    if (chatPdfText) {
+      histMsg = msg + "\n\n(voir le fichier joint dans le contexte système)";
+    }
+
+    chatHistory.push({
+      role: "user",
+      content: histMsg
+    });
+
+    var sourceNote = [urlNote, weatherNote, webNote, pdfNote].filter(Boolean).join(" · ");
+
+    typing.classList.remove("show");
+
+    var aiInner = addBubble("ai", "", true, sourceNote);
+
+    if (isSketchLikeRequest(msg)) {
+      aiInner.classList.add("diagram-mode");
+    }
+
+    var full = await streamMistralChat(model, sysChat, chatHistory, function (t) {
+      aiInner.textContent = t;
+      document.getElementById("chatMsgs").scrollTop =
+        document.getElementById("chatMsgs").scrollHeight;
+    });
+
+    var finalText = cleanMarkdown(full);
+
+    aiInner.textContent = finalText;
+
+    chatHistory.push({
+      role: "assistant",
+      content: finalText
+    });
+
+    await createDownloadFromChat(msg, finalText);
+
+    if (chatPdfText) clearChatFile();
+  } catch (err) {
+    hideWebStatus();
+    typing.classList.remove("show");
+    addBubble("ai", "Erreur : " + err.message);
+  } finally {
+    document.getElementById("chatSendBtn").disabled = false;
+    input.focus();
+  }
+}
 
 
 </script>
