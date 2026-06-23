@@ -9,57 +9,78 @@ const crypto = require("crypto");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ── BASE DE DONNÉES SQLite ──────────────────────────────────────────────────
-// Sur Render : monter un disque persistant sur /data
-// En local   : utilise ./data/myf.db
+// ─────────────────────────────────────────────────────────────
+// DOSSIERS / BASE SQLite
+// ─────────────────────────────────────────────────────────────
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const PUBLIC_DIR = path.join(__dirname, "public");
+const GENERATED_DIR = path.join(PUBLIC_DIR, "generated");
+
+fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(PUBLIC_DIR, { recursive: true });
+fs.mkdirSync(GENERATED_DIR, { recursive: true });
 
 const DB_PATH = path.join(DATA_DIR, "myf.db");
 const db = new Database(DB_PATH);
 
-// Dossier public pour stocker temporairement les images générées
-const PUBLIC_DIR = path.join(__dirname, "public");
-const GENERATED_DIR = path.join(PUBLIC_DIR, "generated");
-if (!fs.existsSync(GENERATED_DIR)) fs.mkdirSync(GENERATED_DIR, { recursive: true });
-
-// Activation WAL pour meilleures performances
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
-// ── SCHÉMA ──────────────────────────────────────────────────────────────────
 db.exec(`
-  CREATE TABLE IF NOT EXISTS config (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
+CREATE TABLE IF NOT EXISTS config (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 
-  CREATE TABLE IF NOT EXISTS users (
-    id         TEXT PRIMARY KEY,
-    username   TEXT UNIQUE NOT NULL,
-    password   TEXT NOT NULL,
-    fullname   TEXT NOT NULL DEFAULT '',
-    status     TEXT NOT NULL DEFAULT 'active',
-    expires_at TEXT DEFAULT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    last_login TEXT DEFAULT NULL
-  );
+CREATE TABLE IF NOT EXISTS users (
+  id         TEXT PRIMARY KEY,
+  username   TEXT UNIQUE NOT NULL,
+  password   TEXT NOT NULL,
+  fullname   TEXT NOT NULL DEFAULT '',
+  status     TEXT NOT NULL DEFAULT 'active',
+  expires_at TEXT DEFAULT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  last_login TEXT DEFAULT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id    TEXT DEFAULT NULL,
+  role       TEXT NOT NULL DEFAULT 'user',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  expires_at INTEGER NOT NULL,
+  last_seen  TEXT DEFAULT NULL,
+  revoked    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS usage_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash TEXT,
+  user_id    TEXT,
+  route      TEXT,
+  created_at INTEGER NOT NULL
+);
 `);
 
-// ── MIDDLEWARES ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// MIDDLEWARES
+// ─────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "35mb" }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(PUBLIC_DIR));
 
-// CORS
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, X-Session-Token, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "same-origin");
   if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
-// ── HELPERS GÉNÉRAUX ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// HELPERS GÉNÉRAUX
+// ─────────────────────────────────────────────────────────────
 function ok(res, data = {}, message = "") {
   return res.json({ success: true, message, data });
 }
@@ -77,735 +98,900 @@ function setConfig(key, value) {
   db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)").run(key, value);
 }
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function id() {
+  return Date.now().toString(36) + crypto.randomBytes(4).toString("hex");
 }
 
-function checkAdminKey(req, res) {
-  const key = req.headers["x-admin-key"] || req.body?.admin_key;
-  const stored = getConfig("admin_key");
-
-  if (!stored) {
-    res.status(401).json({
-      success: false,
-      message: "Aucune clé admin configurée.",
-    });
-    return false;
-  }
-
-  if (key !== stored) {
-    res.status(401).json({
-      success: false,
-      message: "Non autorisé.",
-    });
-    return false;
-  }
-
-  return true;
+function sha256(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex");
 }
 
-function checkAppAccess(req, res) {
-  const supplied =
-    req.headers["x-admin-key"] ||
-    (req.headers.authorization || "").replace(/^Bearer\s+/i, "") ||
-    req.body?.api_key;
-
-  const stored = getConfig("admin_key");
-
-  if (!stored) {
-    res.status(503).json({
-      success: false,
-      message: "L'administrateur n'a pas encore configuré l'accès principal.",
-      data: {},
-    });
-    return false;
-  }
-
-  if (supplied !== stored) {
-    res.status(401).json({
-      success: false,
-      message: "Non autorisé. Connectez-vous avant d'utiliser l'IA.",
-      data: {},
-    });
-    return false;
-  }
-
-  return true;
+function adminSecret() {
+  return process.env.ADMIN_KEY || getConfig("admin_key");
 }
 
-// ── HELPERS MISTRAL / ROTATION DE CLÉS ──────────────────────────────────────
 function splitKeys(value) {
   return String(value || "")
     .split(/[\n,;|]+/)
-    .map((k) => k.trim())
+    .map((v) => v.trim())
     .filter(Boolean);
 }
 
-function uniqueKeys(keys) {
-  const seen = new Set();
-  const out = [];
-
-  for (const key of keys) {
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push(key);
-  }
-
-  return out;
+function unique(list) {
+  return [...new Set(list.filter(Boolean))];
 }
 
-function getStoredMistralKeys() {
+function keyHash(key) {
+  return sha256(key).slice(0, 16);
+}
+
+// ─────────────────────────────────────────────────────────────
+// SESSIONS SÉCURISÉES
+// ─────────────────────────────────────────────────────────────
+function createSession(userId, role = "user", ttlHours = 12) {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = sha256(token);
+  const expiresAt = Date.now() + ttlHours * 60 * 60 * 1000;
+
+  db.prepare(`
+    INSERT INTO sessions (token_hash, user_id, role, expires_at, last_seen)
+    VALUES (?, ?, ?, ?, datetime('now','localtime'))
+  `).run(tokenHash, userId || null, role, expiresAt);
+
+  return {
+    token,
+    role,
+    expires_at: new Date(expiresAt).toISOString(),
+  };
+}
+
+function suppliedToken(req) {
+  return String(
+    req.headers["x-session-token"] ||
+    req.headers["x-admin-key"] ||
+    (req.headers.authorization || "").replace(/^Bearer\s+/i, "") ||
+    req.body?.session_token ||
+    ""
+  ).trim();
+}
+
+function readSession(req) {
+  const token = suppliedToken(req);
+  if (!token) return null;
+
+  const tokenHash = sha256(token);
+  const row = db.prepare("SELECT * FROM sessions WHERE token_hash = ? AND revoked = 0").get(tokenHash);
+  if (!row) return null;
+
+  if (Number(row.expires_at) < Date.now()) {
+    db.prepare("UPDATE sessions SET revoked = 1 WHERE token_hash = ?").run(tokenHash);
+    return null;
+  }
+
+  db.prepare("UPDATE sessions SET last_seen = datetime('now','localtime') WHERE token_hash = ?").run(tokenHash);
+  return { ...row, token_hash: tokenHash };
+}
+
+function requireSession(req, res) {
+  const s = readSession(req);
+  if (!s) {
+    fail(res, "Session invalide ou expirée. Veuillez vous reconnecter.", 401);
+    return null;
+  }
+  req.session = s;
+  return s;
+}
+
+function requireAdmin(req, res) {
+  const session = readSession(req);
+  if (session && session.role === "admin") {
+    req.session = session;
+    return true;
+  }
+
+  const key = String(req.headers["x-admin-key"] || req.body?.admin_key || "").trim();
+  const stored = adminSecret();
+
+  if (!stored) return fail(res, "Aucune clé admin configurée.", 401), false;
+  if (key !== stored) return fail(res, "Non autorisé.", 401), false;
+
+  return true;
+}
+
+function requireAppAccess(req, res) {
+  const session = requireSession(req, res);
+  if (!session) return false;
+
+  const now = Date.now();
+  const since = now - 60 * 60 * 1000;
+  const limit = Number(process.env.MYF_SESSION_HOURLY_LIMIT || 80);
+
+  const count = db.prepare(`
+    SELECT COUNT(*) AS n FROM usage_log
+    WHERE token_hash = ? AND created_at > ?
+  `).get(session.token_hash, since).n;
+
+  if (count >= limit) {
+    fail(res, "Limite d'utilisation atteinte pour cette session. Réessayez plus tard.", 429);
+    return false;
+  }
+
+  db.prepare(`
+    INSERT INTO usage_log (token_hash, user_id, route, created_at)
+    VALUES (?, ?, ?, ?)
+  `).run(session.token_hash, session.user_id || null, req.path, now);
+
+  if (Math.random() < 0.02) {
+    db.prepare("DELETE FROM usage_log WHERE created_at < ?").run(now - 7 * 24 * 60 * 60 * 1000);
+  }
+
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────
+// CLÉS MISTRAL CÔTÉ SERVEUR UNIQUEMENT
+// ─────────────────────────────────────────────────────────────
+function storedMistralKeys() {
   const raw = getConfig("mistral_keys");
   if (!raw) return [];
-
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map(String).map((k) => k.trim()).filter(Boolean);
-    }
-  } catch (e) {}
-
+    if (Array.isArray(parsed)) return parsed.map(String).map((v) => v.trim()).filter(Boolean);
+  } catch (_) {}
   return splitKeys(raw);
 }
 
-function getMistralKeys() {
-  return uniqueKeys([
+function mistralKeys() {
+  const keys = [
     ...splitKeys(process.env.MISTRAL_API_KEYS),
     ...splitKeys(process.env.MISTRAL_API_KEY),
-    ...getStoredMistralKeys(),
-    ...splitKeys(getConfig("mistral_api_key")),
-    ...splitKeys(getConfig("admin_key")),
-  ]);
+    ...storedMistralKeys(),
+  ];
+  return unique(keys);
 }
 
-function keyHash(apiKey) {
-  return crypto.createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
+function isRateLimit(message) {
+  return /(429|rate\s*limit|quota|too\s*many|limite)/i.test(String(message || ""));
 }
 
-function isRateLimitError(message) {
-  return /(rate\s*limit|quota|too\s*many\s*requests|429|image_generation\s+rate\s+limit\s+reached|limite)/i.test(
-    String(message || "")
-  );
-}
-
-function isAuthKeyError(message) {
-  return /(unauthorized|invalid\s+api\s+key|forbidden|401|403|cl[eé]\s+invalide|non\s+autorisé)/i.test(
-    String(message || "")
-  );
-}
-
-async function parseJsonSafe(response) {
+async function parseResponse(response) {
   const raw = await response.text();
-
   try {
-    return {
-      ok: true,
-      data: JSON.parse(raw),
-      raw,
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      data: null,
-      raw,
-    };
+    return { json: JSON.parse(raw), raw };
+  } catch (_) {
+    return { json: null, raw };
   }
 }
 
-async function mistralJson(pathname, options = {}, apiKey) {
-  if (!apiKey) {
-    throw new Error("Clé API Mistral introuvable.");
-  }
-
+async function mistralJson(pathname, options, apiKey) {
   const response = await fetch("https://api.mistral.ai" + pathname, {
-    method: options.method || "GET",
-    headers: Object.assign(
-      {
-        Authorization: "Bearer " + apiKey,
-        "Content-Type": "application/json",
-      },
-      options.headers || {}
-    ),
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    method: options?.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + apiKey,
+      ...(options?.headers || {}),
+    },
+    body: options?.body ? JSON.stringify(options.body) : undefined,
   });
 
-  const parsed = await parseJsonSafe(response);
+  const parsed = await parseResponse(response);
 
   if (!response.ok) {
-    const msg =
-      parsed.data?.message ||
-      parsed.data?.detail ||
-      parsed.data?.error?.message ||
-      parsed.raw ||
-      "Erreur Mistral HTTP " + response.status;
-
-    const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    const msg = parsed.json?.message || parsed.json?.detail || parsed.json?.error?.message || parsed.raw || "Erreur Mistral";
+    const err = new Error(msg);
     err.status = response.status;
     throw err;
   }
 
-  if (!parsed.ok) {
-    throw new Error("Réponse JSON Mistral illisible.");
-  }
-
-  return parsed.data;
+  return parsed.json;
 }
 
-async function ensureMistralImageAgent(apiKey) {
-  const hash = keyHash(apiKey);
-  const cfgKey = "mistral_image_agent_id_" + hash;
+async function openMistralStream(payload) {
+  const keys = mistralKeys();
+  if (!keys.length) {
+    const err = new Error("Aucune clé Mistral configurée côté serveur. Ajoutez MISTRAL_API_KEYS sur Render.");
+    err.status = 503;
+    throw err;
+  }
+
+  let lastError = null;
+
+  for (const key of keys) {
+    try {
+      const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + key,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) return response;
+
+      const parsed = await parseResponse(response);
+      const msg = parsed.json?.message || parsed.json?.detail || parsed.json?.error?.message || parsed.raw || "Erreur Mistral " + response.status;
+      lastError = new Error(msg);
+      lastError.status = response.status;
+
+      if ([401, 403, 429].includes(response.status)) continue;
+      break;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  throw lastError || new Error("Impossible d'ouvrir le flux Mistral.");
+}
+
+function sanitizeModel(model) {
+  const allowed = [
+    "mistral-large-latest",
+    "mistral-medium-latest",
+    "mistral-small-latest",
+    "open-mistral-nemo",
+    "codestral-latest",
+  ];
+  return allowed.includes(model) ? model : "mistral-large-latest";
+}
+
+function clamp(n, min, max, fallback) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return fallback;
+  return Math.max(min, Math.min(max, x));
+}
+
+// ─────────────────────────────────────────────────────────────
+// IMAGE MISTRAL
+// ─────────────────────────────────────────────────────────────
+function collectText(node, bag = []) {
+  if (!node) return bag;
+  if (Array.isArray(node)) {
+    node.forEach((x) => collectText(x, bag));
+    return bag;
+  }
+  if (typeof node === "object") {
+    if (node.type === "text" && typeof node.text === "string") bag.push(node.text);
+    Object.keys(node).forEach((k) => collectText(node[k], bag));
+  }
+  return bag;
+}
+
+function findToolFile(node) {
+  if (!node) return null;
+  if (Array.isArray(node)) {
+    for (const x of node) {
+      const found = findToolFile(x);
+      if (found) return found;
+    }
+  }
+  if (typeof node === "object") {
+    if (node.type === "tool_file" && node.file_id) return node;
+    for (const k of Object.keys(node)) {
+      const found = findToolFile(node[k]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+async function ensureImageAgent(apiKey) {
+  const cfgKey = "mistral_image_agent_id_" + keyHash(apiKey);
   const cached = getConfig(cfgKey);
 
   if (cached) {
     try {
       const agent = await mistralJson("/v1/agents/" + encodeURIComponent(cached), {}, apiKey);
-      if (agent && agent.id) return agent.id;
-    } catch (e) {
-      // Agent supprimé ou inaccessible : on le recrée.
-    }
+      if (agent?.id) return agent.id;
+    } catch (_) {}
   }
 
-  const agent = await mistralJson(
-    "/v1/agents",
-    {
-      method: "POST",
-      body: {
-        model: process.env.MISTRAL_IMAGE_AGENT_MODEL || "mistral-medium-latest",
-        name: "MYF Image Agent",
-        description: "Agent de génération d'images pour l'application MYF.",
-        instructions:
-          "You are an image generation agent. Use the image_generation tool only when the user explicitly asks for an image, photo, visual, logo, poster, illustration or artistic rendering. Do not generate images for text diagrams, one-line electrical diagrams, sketches, chemistry mechanisms or technical schemas unless the user explicitly asks for an image file.",
-        tools: [{ type: "image_generation" }],
-        completion_args: {
-          temperature: 0.3,
-          top_p: 0.95,
-        },
-      },
+  const agent = await mistralJson("/v1/agents", {
+    method: "POST",
+    body: {
+      model: process.env.MISTRAL_IMAGE_AGENT_MODEL || "mistral-medium-latest",
+      name: "MYF Image Agent",
+      description: "Agent image sécurisé côté serveur pour Agent IA de MYF.",
+      instructions: "Use the image_generation tool only when the user explicitly asks for an image, logo, poster, photo, visual, illustration or realistic rendering.",
+      tools: [{ type: "image_generation" }],
+      completion_args: { temperature: 0.3, top_p: 0.95 },
     },
-    apiKey
-  );
+  }, apiKey);
 
-  if (!agent || !agent.id) {
-    throw new Error("Création de l'agent image Mistral impossible.");
-  }
-
+  if (!agent?.id) throw new Error("Création de l'agent image Mistral impossible.");
   setConfig(cfgKey, agent.id);
   return agent.id;
 }
 
-function findToolFileChunk(node) {
-  if (!node) return null;
-
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const found = findToolFileChunk(item);
-      if (found) return found;
-    }
-
-    return null;
-  }
-
-  if (typeof node === "object") {
-    if (node.type === "tool_file" && node.file_id) return node;
-
-    for (const key of Object.keys(node)) {
-      const found = findToolFileChunk(node[key]);
-      if (found) return found;
-    }
-  }
-
-  return null;
-}
-
-function collectTextChunks(node, bag = []) {
-  if (!node) return bag;
-
-  if (Array.isArray(node)) {
-    node.forEach((item) => collectTextChunks(item, bag));
-    return bag;
-  }
-
-  if (typeof node === "object") {
-    if (node.type === "text" && typeof node.text === "string") {
-      bag.push(node.text);
-    }
-
-    for (const key of Object.keys(node)) {
-      collectTextChunks(node[key], bag);
-    }
-  }
-
-  return bag;
-}
-
-async function downloadMistralFileContent(fileId, apiKey) {
-  if (!apiKey) {
-    throw new Error("Clé API Mistral introuvable.");
-  }
-
-  const response = await fetch(
-    "https://api.mistral.ai/v1/files/" + encodeURIComponent(fileId) + "/content",
-    {
-      headers: {
-        Authorization: "Bearer " + apiKey,
-      },
-    }
-  );
+async function downloadMistralFile(fileId, apiKey) {
+  const response = await fetch("https://api.mistral.ai/v1/files/" + encodeURIComponent(fileId) + "/content", {
+    headers: { Authorization: "Bearer " + apiKey },
+  });
 
   const raw = await response.text();
+  if (!response.ok) throw new Error(raw || "Téléchargement image Mistral impossible.");
 
-  if (!response.ok) {
-    let msg = raw;
-
-    try {
-      const j = JSON.parse(raw);
-      msg = j.message || j.detail || j.error?.message || raw;
-    } catch (e) {}
-
-    const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-    err.status = response.status;
-    throw err;
-  }
-
-  let base64Data = raw.trim();
-
+  let base64 = raw.trim();
   try {
     const parsed = JSON.parse(raw);
-    if (typeof parsed === "string") base64Data = parsed;
-  } catch (e) {}
+    if (typeof parsed === "string") base64 = parsed;
+  } catch (_) {}
 
-  return Buffer.from(base64Data, "base64");
+  return Buffer.from(base64, "base64");
 }
 
-async function runMistralImageJobWithKey(prompt, apiKey) {
-  const agentId = await ensureMistralImageAgent(apiKey);
+async function generateImageWithKey(prompt, apiKey) {
+  const agentId = await ensureImageAgent(apiKey);
+  const data = await mistralJson("/v1/conversations", {
+    method: "POST",
+    body: { agent_id: agentId, inputs: prompt, store: false },
+  }, apiKey);
 
-  const data = await mistralJson(
-    "/v1/conversations",
-    {
-      method: "POST",
-      body: {
-        agent_id: agentId,
-        inputs: prompt,
-        store: false,
-      },
-    },
-    apiKey
-  );
-
-  const fileChunk = findToolFileChunk(data);
-
-  if (!fileChunk || !fileChunk.file_id) {
-    const txt = collectTextChunks(data).join(" ").trim();
-    throw new Error(txt || "Aucun fichier image n'a été retourné par Mistral.");
+  const file = findToolFile(data);
+  if (!file?.file_id) {
+    throw new Error(collectText(data).join(" ").trim() || "Aucune image retournée par Mistral.");
   }
 
-  const bytes = await downloadMistralFileContent(fileChunk.file_id, apiKey);
-
-  const ext =
-    fileChunk.file_type === "jpeg"
-      ? "jpg"
-      : fileChunk.file_type || "png";
-
-  const filename =
-    "image-" +
-    Date.now() +
-    "-" +
-    Math.random().toString(36).slice(2, 8) +
-    "." +
-    ext;
-
-  const filepath = path.join(GENERATED_DIR, filename);
-  fs.writeFileSync(filepath, bytes);
-
-  const assistantText = collectTextChunks(data).join("\n").trim();
+  const bytes = await downloadMistralFile(file.file_id, apiKey);
+  const ext = file.file_type === "jpeg" ? "jpg" : (file.file_type || "png");
+  const filename = "image-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex") + "." + ext;
+  fs.writeFileSync(path.join(GENERATED_DIR, filename), bytes);
 
   return {
     filename,
-    mime: "image/" + (ext === "jpg" ? "jpeg" : ext),
     image_url: "/generated/" + filename,
     download_url: "/generated/" + filename,
-    revised_prompt: assistantText,
+    mime: "image/" + (ext === "jpg" ? "jpeg" : ext),
     provider: "mistral",
     key_used: keyHash(apiKey),
-    file_id: fileChunk.file_id,
-    file_name: fileChunk.file_name || filename,
-    file_type: fileChunk.file_type || ext,
   };
 }
 
-async function runMistralImageJob(prompt) {
-  const keys = getMistralKeys();
+async function generateImage(prompt) {
+  const keys = mistralKeys();
+  if (!keys.length) throw new Error("Clé API Mistral introuvable côté serveur.");
 
-  if (!keys.length) {
-    throw new Error("Clé API Mistral introuvable.");
-  }
+  let last = null;
+  let rateLimited = 0;
 
-  let lastError = null;
-  let rateLimitCount = 0;
-
-  for (const apiKey of keys) {
+  for (const key of keys) {
     try {
-      return await runMistralImageJobWithKey(prompt, apiKey);
+      return await generateImageWithKey(prompt, key);
     } catch (e) {
-      lastError = e;
-
-      const msg = e && e.message ? e.message : String(e);
-
-      // Si cette clé est en limite, on essaye automatiquement la suivante.
-      if (e.status === 429 || isRateLimitError(msg)) {
-        rateLimitCount++;
-        continue;
-      }
-
-      // Si cette clé est invalide/interdite, on essaye la suivante aussi.
-      if (e.status === 401 || e.status === 403 || isAuthKeyError(msg)) {
-        continue;
-      }
-
-      // Autre erreur : on essaye aussi la clé suivante s'il y en a une.
+      last = e;
+      if (e.status === 429 || isRateLimit(e.message)) rateLimited++;
       continue;
     }
   }
 
-  if (rateLimitCount >= keys.length) {
+  if (rateLimited >= keys.length) {
     const err = new Error("Limite génération image atteint");
     err.status = 429;
     throw err;
   }
 
-  throw lastError || new Error("Impossible de générer l'image.");
+  throw last || new Error("Impossible de générer l'image.");
 }
 
-// ── ROUTES ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// WEB TEMPS RÉEL
+// ─────────────────────────────────────────────────────────────
+function htmlDecode(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
 
-// Santé
+function stripHtml(html, max = 9000) {
+  let text = String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<!--([\s\S]*?)-->/g, " ")
+    .replace(/<\/(p|div|section|article|header|footer|li|br|h1|h2|h3|h4|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+
+  text = htmlDecode(text)
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return text.length > max ? text.slice(0, max) + "\n… [contenu tronqué]" : text;
+}
+
+function pageTitle(html) {
+  const m = String(html || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return m ? stripHtml(m[1], 180).replace(/\s+/g, " ") : "";
+}
+
+function safeUrl(raw) {
+  try {
+    const url = new URL(String(raw || "").trim());
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host.endsWith(".local")) return null;
+
+    const ip = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ip) {
+      const a = Number(ip[1]);
+      const b = Number(ip[2]);
+      if (a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31)) return null;
+    }
+
+    return url.toString();
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fetchTimeout(url, options = {}, timeout = 9000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readUrl(rawUrl, maxChars = 9000) {
+  const url = safeUrl(rawUrl);
+  if (!url) throw new Error("URL invalide ou non autorisée.");
+
+  const response = await fetchTimeout(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; MYF-AI/1.0)",
+      "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
+      "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.7",
+    },
+    redirect: "follow",
+  }, 10000);
+
+  const contentType = response.headers.get("content-type") || "";
+  const raw = await response.text();
+  if (!response.ok) throw new Error("Lecture impossible HTTP " + response.status);
+
+  return {
+    url,
+    title: pageTitle(raw),
+    content_type: contentType,
+    text: stripHtml(raw, maxChars),
+    fetched_at: new Date().toISOString(),
+  };
+}
+
+function normalizeResultUrl(url) {
+  try {
+    let u = htmlDecode(String(url || "").trim());
+    if (!u) return "";
+    if (u.startsWith("//")) u = "https:" + u;
+
+    if (u.includes("duckduckgo.com/l/") || u.startsWith("/l/")) {
+      const parsed = new URL(u, "https://duckduckgo.com");
+      const uddg = parsed.searchParams.get("uddg");
+      if (uddg) return decodeURIComponent(uddg);
+    }
+
+    return new URL(u).toString();
+  } catch (_) {
+    return "";
+  }
+}
+
+async function braveSearch(query, maxResults) {
+  const key = process.env.BRAVE_SEARCH_API_KEY || getConfig("brave_search_api_key");
+  if (!key) return [];
+
+  const url = "https://api.search.brave.com/res/v1/web/search?q=" + encodeURIComponent(query) +
+    "&count=" + Math.min(maxResults || 6, 10) + "&country=fr&search_lang=fr&ui_lang=fr-FR";
+
+  const response = await fetchTimeout(url, {
+    headers: { "Accept": "application/json", "X-Subscription-Token": key },
+  }, 9000);
+
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => ({}));
+  const rows = data.web?.results || [];
+
+  return rows.map((r) => ({
+    title: htmlDecode(r.title || ""),
+    url: normalizeResultUrl(r.url || ""),
+    snippet: stripHtml(r.description || "", 700),
+    source: "Brave Search",
+  })).filter((r) => r.url);
+}
+
+async function duckDuckGoSearch(query, maxResults) {
+  const results = [];
+
+  try {
+    const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query);
+    const response = await fetchTimeout(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; MYF-AI/1.0)" },
+    }, 9000);
+
+    const html = await response.text();
+    const blocks = html.split(/<div class="result/i).slice(1);
+
+    for (const block of blocks) {
+      if (results.length >= maxResults) break;
+      const a = block.match(/<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+      if (!a) continue;
+
+      const url = normalizeResultUrl(a[1]);
+      if (!url || results.some((r) => r.url === url)) continue;
+
+      const sn = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\//i);
+      results.push({
+        title: stripHtml(a[2], 250),
+        url,
+        snippet: sn ? stripHtml(sn[1], 700) : "",
+        source: "DuckDuckGo",
+      });
+    }
+  } catch (_) {}
+
+  return results;
+}
+
+async function gdeltSearch(query, maxResults) {
+  try {
+    const url = "https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(query) +
+      "&mode=ArtList&format=json&maxrecords=" + Math.min(maxResults || 6, 10) + "&sort=HybridRel";
+
+    const response = await fetchTimeout(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; MYF-AI/1.0)" },
+    }, 9000);
+
+    if (!response.ok) return [];
+    const data = await response.json().catch(() => ({}));
+    return (data.articles || []).map((a) => ({
+      title: a.title || "",
+      url: normalizeResultUrl(a.url || ""),
+      snippet: [a.seendate, a.domain].filter(Boolean).join(" · "),
+      source: "GDELT News",
+      published_at: a.seendate || "",
+    })).filter((r) => r.url);
+  } catch (_) {
+    return [];
+  }
+}
+
+function isNewsQuery(q) {
+  return /(actualité|actualités|actu|news|aujourd'hui|récent|recent|derni[eè]re|latest|breaking|maintenant)/i.test(String(q || ""));
+}
+
+async function liveSearch(query, options = {}) {
+  const maxResults = Math.max(1, Math.min(Number(options.max_results || 6), 10));
+  let results = [];
+
+  results = results.concat(await braveSearch(query, maxResults));
+  if (isNewsQuery(query)) results = results.concat(await gdeltSearch(query, maxResults));
+  if (results.length < maxResults) results = results.concat(await duckDuckGoSearch(query, maxResults));
+
+  const seen = new Set();
+  results = results.filter((r) => {
+    if (!r.url || seen.has(r.url)) return false;
+    seen.add(r.url);
+    return true;
+  }).slice(0, maxResults);
+
+  if (options.deep !== false) {
+    for (let i = 0; i < Math.min(results.length, Number(options.read_top || 4)); i++) {
+      try {
+        const page = await readUrl(results[i].url, 5000);
+        results[i].page_title = page.title || results[i].title;
+        results[i].page_text = page.text;
+        results[i].checked_at = page.fetched_at;
+      } catch (e) {
+        results[i].read_error = e.message;
+      }
+    }
+  }
+
+  return { query, checked_at: new Date().toISOString(), results };
+}
+
+function timeContext(client = {}) {
+  const lines = ["Date/heure serveur ISO : " + new Date().toISOString()];
+  if (client.timezone) lines.push("Fuseau horaire utilisateur : " + client.timezone);
+  if (client.local_time) lines.push("Date/heure locale utilisateur : " + client.local_time);
+  if (client.locale) lines.push("Locale navigateur : " + client.locale);
+  return lines.join("\n");
+}
+
+function formatWebContext(payload, clientContext) {
+  const lines = [
+    "Recherche web temps réel",
+    "Requête : " + payload.query,
+    "Vérifié le : " + payload.checked_at,
+    clientContext ? "Contexte utilisateur : " + clientContext : "",
+    "",
+  ].filter(Boolean);
+
+  if (!payload.results.length) {
+    lines.push("Aucun résultat web exploitable trouvé.");
+    return lines.join("\n");
+  }
+
+  payload.results.forEach((r, i) => {
+    lines.push("SOURCE " + (i + 1));
+    lines.push("Titre : " + (r.page_title || r.title || "Sans titre"));
+    lines.push("URL : " + r.url);
+    if (r.published_at) lines.push("Date source : " + r.published_at);
+    if (r.snippet) lines.push("Extrait recherche : " + r.snippet);
+    if (r.page_text) lines.push("Contenu vérifié : " + r.page_text.slice(0, 5000));
+    if (r.read_error) lines.push("Lecture page : impossible (" + r.read_error + ")");
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
+// ─────────────────────────────────────────────────────────────
+// ROUTES PUBLIQUES / ADMIN / UTILISATEUR
+// ─────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {
-  const configured = !!getConfig("admin_key");
-
-  return ok(res, {
-    configured,
-    image_keys_available: getMistralKeys().length,
-    version: "1.0.0-mistral-image-key-rotation",
+  ok(res, {
+    configured: !!adminSecret(),
+    mistral_keys_available: mistralKeys().length,
+    version: "2.5.0-secure-structured",
   });
 });
 
-// Admin : configurer / vérifier la clé API Mistral principale
-app.post("/api/admin/setup", async (req, res) => {
-  const { key } = req.body;
-
-  if (!key) {
-    return fail(res, "Clé API manquante.");
-  }
-
-  try {
-    const response = await fetch("https://api.mistral.ai/v1/models", {
-      headers: {
-        Authorization: "Bearer " + key,
-      },
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const msg =
-        errData.message ||
-        errData.detail ||
-        "Clé invalide (HTTP " + response.status + ")";
-
-      return fail(res, typeof msg === "string" ? msg : JSON.stringify(msg));
-    }
-  } catch (e) {
-    return fail(res, "Impossible de joindre api.mistral.ai : " + e.message);
-  }
+app.post("/api/admin/setup", (req, res) => {
+  const key = String(req.body?.key || "").trim();
+  if (!key || key.length < 8) return fail(res, "Clé admin manquante ou trop courte. Minimum 8 caractères.");
+  if (adminSecret()) return fail(res, "L'accès admin est déjà configuré.", 409);
 
   setConfig("admin_key", key);
-
-  return ok(res, {}, "Clé API vérifiée et sauvegardée.");
+  const session = createSession("admin", "admin", 12);
+  ok(res, { role: "admin", session_token: session.token, expires_at: session.expires_at }, "Accès administrateur configuré.");
 });
 
-// Admin : connexion
-app.post("/api/admin/login", async (req, res) => {
-  const { key } = req.body;
+app.post("/api/admin/login", (req, res) => {
+  const key = String(req.body?.key || "").trim();
+  if (!key) return fail(res, "Clé admin manquante.");
 
-  if (!key) {
-    return fail(res, "Clé API manquante.");
-  }
+  const stored = adminSecret();
+  if (!stored) setConfig("admin_key", key);
+  else if (key !== stored) return fail(res, "Clé admin incorrecte.", 401);
 
-  const stored = getConfig("admin_key");
-
-  if (!stored) {
-    try {
-      const response = await fetch("https://api.mistral.ai/v1/models", {
-        headers: {
-          Authorization: "Bearer " + key,
-        },
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const msg =
-          errData.message ||
-          errData.detail ||
-          "Clé invalide (HTTP " + response.status + ")";
-
-        return fail(res, typeof msg === "string" ? msg : JSON.stringify(msg));
-      }
-    } catch (e) {
-      return fail(res, "Impossible de joindre api.mistral.ai : " + e.message);
-    }
-
-    setConfig("admin_key", key);
-
-    return ok(res, { role: "admin" }, "Première connexion : clé enregistrée.");
-  }
-
-  if (key !== stored) {
-    return fail(res, "Clé API incorrecte.", 401);
-  }
-
-  return ok(res, { role: "admin" });
+  const session = createSession("admin", "admin", 12);
+  ok(res, { role: "admin", session_token: session.token, expires_at: session.expires_at });
 });
 
-// Admin : enregistrer plusieurs clés Mistral de secours
-// Body attendu : { keys: ["clé1", "clé2"] } ou { keys: "clé1,clé2" }
+app.post("/api/login", (req, res) => {
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "");
+
+  if (!username || !password) return fail(res, "Identifiants manquants.");
+  if (!adminSecret()) return fail(res, "L'administrateur n'a pas encore configuré son accès. Veuillez le contacter.", 503);
+
+  const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username);
+  if (!user || !bcrypt.compareSync(password, user.password)) return fail(res, "Nom d'utilisateur ou mot de passe incorrect.", 401);
+  if (user.status === "paused") return fail(res, "Votre accès est temporairement suspendu. Contactez l'administrateur.", 403);
+
+  if (user.expires_at) {
+    const exp = new Date(user.expires_at);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (exp < today) return fail(res, "Votre accès a expiré le " + exp.toLocaleDateString("fr-FR") + ". Contactez l'administrateur.", 403);
+  }
+
+  db.prepare("UPDATE users SET last_login = datetime('now','localtime') WHERE id = ?").run(user.id);
+  const session = createSession(user.id, "user", Number(process.env.MYF_USER_SESSION_HOURS || 12));
+
+  ok(res, {
+    username: user.username,
+    fullname: user.fullname || user.username,
+    role: "user",
+    session_token: session.token,
+    expires_at: session.expires_at,
+  });
+});
+
+app.get("/api/admin/users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const users = db.prepare(`
+    SELECT id, username, fullname, status, expires_at, created_at, last_login
+    FROM users ORDER BY created_at DESC
+  `).all();
+  ok(res, { users });
+});
+
+app.post("/api/admin/users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "");
+  const fullname = String(req.body?.fullname || username).trim();
+  const expiresAt = req.body?.expires_at || null;
+
+  if (!username || !password) return fail(res, "Nom d'utilisateur et mot de passe requis.");
+  if (db.prepare("SELECT id FROM users WHERE username = ?").get(username)) return fail(res, "Ce nom d'utilisateur existe déjà.");
+
+  const userId = id();
+  db.prepare(`
+    INSERT INTO users (id, username, password, fullname, status, expires_at)
+    VALUES (?, ?, ?, ?, 'active', ?)
+  `).run(userId, username, bcrypt.hashSync(password, 10), fullname, expiresAt);
+
+  ok(res, { id: userId }, "Utilisateur créé avec succès.");
+});
+
+app.patch("/api/admin/users/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  const userId = req.params.id;
+  const op = req.body?.op;
+
+  if (!db.prepare("SELECT id FROM users WHERE id = ?").get(userId)) return fail(res, "Utilisateur introuvable.", 404);
+
+  if (op === "pause") db.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(userId);
+  else if (op === "resume") db.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(userId);
+  else if (op === "set_expiry") db.prepare("UPDATE users SET expires_at = ? WHERE id = ?").run(req.body?.expires_at || null, userId);
+  else if (op === "reset_password") {
+    if (!req.body?.new_password) return fail(res, "Nouveau mot de passe requis.");
+    db.prepare("UPDATE users SET password = ? WHERE id = ?").run(bcrypt.hashSync(String(req.body.new_password), 10), userId);
+  } else return fail(res, "Opération inconnue.");
+
+  ok(res, {}, "Mise à jour effectuée.");
+});
+
+app.delete("/api/admin/users/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+  ok(res, {}, "Utilisateur supprimé.");
+});
+
 app.post("/api/admin/mistral-keys", async (req, res) => {
-  if (!checkAdminKey(req, res)) return;
+  if (!requireAdmin(req, res)) return;
 
-  const incoming = Array.isArray(req.body.keys)
-    ? req.body.keys
-    : splitKeys(req.body.keys || "");
-
-  const keys = uniqueKeys(incoming.map(String).map((k) => k.trim()).filter(Boolean));
+  const incoming = Array.isArray(req.body?.keys) ? req.body.keys : splitKeys(req.body?.keys || "");
+  const keys = unique(incoming.map(String).map((v) => v.trim()).filter(Boolean));
 
   if (!keys.length) {
     setConfig("mistral_keys", JSON.stringify([]));
     return ok(res, { count: 0 }, "Clés Mistral secondaires supprimées.");
   }
 
-  // On vérifie au moins que les clés peuvent interroger /models.
   const valid = [];
   const invalid = [];
 
   for (const key of keys) {
     try {
-      const response = await fetch("https://api.mistral.ai/v1/models", {
-        headers: {
-          Authorization: "Bearer " + key,
-        },
-      });
-
-      if (response.ok) {
-        valid.push(key);
-      } else {
-        invalid.push(keyHash(key));
-      }
-    } catch (e) {
+      const response = await fetch("https://api.mistral.ai/v1/models", { headers: { Authorization: "Bearer " + key } });
+      if (response.ok) valid.push(key);
+      else invalid.push(keyHash(key));
+    } catch (_) {
       invalid.push(keyHash(key));
     }
   }
 
   setConfig("mistral_keys", JSON.stringify(valid));
-
-  return ok(
-    res,
-    {
-      count: valid.length,
-      invalid,
-    },
-    valid.length
-      ? "Clés Mistral secondaires enregistrées."
-      : "Aucune clé secondaire valide enregistrée."
-  );
+  ok(res, { count: valid.length, invalid }, "Clés Mistral mises à jour.");
 });
 
-// Admin : liste des utilisateurs
-app.get("/api/admin/users", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const users = db
-    .prepare(
-      "SELECT id, username, fullname, status, expires_at, created_at, last_login FROM users ORDER BY created_at DESC"
-    )
-    .all();
-
-  return ok(res, { users });
-});
-
-// Admin : créer un utilisateur
-app.post("/api/admin/users", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { username, password, fullname, expires_at } = req.body;
-
-  if (!username || !password) {
-    return fail(res, "Nom d'utilisateur et mot de passe requis.");
-  }
-
-  const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
-
-  if (existing) {
-    return fail(res, "Ce nom d'utilisateur existe déjà.");
-  }
-
-  const hashed = bcrypt.hashSync(password, 10);
-  const id = generateId();
-  const now = new Date().toLocaleDateString("fr-FR");
-
-  db.prepare(
-    "INSERT INTO users (id, username, password, fullname, status, expires_at, created_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
-  ).run(
-    id,
-    username.trim(),
-    hashed,
-    fullname || username.trim(),
-    expires_at || null,
-    now
-  );
-
-  return ok(res, { id }, "Utilisateur créé avec succès.");
-});
-
-// Admin : modifier un utilisateur
-app.patch("/api/admin/users/:id", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { id } = req.params;
-  const { op, expires_at, new_password } = req.body;
-
-  const user = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
-
-  if (!user) {
-    return fail(res, "Utilisateur introuvable.", 404);
-  }
-
-  if (op === "pause") {
-    db.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(id);
-  } else if (op === "resume") {
-    db.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(id);
-  } else if (op === "set_expiry") {
-    db.prepare("UPDATE users SET expires_at = ? WHERE id = ?").run(expires_at || null, id);
-  } else if (op === "reset_password") {
-    if (!new_password) {
-      return fail(res, "Nouveau mot de passe requis.");
-    }
-
-    const hashed = bcrypt.hashSync(new_password, 10);
-    db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashed, id);
-  } else {
-    return fail(res, "Opération inconnue.");
-  }
-
-  return ok(res, {}, "Mise à jour effectuée.");
-});
-
-// Admin : supprimer un utilisateur
-app.delete("/api/admin/users/:id", (req, res) => {
-  if (!checkAdminKey(req, res)) return;
-
-  const { id } = req.params;
-  db.prepare("DELETE FROM users WHERE id = ?").run(id);
-
-  return ok(res, {}, "Utilisateur supprimé.");
-});
-
-// Utilisateur : connexion
-app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return fail(res, "Identifiants manquants.");
-  }
-
-  const adminKey = getConfig("admin_key");
-
-  if (!adminKey) {
-    return fail(
-      res,
-      "L'administrateur n'a pas encore configuré son accès. Veuillez le contacter.",
-      503
-    );
-  }
-
-  const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username.trim());
-
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return fail(res, "Nom d'utilisateur ou mot de passe incorrect.", 401);
-  }
-
-  if (user.status === "paused") {
-    return fail(
-      res,
-      "Votre accès est temporairement suspendu. Contactez l'administrateur.",
-      403
-    );
-  }
-
-  if (user.expires_at) {
-    const expDate = new Date(user.expires_at);
-    const now = new Date();
-
-    now.setHours(0, 0, 0, 0);
-
-    if (expDate < now) {
-      return fail(
-        res,
-        "Votre accès a expiré le " +
-          expDate.toLocaleDateString("fr-FR") +
-          ". Contactez l'administrateur.",
-        403
-      );
-    }
-  }
-
-  db.prepare("UPDATE users SET last_login = datetime('now','localtime') WHERE id = ?").run(
-    user.id
-  );
-
-  return ok(res, {
-    username: user.username,
-    fullname: user.fullname || user.username,
-    role: "user",
-    api_key: adminKey,
-  });
-});
-
-// IA : génération d'image Mistral
-app.post("/api/generate-image", async (req, res) => {
-  if (!checkAppAccess(req, res)) return;
+// ─────────────────────────────────────────────────────────────
+// ROUTES IA PROTÉGÉES
+// ─────────────────────────────────────────────────────────────
+app.post("/api/ai-stream", async (req, res) => {
+  if (!requireAppAccess(req, res)) return;
 
   try {
-    const prompt = (req.body.prompt || "").trim();
+    const model = sanitizeModel(req.body?.model);
+    const system = String(req.body?.system || "").slice(0, 30000);
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const clean = messages
+      .filter((m) => m && ["user", "assistant", "system"].includes(m.role) && typeof m.content === "string")
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: String(m.content).slice(0, 30000) }));
 
-    if (!prompt) {
-      return fail(res, "Prompt image manquant.");
-    }
+    const finalMessages = [];
+    if (system) finalMessages.push({ role: "system", content: system });
+    finalMessages.push(...clean);
 
-    if (prompt.length > 6000) {
-      return fail(res, "Prompt trop long. Limitez-le à 6000 caractères.");
-    }
+    if (!finalMessages.length) return fail(res, "Message IA manquant.");
 
-    const result = await runMistralImageJob(prompt);
+    const mistralResponse = await openMistralStream({
+      model,
+      messages: finalMessages,
+      max_tokens: clamp(req.body?.max_tokens, 128, 4000, 2600),
+      temperature: clamp(req.body?.temperature, 0, 1.2, 0.7),
+      stream: true,
+    });
 
-    return ok(res, result);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    mistralResponse.body.on("data", (chunk) => res.write(chunk));
+    mistralResponse.body.on("end", () => res.end());
+    mistralResponse.body.on("error", (err) => {
+      try { res.write("data: " + JSON.stringify({ error: err.message || String(err) }) + "\n\n"); } catch (_) {}
+      res.end();
+    });
   } catch (e) {
-    const msg = e && e.message ? e.message : String(e);
-
-    if (e.status === 429 || isRateLimitError(msg) || msg === "Limite génération image atteint") {
-      return fail(res, "Limite génération image atteint", 429);
-    }
-
-    return fail(res, msg, 500);
+    fail(res, e.message || "Erreur IA.", e.status || 500);
   }
 });
 
-// Fallback SPA
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+app.post("/api/generate-image", async (req, res) => {
+  if (!requireAppAccess(req, res)) return;
+
+  try {
+    const prompt = String(req.body?.prompt || "").trim();
+    if (!prompt) return fail(res, "Prompt image manquant.");
+    if (prompt.length > 6000) return fail(res, "Prompt trop long. Limitez-le à 6000 caractères.");
+
+    ok(res, await generateImage(prompt));
+  } catch (e) {
+    if (e.status === 429 || isRateLimit(e.message)) return fail(res, "Limite génération image atteint", 429);
+    fail(res, e.message || "Erreur image.", 500);
+  }
 });
 
-// ── DÉMARRAGE ────────────────────────────────────────────────────────────────
+app.post("/api/live-time", (req, res) => {
+  if (!requireAppAccess(req, res)) return;
+  const client = req.body?.client || {};
+  ok(res, { server_iso: new Date().toISOString(), context: timeContext(client) });
+});
+
+app.post("/api/read-url", async (req, res) => {
+  if (!requireAppAccess(req, res)) return;
+
+  try {
+    ok(res, await readUrl(req.body?.url, Number(req.body?.max_chars || 9000)));
+  } catch (e) {
+    fail(res, "Lecture URL impossible : " + e.message, 400);
+  }
+});
+
+app.post("/api/live-search", async (req, res) => {
+  if (!requireAppAccess(req, res)) return;
+
+  try {
+    const query = String(req.body?.query || "").trim();
+    if (!query) return fail(res, "Requête web manquante.");
+
+    const payload = await liveSearch(query, {
+      max_results: req.body?.max_results || 6,
+      read_top: req.body?.read_top || 4,
+      deep: req.body?.deep !== false,
+    });
+
+    const ctx = timeContext(req.body?.client || {});
+    ok(res, {
+      query,
+      checked_at: payload.checked_at,
+      results: payload.results,
+      context_text: formatWebContext(payload, ctx),
+      time_context: ctx,
+      provider: process.env.BRAVE_SEARCH_API_KEY ? "Brave Search + fallback" : "DuckDuckGo/GDELT fallback",
+    });
+  } catch (e) {
+    fail(res, "Recherche web impossible : " + e.message, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// FALLBACK SPA + DÉMARRAGE
+// ─────────────────────────────────────────────────────────────
+app.get("*", (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
 app.listen(PORT, () => {
-  console.log("✅ Agent IA de MYF — Serveur démarré sur le port " + PORT);
-  console.log("📂 Base de données : " + DB_PATH);
-  console.log("🔑 Clés Mistral disponibles pour l'image : " + getMistralKeys().length);
+  console.log("✅ Agent IA de MYF — serveur sécurisé démarré sur le port " + PORT);
+  console.log("📂 Base SQLite : " + DB_PATH);
+  console.log("🔑 Clés Mistral côté serveur : " + mistralKeys().length);
 });
