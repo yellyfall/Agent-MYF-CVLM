@@ -2243,10 +2243,10 @@ async function generateAll(){
       +"2. Optimize only the wording of the professional profile, skills and experience tasks according to the job offer.\n"
       +"3. Integrate exact keywords from the job offer naturally, without inventing experience.\n"
       +"4. HEADER FORMAT: first non-empty line = candidate full name only. Second line = target professional profile / job title only. Third line = contact information, mobility and driving licence on ONE line separated with |, for example: Address | Phone | Email | LinkedIn | Mobility | Driving licence.\n"
-      +"5. SECTION ORDER: Expériences professionnelles, Formation, Skills, Logiciels, Langues, Contact if useful. Put Langues immediately under Skills / Logiciels when those sections exist.\n"
-      +"6. CREATE A CLEAR SECTION NAMED EXACTLY: Skills. Put all professional skills, technical skills and transversal skills there. Do not call this section Compétences techniques.\n"
+      +"5. SECTION ORDER: Expériences professionnelles, Formations, Skills, Logiciels, Langues, Contact if useful. Put Langues immediately under Skills / Logiciels when those sections exist.\n"
+      +"6. CREATE A CLEAR SECTION NAMED EXACTLY: Skills. Put all professional skills, technical skills, transversal skills, certifications, methods and non-academic training-related abilities there. Do not create a second Formation section.\n"
       +"7. EXPERIENCE FORMAT: section heading on its own line. For each job, put one header line exactly like: Job title | Company / organization - city | dates or duration. Then put tasks as bullet points starting with •. Make bullets dense and complete, but factual.\n"
-      +"8. EDUCATION FORMAT: section heading on its own line. For each education item, put the school/university/training organization and duration BEFORE the degree, exactly like: School / University - city | dates. Next line: degree / training title.\n"
+      +"8. EDUCATION FORMAT: use only one section named Formations, reserved strictly for academic studies/diplomas. For each education item, put the school/university/college and duration BEFORE the degree, exactly like: School / University - city | dates. Next line: degree / training title.\n"
       +"9. SKILLS / SOFTWARE / LANGUAGES FORMAT: use clear compact lines, no page numbers, no markdown tables, no decorative symbols except simple bullets when useful.\n"
       +"10. SECTION SEPARATION: make sure every section has its own heading and content clearly separated from the previous section. Do not merge sections.\n"
       +"11. All writing must remain professional, concise and ATS-friendly.\n\n"
@@ -5999,6 +5999,474 @@ async function dlCVPdf() {
     doc.save("cv_optimise.pdf");
   } catch(e) {
     console.error("Export CV PDF jsPDF impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V29 — PAGINATION CV + FORMATIONS UNIQUES + SKILLS
+   ========================================================================== */
+
+/*
+  Objectifs :
+  1) Ne pas écrire trop bas sur une page.
+  2) Ne pas commencer une page suivante trop haut.
+  3) N'avoir qu'une seule section "Formations", strictement réservée aux études.
+  4) Toute section non académique de type compétences/méthodes/certifications est renommée "Skills".
+*/
+
+// Détection renforcée : "Formations" = uniquement études/diplômes.
+// Toutes les compétences / méthodes / certifications / expertises vont dans Skills.
+(function(){
+  if (typeof cvSectionType === "function") {
+    var __myf_v29_cvSectionType_base = cvSectionType;
+
+    cvSectionType = function(line) {
+      var raw = String(line || "");
+      var t = cvNorm(cvCleanLine(raw)).replace(/[:|]+$/g, "").trim();
+
+      // Skills / compétences / méthodes / certifications / expertise
+      if (/^(skills|skill|competences|competence|competences techniques|competence technique|savoir-faire|savoir faire|expertise|expertises|expertise technique|aptitudes|atouts|methodes|methodes et outils|outils|certifications|certification|habilitations|habilitation|formations techniques|formation technique|formation professionnelle|formation continue)\b/.test(t)) {
+        return "skills";
+      }
+
+      // Formations strictement académiques
+      if (/^(formations|formation|education|etudes|études|parcours academique|parcours académique|diplomes|diplômes)\b/.test(t)) {
+        return "education";
+      }
+
+      return __myf_v29_cvSectionType_base(line);
+    };
+  }
+
+  if (typeof cvSectionTitleFromType === "function") {
+    var __myf_v29_cvSectionTitleFromType_base = cvSectionTitleFromType;
+
+    cvSectionTitleFromType = function(type, original) {
+      if (type === "education") return "Formations";
+      if (type === "skills") return "Skills";
+      return __myf_v29_cvSectionTitleFromType_base(type, original);
+    };
+  }
+})();
+
+// Fusionne les sections portant le même type afin d'éviter deux sections Formations.
+function cvPdfMergeSectionsV29(sections) {
+  var order = [];
+  var map = {};
+
+  (sections || []).forEach(function(sec) {
+    if (!sec || !sec.title) return;
+
+    var titleNorm = cvNorm(sec.title);
+    var key = titleNorm;
+
+    if (/formation|education|etude|étude|diplome|diplôme/.test(titleNorm)) {
+      key = "formations";
+      sec.title = "Formations";
+    } else if (/skill|competence|savoir|expertise|aptitude|atout|certification|habilitation|methode|outil|processus|optimisation|dimensionnement|raccordement|logiciel/.test(titleNorm)) {
+      key = "skills";
+      sec.title = "Skills";
+    }
+
+    if (!map[key]) {
+      map[key] = {
+        title: sec.title,
+        entries: [],
+        tags: [],
+        lines: []
+      };
+      order.push(key);
+    }
+
+    map[key].entries = map[key].entries.concat(sec.entries || []);
+    map[key].tags = map[key].tags.concat(sec.tags || []);
+    map[key].lines = map[key].lines.concat(sec.lines || []);
+  });
+
+  // Déduplication légère
+  return order.map(function(k) {
+    var sec = map[k];
+    var seenTags = {};
+    var seenLines = {};
+
+    sec.tags = (sec.tags || []).filter(function(x) {
+      var n = cvNorm(x);
+      if (!n || seenTags[n]) return false;
+      seenTags[n] = true;
+      return true;
+    });
+
+    sec.lines = (sec.lines || []).filter(function(x) {
+      var n = cvNorm(x);
+      if (!n || seenLines[n]) return false;
+      seenLines[n] = true;
+      return true;
+    });
+
+    return sec;
+  });
+}
+
+// Remplace cvPdfCollectData pour fusionner/renommer correctement les sections.
+if (typeof cvPdfCollectData === "function") {
+  var __myf_v29_cvPdfCollectData_base = cvPdfCollectData;
+
+  cvPdfCollectData = function() {
+    var data = __myf_v29_cvPdfCollectData_base();
+
+    if (!data || !data.sections) return data;
+
+    data.sections = cvPdfMergeSectionsV29(data.sections);
+
+    // Réordonnancement propre du CV
+    var preferred = {
+      "expériences professionnelles": 1,
+      "experiences professionnelles": 1,
+      "expérience professionnelle": 1,
+      "experience professionnelle": 1,
+      "formations": 2,
+      "skills": 3,
+      "logiciels": 4,
+      "langues": 5,
+      "contact": 6
+    };
+
+    data.sections.sort(function(a, b) {
+      var aa = preferred[cvNorm(a.title)] || 50;
+      var bb = preferred[cvNorm(b.title)] || 50;
+      return aa - bb;
+    });
+
+    return data;
+  };
+}
+
+// Nouvelle version de dlCVPdf : marges haut/bas renforcées et pagination confortable.
+async function dlCVPdf() {
+  var data = cvPdfCollectData();
+
+  if (!data || !data.sections || !data.sections.length) {
+    alert("Générez d'abord le CV optimisé avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+
+    // Marges volontairement confortables :
+    // on évite d'écrire trop haut ou trop bas.
+    var marginL = 15;
+    var marginR = 15;
+    var marginT = 20;
+    var marginB = 24;
+
+    var contentW = pageW - marginL - marginR;
+    var blue = [26, 58, 110];
+    var text = [17, 24, 39];
+    var muted = [75, 85, 99];
+    var lightBorder = [218, 226, 238];
+    var veryLight = [248, 250, 252];
+    var y = marginT;
+
+    function setTextColor(arr) {
+      doc.setTextColor(arr[0], arr[1], arr[2]);
+    }
+
+    function pageBottomLimit() {
+      // On garde toujours une zone blanche confortable en bas.
+      return pageH - marginB;
+    }
+
+    function addComfortPage() {
+      doc.addPage();
+      y = marginT + 4; // La page suivante ne commence pas collée en haut.
+    }
+
+    function ensureSpace(h) {
+      if (y + h > pageBottomLimit()) {
+        addComfortPage();
+      }
+    }
+
+    function drawLine(x1, y1, x2, y2, color) {
+      doc.setDrawColor(color[0], color[1], color[2]);
+      doc.line(x1, y1, x2, y2);
+    }
+
+    function writeWrapped(txt, x, maxW, options) {
+      options = options || {};
+
+      var size = options.size || 9;
+      var style = options.style || "normal";
+      var color = options.color || text;
+      var lineH = options.lineH || (size * 0.45);
+      var prefix = options.prefix || "";
+      var indent = options.indent || 0;
+      var after = options.after || 0;
+
+      doc.setFont("helvetica", style);
+      doc.setFontSize(size);
+      setTextColor(color);
+
+      var lines = doc.splitTextToSize(String(txt || ""), maxW - indent - 1);
+
+      lines.forEach(function(line, idx) {
+        ensureSpace(lineH + 2);
+
+        var rendered = idx === 0 && prefix ? prefix + line : line;
+        doc.text(rendered, x + indent, y);
+        y += lineH;
+      });
+
+      y += after;
+    }
+
+    function writeInlineHeader(leftText, rightText, options) {
+      options = options || {};
+
+      var size = options.size || 10;
+      var leftW = contentW - 48;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(size);
+      setTextColor(options.color || blue);
+
+      var leftLines = doc.splitTextToSize(leftText || "", leftW);
+      var blockH = Math.max(leftLines.length * 4.6, 6) + 2;
+
+      ensureSpace(blockH + 4);
+
+      doc.text(leftLines, marginL, y);
+
+      if (rightText) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        setTextColor(muted);
+        doc.text(String(rightText), pageW - marginR, y, { align: "right" });
+      }
+
+      y += leftLines.length * 4.6 + 2;
+    }
+
+    function sectionTitle(title) {
+      // Si on est trop bas, le titre part directement page suivante.
+      ensureSpace(18);
+
+      doc.setFillColor(veryLight[0], veryLight[1], veryLight[2]);
+      doc.setDrawColor(lightBorder[0], lightBorder[1], lightBorder[2]);
+      doc.roundedRect(marginL, y, contentW, 8.5, 1.5, 1.5, "FD");
+
+      doc.setFillColor(blue[0], blue[1], blue[2]);
+      doc.rect(marginL, y, 2.4, 8.5, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11.5);
+      setTextColor(blue);
+      doc.text(String(title || "").toUpperCase(), marginL + 4.5, y + 5.8);
+
+      y += 12;
+    }
+
+    function separator() {
+      if (y < pageBottomLimit() - 6) {
+        drawLine(marginL, y, pageW - marginR, y, [226, 232, 240]);
+        y += 3;
+      }
+    }
+
+    function drawHeader() {
+      if (data.score) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setFillColor(229, 247, 237);
+        doc.setDrawColor(190, 225, 204);
+        doc.roundedRect(marginL, y - 3.5, 35, 7, 3, 3, "FD");
+        doc.setTextColor(22, 101, 52);
+        doc.text(data.score.replace(/^📊\s*/, ""), marginL + 3, y + 1);
+        y += 8;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      setTextColor(text);
+      doc.text(data.name.toUpperCase(), pageW / 2, y, { align: "center" });
+      y += 6.5;
+
+      if (data.profile) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10.5);
+        setTextColor(blue);
+
+        var profileLines = doc.splitTextToSize(data.profile, contentW);
+        doc.text(profileLines, pageW / 2, y, { align: "center" });
+
+        y += profileLines.length * 4.8;
+      }
+
+      if (data.contacts && data.contacts.length) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.8);
+        setTextColor(muted);
+
+        var contact = data.contacts.join("  |  ");
+        var cLines = doc.splitTextToSize(contact, contentW);
+        doc.text(cLines, pageW / 2, y, { align: "center" });
+
+        y += cLines.length * 4.3;
+      }
+
+      y += 3;
+      drawLine(marginL, y, pageW - marginR, y, blue);
+      y += 8;
+    }
+
+    function drawEntry(entry) {
+      if (!entry) return;
+
+      var right = entry.date || "";
+      var main = "";
+
+      if (entry.school) {
+        main = entry.school;
+
+        writeInlineHeader(main, right, {
+          size: 10.2,
+          color: blue
+        });
+
+        if (entry.degree) {
+          writeWrapped(entry.degree, marginL, contentW, {
+            size: 9,
+            style: "normal",
+            color: text,
+            lineH: 4.1,
+            after: 1.5
+          });
+        }
+      } else {
+        main = [entry.role, entry.company].filter(Boolean).join(" | ");
+
+        writeInlineHeader(main, right, {
+          size: 10.2,
+          color: blue
+        });
+      }
+
+      (entry.extra || []).forEach(function(extra) {
+        writeWrapped(extra, marginL, contentW, {
+          size: 8.8,
+          style: "bold",
+          color: blue,
+          lineH: 3.9,
+          after: 0.8
+        });
+      });
+
+      (entry.tasks || []).forEach(function(task) {
+        writeWrapped(task, marginL, contentW, {
+          size: 8.6,
+          style: "normal",
+          color: text,
+          lineH: 3.8,
+          prefix: "- ",
+          indent: 3,
+          after: 0.8
+        });
+      });
+
+      y += 1.5;
+      separator();
+    }
+
+    function drawTags(tags) {
+      if (!tags || !tags.length) return;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.8);
+      setTextColor(text);
+
+      var line = "";
+
+      tags.forEach(function(tag, idx) {
+        var next = line ? line + "  •  " + tag : tag;
+
+        if (doc.getTextWidth(next) > contentW) {
+          writeWrapped(line, marginL, contentW, {
+            size: 8.8,
+            style: "normal",
+            color: text,
+            lineH: 4.2,
+            after: 1
+          });
+          line = tag;
+        } else {
+          line = next;
+        }
+
+        if (idx === tags.length - 1 && line) {
+          writeWrapped(line, marginL, contentW, {
+            size: 8.8,
+            style: "normal",
+            color: text,
+            lineH: 4.2,
+            after: 1
+          });
+        }
+      });
+    }
+
+    drawHeader();
+
+    data.sections.forEach(function(section) {
+      var t = cvNorm(section.title);
+      var finalTitle = section.title;
+
+      if (/formation|education|etude|étude|diplome|diplôme/.test(t)) finalTitle = "Formations";
+      if (/skill|competence|savoir|expertise|aptitude|atout|certification|habilitation|methode|outil|processus|optimisation|dimensionnement|raccordement|logiciel/.test(t)) finalTitle = "Skills";
+
+      sectionTitle(finalTitle);
+
+      if (section.entries && section.entries.length) {
+        section.entries.forEach(function(entry) {
+          drawEntry(entry);
+        });
+      }
+
+      if (section.tags && section.tags.length) {
+        drawTags(section.tags);
+      }
+
+      if (section.lines && section.lines.length) {
+        section.lines.forEach(function(line) {
+          writeWrapped(line, marginL, contentW, {
+            size: 8.8,
+            style: "normal",
+            color: text,
+            lineH: 4,
+            prefix: "- ",
+            indent: 3,
+            after: 0.8
+          });
+        });
+      }
+
+      y += 4;
+    });
+
+    doc.save("cv_optimise.pdf");
+  } catch(e) {
+    console.error("Export CV PDF impossible :", e);
     alert("Export PDF impossible : " + (e.message || e));
   }
 }
