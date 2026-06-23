@@ -2250,8 +2250,8 @@ async function generateAll(){
       +"9. SKILLS / SOFTWARE / LANGUAGES FORMAT: use clear compact lines, no page numbers, no markdown tables, no decorative symbols except simple bullets when useful.\n"
       +"10. SECTION SEPARATION: make sure every section has its own heading and content clearly separated from the previous section. Do not merge sections.\n"
       +"11. All writing must remain professional, concise and ATS-friendly.\n\n"
-      +"Start with one line: [MATCH RATE ESTIMATE: XX%]\n"
-      +"Then return the optimized CV using the same text layout as the original.\n"
+      +"Do NOT write any match rate, match percentage, score, or line like [MATCH RATE ESTIMATE: XX%] inside the CV.\n"
+      +"Return the optimized CV using the same text layout as the original.\n"
       +"Return ONLY the CV text, no comments, no markdown symbols.";
 
     var userCV="LANGUAGE: "+lang+" ("+langLabel+") — rewrite in "+lang+".\n\n"
@@ -8444,7 +8444,7 @@ async function dlCVPdf() {
     }
 
     function drawHeader() {
-      center(data.name || "MOUSSA YELLY FALL", 16.5, "bold", 6.0, 1.0, black);
+      center(data.name || "MOUSSA YELLY FALL", 11.5, "bold", 4.8, 1.0, black);
 
       if (data.profile) {
         center(data.profile, 10.2, "normal", 4.4, 1.2, blue);
@@ -9192,7 +9192,7 @@ async function dlCVPdf() {
     }
 
     function drawHeader() {
-      center(data.name || "MOUSSA YELLY FALL", 16.5, "bold", 6, 1, black);
+      center(data.name || "MOUSSA YELLY FALL", 11.5, "bold", 4.8, 1, black);
 
       if (data.profile) {
         center(data.profile, 10.2, "normal", 4.4, 1.2, blue);
@@ -9289,6 +9289,332 @@ async function dlCVPdf() {
     doc.save("cv_optimise.pdf");
   } catch(e) {
     console.error("Export CV V35 impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V36 — PAS DE MATCHING SUR CV + PDF LETTRE IDENTIQUE AU VISUEL
+   ========================================================================== */
+
+/*
+  CV :
+  - Supprime définitivement les lignes du type [MATCH RATE ESTIMATE: 92%].
+  - Ne met plus de badge/pourcentage de matching dans le document CV.
+  - Réduit le calibre NOM PRÉNOM dans le PDF.
+
+  Lettre :
+  - Abandonne l'export html2canvas qui coupait la lettre.
+  - Génère un PDF A4 propre en reproduisant le visuel :
+    expéditeur gauche, destinataire droite, date sous destinataire,
+    objet, corps, formule, signature.
+*/
+
+function v36StripMatchLines(value) {
+  return String(value || "")
+    .replace(/\[MATCH\s*RATE\s*ESTIMATE\s*:\s*\d{1,3}%?\]/gi, "")
+    .replace(/\[TAUX\s*DE\s*CORRESPONDANCE\s*:\s*\d{1,3}%?\]/gi, "")
+    .replace(/^.*MATCH\s*RATE\s*ESTIMATE.*$/gim, "")
+    .replace(/^.*TAUX\s*DE\s*CORRESPONDANCE.*$/gim, "")
+    .replace(/^.*Correspondance\s*:\s*\d{1,3}%.*$/gim, "")
+    .trim();
+}
+
+// Le rendu visuel du CV ne doit plus afficher le badge de correspondance.
+if (typeof renderCV === "function") {
+  var __myf_v36_renderCV_base = renderCV;
+
+  renderCV = function(raw) {
+    var cleanRaw = v36StripMatchLines(raw);
+
+    // On neutralise l'ancien badge.
+    var oldGetCVScore = window.getCVScore;
+    window.getCVScore = function() { return null; };
+
+    try {
+      __myf_v36_renderCV_base(cleanRaw);
+    } finally {
+      if (oldGetCVScore) window.getCVScore = oldGetCVScore;
+    }
+
+    var out = document.getElementById("cvOut");
+    if (out) out.textContent = cleanRaw;
+
+    document.querySelectorAll(".cv-preserve-score").forEach(function(el) {
+      el.remove();
+    });
+  };
+}
+
+// Le PDF CV repart d'un texte nettoyé.
+if (typeof v35GetRawCvText === "function") {
+  var __myf_v36_v35GetRawCvText_base = v35GetRawCvText;
+
+  v35GetRawCvText = function() {
+    return v36StripMatchLines(__myf_v36_v35GetRawCvText_base());
+  };
+}
+
+if (typeof v35ExtractHeaderAndSections === "function") {
+  var __myf_v36_v35ExtractHeaderAndSections_base = v35ExtractHeaderAndSections;
+
+  v35ExtractHeaderAndSections = function(raw) {
+    return __myf_v36_v35ExtractHeaderAndSections_base(v36StripMatchLines(raw));
+  };
+}
+
+function v36Clean(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function v36TextFromHtmlElement(id) {
+  var el = document.getElementById(id);
+  return el ? v36Clean(el.innerText || el.textContent || "") : "";
+}
+
+function v36LetterData() {
+  var j = null;
+
+  if (typeof LAST_LETTER_JSON !== "undefined" && LAST_LETTER_JSON) {
+    j = Object.assign({}, LAST_LETTER_JSON);
+    if (typeof normalizeLetterDate === "function") j = normalizeLetterDate(j);
+  }
+
+  if (!j) {
+    j = {
+      sender_name: v36TextFromHtmlElement("lmSender").split("\n")[0] || "",
+      recipient_company: v36TextFromHtmlElement("lmRecipient").split("\n")[0] || "",
+      city: "",
+      date: v36TextFromHtmlElement("lmDate"),
+      subject: v36TextFromHtmlElement("lmSubject").replace(/^Objet\s*:\s*/i, ""),
+      salutation: "",
+      body: v36TextFromHtmlElement("lmBody"),
+      closing: v36TextFromHtmlElement("lmClosing"),
+      signature: v36TextFromHtmlElement("lmSignature")
+    };
+  }
+
+  return {
+    sender_name: v36Clean(j.sender_name),
+    sender_address: v36Clean(j.sender_address),
+    sender_phone: v36Clean(j.sender_phone),
+    sender_email: v36Clean(j.sender_email),
+    recipient_company: v36Clean(j.recipient_company),
+    recipient_name: v36Clean(j.recipient_name),
+    recipient_title: v36Clean(j.recipient_title),
+    recipient_address: v36Clean(j.recipient_address),
+    city: v36Clean(j.city),
+    date: v36Clean(j.date),
+    subject: v36Clean(j.subject),
+    salutation: v36Clean(j.salutation),
+    body: v36Clean(j.body),
+    closing: v36Clean(j.closing),
+    signature: v36Clean(j.signature || j.sender_name || "")
+  };
+}
+
+function v36SplitParagraphs(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .split(/\n\s*\n+/)
+    .map(v36Clean)
+    .filter(Boolean);
+}
+
+function v36DrawLetterTextBlock(doc, lines, x, y, w, options) {
+  options = options || {};
+
+  var size = options.size || 10.5;
+  var style = options.style || "normal";
+  var lineH = options.lineH || 5;
+  var align = options.align || "left";
+  var color = options.color || [20, 20, 20];
+
+  doc.setFont("times", style);
+  doc.setFontSize(size);
+  doc.setTextColor(color[0], color[1], color[2]);
+
+  String(lines || "")
+    .split(/\n/)
+    .map(v36Clean)
+    .filter(Boolean)
+    .forEach(function(line) {
+      var wrapped = doc.splitTextToSize(line, w);
+      wrapped.forEach(function(part) {
+        doc.text(part, align === "right" ? x + w : x, y, { align: align });
+        y += lineH;
+      });
+    });
+
+  return y;
+}
+
+async function dlLetterPdf() {
+  var j = v36LetterData();
+
+  var hasLetter =
+    j.subject || j.body || j.salutation ||
+    v36TextFromHtmlElement("lmOut").length > 20 ||
+    v36TextFromHtmlElement("lmBody").length > 20;
+
+  if (!hasLetter) {
+    alert("Générez d'abord une lettre de motivation avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+    var marginL = 24;
+    var marginR = 24;
+    var marginT = 22;
+    var marginB = 22;
+    var contentW = pageW - marginL - marginR;
+    var y = marginT;
+
+    function bottom() {
+      return pageH - marginB;
+    }
+
+    function newPage() {
+      doc.addPage();
+      y = marginT;
+    }
+
+    function ensure(h) {
+      if (y + h > bottom()) newPage();
+    }
+
+    function setFont(size, style) {
+      doc.setFont("times", style || "normal");
+      doc.setFontSize(size);
+      doc.setTextColor(25, 25, 25);
+    }
+
+    function writeWrapped(text, x, w, size, style, lineH, after, align) {
+      text = v36Clean(text);
+      if (!text) return;
+
+      setFont(size, style || "normal");
+      var lines = doc.splitTextToSize(text, w);
+
+      lines.forEach(function(line) {
+        ensure(lineH + 1);
+        doc.text(line, align === "right" ? x + w : x, y, { align: align || "left" });
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function writeParagraph(text) {
+      writeWrapped(text, marginL, contentW, 11, "normal", 5.4, 5.2, "left");
+    }
+
+    // Expéditeur à gauche
+    var senderLines = [
+      j.sender_name,
+      j.sender_address,
+      j.sender_phone,
+      j.sender_email
+    ].filter(Boolean).join("\n");
+
+    var recipientNameLine = "";
+    if (j.recipient_name) {
+      recipientNameLine = j.recipient_name + (j.recipient_title ? ", " + j.recipient_title : "");
+    }
+
+    var recipientLines = [
+      j.recipient_company,
+      recipientNameLine,
+      j.recipient_address
+    ].filter(Boolean).join("\n");
+
+    var yTop = y;
+    var leftW = 76;
+    var rightW = 76;
+    var rightX = pageW - marginR - rightW;
+
+    var ySender = v36DrawLetterTextBlock(doc, senderLines, marginL, yTop, leftW, {
+      size: 10.5,
+      style: "normal",
+      lineH: 5,
+      align: "left"
+    });
+
+    var yRecipient = v36DrawLetterTextBlock(doc, recipientLines, rightX, yTop, rightW, {
+      size: 10.5,
+      style: "normal",
+      lineH: 5,
+      align: "left"
+    });
+
+    y = Math.max(ySender, yRecipient) + 7;
+
+    // Date sous destinataire, alignée à droite
+    var dateLine = ((j.city ? j.city + ", " : "") + (j.date || "")).trim();
+    if (dateLine) {
+      setFont(10.5, "normal");
+      doc.text(dateLine, pageW - marginR, y, { align: "right" });
+      y += 13;
+    }
+
+    // Objet
+    if (j.subject) {
+      setFont(10.5, "italic");
+      var subjectText = "Objet : " + j.subject;
+      var subjectLines = doc.splitTextToSize(subjectText, contentW);
+      subjectLines.forEach(function(line) {
+        ensure(6);
+        doc.text(line, marginL, y);
+        y += 5.2;
+      });
+
+      doc.setDrawColor(225, 225, 225);
+      doc.setLineWidth(0.25);
+      doc.line(marginL, y + 1, pageW - marginR, y + 1);
+
+      y += 15;
+    }
+
+    // Corps
+    if (j.salutation) {
+      writeParagraph(j.salutation);
+    }
+
+    v36SplitParagraphs(j.body).forEach(function(p) {
+      writeParagraph(p);
+    });
+
+    // Formule + signature : on les garde ensemble si possible.
+    ensure(32);
+
+    if (j.closing) {
+      writeWrapped(j.closing, marginL, contentW, 11, "normal", 5.4, 14, "left");
+    }
+
+    if (j.signature) {
+      setFont(12, "bold");
+      doc.text(j.signature.toUpperCase(), pageW - marginR, y, { align: "right" });
+    }
+
+    doc.save("lettre_motivation.pdf");
+  } catch(e) {
+    console.error("Export PDF lettre V36 impossible :", e);
     alert("Export PDF impossible : " + (e.message || e));
   }
 }
