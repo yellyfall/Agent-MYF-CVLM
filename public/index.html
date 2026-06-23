@@ -7417,6 +7417,658 @@ async function dlCVPdf() {
 }
 
 
+
+/* ==========================================================================
+   CORRECTIF MYF V33 — PDF CV STYLE CARTE + FORMAT A4 PORTRAIT
+   ========================================================================== */
+/*
+  Objectif :
+  - Garder le style du CV optimisé joint : badge, header centré, sections encadrées,
+    bordure gauche bleue, skills sous forme de tags.
+  - Mais générer un vrai PDF A4 portrait, page par page, sans capture HTML.
+  - Empêcher les pages trop basses/trop hautes.
+  - Éviter la 3e page presque vide autant que possible avec une pagination compacte.
+*/
+
+function v33Norm(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function v33Clean(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function v33SplitPieces(value) {
+  var raw = v33Clean(value)
+    .replace(/(UTEC\s*15-712)(Analyse)/gi, "$1\n$2")
+    .replace(/(chantier)(Analyse)/gi, "$1\n$2")
+    .replace(/(prenantes)(Veille)/gi, "$1\n$2")
+    .replace(/(charge)(Montage)/gi, "$1\n$2")
+    .replace(/(autoconsommation)(Relation)/gi, "$1\n$2")
+    .replace(/(courant)(Anglais)/gi, "$1\nAnglais");
+
+  return raw
+    .split(/\n|•|;/)
+    .map(function(x) {
+      return v33Clean(x.replace(/^[-–—•]\s*/, ""));
+    })
+    .filter(Boolean);
+}
+
+function v33PushUnique(arr, value) {
+  var v = v33Clean(value);
+  if (!v) return;
+
+  var n = v33Norm(v);
+  if (!n) return;
+
+  for (var i = 0; i < arr.length; i++) {
+    if (v33Norm(arr[i]) === n) return;
+  }
+
+  arr.push(v);
+}
+
+function v33IsAcademic(entry) {
+  var txt = [
+    entry && entry.school,
+    entry && entry.degree,
+    entry && entry.role,
+    entry && entry.company,
+    entry && entry.date,
+    entry && entry.extra ? entry.extra.join(" ") : "",
+    entry && entry.tasks ? entry.tasks.join(" ") : ""
+  ].join(" ");
+
+  var t = v33Norm(txt);
+
+  return /(universite|université|lycee|lycée|college|collège|ecole|école|institut|faculte|faculté|ugb|upvd|perpignan via domitia|gaston berger|master|licence|bachelor|dut|bts|doctorat|diplome|diplôme|physique appliquee|physique appliquée|energie solaire|énergie solaire|energies renouvelables|énergies renouvelables)/.test(t);
+}
+
+function v33IsSoftware(value) {
+  var t = v33Norm(value);
+  return /(solaredge|sketchup|autocad|revit|archelios|qgis|pvsyst|pvgis|office|excel|word|powerpoint|latex|pleiades|pléiades|comsol|ees|matlab|python|javascript|node|render|github|sqlite|laragon)/.test(t);
+}
+
+function v33IsLanguage(value) {
+  var t = v33Norm(value);
+  return /(francais|français|anglais|english|espagnol|arabe|wolof|c2|b2|b1|a2|courant|intermediaire|intermédiaire)/.test(t);
+}
+
+function v33SectionKind(title) {
+  var t = v33Norm(title);
+
+  if (/experience|expérience|professionnelle/.test(t)) return "experience";
+  if (/formation|education|etude|étude|diplome|diplôme/.test(t)) return "education";
+  if (/logiciel|software|outils/.test(t)) return "software";
+  if (/langue|language/.test(t)) return "language";
+  if (/skill|competence|compétence|technique|hard|soft|savoir|expertise|aptitude|atout|certification|habilitation|norme|methode|méthode/.test(t)) return "skill";
+
+  return "other";
+}
+
+function v33Organize(raw) {
+  var data = {
+    score: raw.score || "",
+    name: raw.name || "MOUSSA YELLY FALL",
+    profile: raw.profile || "",
+    contacts: raw.contacts || [],
+    experiences: [],
+    formations: [],
+    skills: [],
+    software: [],
+    languages: []
+  };
+
+  (raw.sections || []).forEach(function(sec) {
+    var kind = v33SectionKind(sec.title);
+
+    if (kind === "experience") {
+      (sec.entries || []).forEach(function(e) {
+        data.experiences.push(e);
+      });
+      return;
+    }
+
+    if (kind === "education") {
+      (sec.entries || []).forEach(function(e) {
+        if (v33IsAcademic(e)) {
+          data.formations.push(e);
+        } else {
+          var txt = [
+            e.role,
+            e.company,
+            e.school,
+            e.degree,
+            (e.extra || []).join(" "),
+            (e.tasks || []).join(" ")
+          ].filter(Boolean).join(" ");
+
+          v33SplitPieces(txt).forEach(function(x) {
+            if (v33IsSoftware(x)) v33PushUnique(data.software, x);
+            else if (v33IsLanguage(x)) v33PushUnique(data.languages, x);
+            else v33PushUnique(data.skills, x);
+          });
+        }
+      });
+
+      (sec.lines || []).forEach(function(line) {
+        v33SplitPieces(line).forEach(function(x) {
+          if (v33IsSoftware(x)) v33PushUnique(data.software, x);
+          else if (v33IsLanguage(x)) v33PushUnique(data.languages, x);
+          else v33PushUnique(data.skills, x);
+        });
+      });
+
+      (sec.tags || []).forEach(function(x) {
+        if (v33IsSoftware(x)) v33PushUnique(data.software, x);
+        else if (v33IsLanguage(x)) v33PushUnique(data.languages, x);
+        else v33PushUnique(data.skills, x);
+      });
+
+      return;
+    }
+
+    if (kind === "software") {
+      (sec.tags || []).forEach(function(x) { v33PushUnique(data.software, x); });
+      (sec.lines || []).forEach(function(line) {
+        v33SplitPieces(line).forEach(function(x) { v33PushUnique(data.software, x); });
+      });
+      return;
+    }
+
+    if (kind === "language") {
+      (sec.tags || []).forEach(function(x) { v33PushUnique(data.languages, x); });
+      (sec.lines || []).forEach(function(line) {
+        v33SplitPieces(line).forEach(function(x) { v33PushUnique(data.languages, x); });
+      });
+      return;
+    }
+
+    // Skills et autres sections
+    (sec.tags || []).forEach(function(x) {
+      if (v33IsSoftware(x)) v33PushUnique(data.software, x);
+      else if (v33IsLanguage(x)) v33PushUnique(data.languages, x);
+      else v33PushUnique(data.skills, x);
+    });
+
+    (sec.lines || []).forEach(function(line) {
+      v33SplitPieces(line).forEach(function(x) {
+        if (v33IsSoftware(x)) v33PushUnique(data.software, x);
+        else if (v33IsLanguage(x)) v33PushUnique(data.languages, x);
+        else v33PushUnique(data.skills, x);
+      });
+    });
+
+    (sec.entries || []).forEach(function(e) {
+      var txt = [
+        e.role,
+        e.company,
+        e.school,
+        e.degree,
+        (e.extra || []).join(" "),
+        (e.tasks || []).join(" ")
+      ].filter(Boolean).join(" ");
+
+      v33SplitPieces(txt).forEach(function(x) {
+        if (v33IsSoftware(x)) v33PushUnique(data.software, x);
+        else if (v33IsLanguage(x)) v33PushUnique(data.languages, x);
+        else v33PushUnique(data.skills, x);
+      });
+    });
+  });
+
+  return data;
+}
+
+function v33ParseExperience(entry) {
+  var role = v33Clean(entry.role || "");
+  var company = v33Clean(entry.company || "");
+  var date = v33Clean(entry.date || "");
+
+  if (!company && role.indexOf("|") !== -1) {
+    var parts = role.split("|").map(v33Clean).filter(Boolean);
+    role = parts[0] || role;
+    company = parts.slice(1).join(" | ");
+  }
+
+  return {
+    role: role,
+    company: company || v33Clean(entry.school || ""),
+    date: date,
+    tasks: (entry.tasks || []).map(function(x) { return v33Clean(x); }).filter(Boolean),
+    extra: (entry.extra || []).map(function(x) { return v33Clean(x); }).filter(Boolean)
+  };
+}
+
+function v33ParseFormation(entry) {
+  var school = v33Clean(entry.school || entry.company || "");
+  var degree = v33Clean(entry.degree || entry.role || "");
+  var date = v33Clean(entry.date || "");
+
+  if (/master|licence|bachelor|dut|bts|doctorat|diplome|diplôme/i.test(school) && /universit|lycee|lycée|college|collège|ecole|école/i.test(degree)) {
+    var tmp = school;
+    school = degree;
+    degree = tmp;
+  }
+
+  return { school: school, degree: degree, date: date };
+}
+
+async function dlCVPdf() {
+  var raw = typeof cvPdfCollectData === "function" ? cvPdfCollectData() : null;
+
+  if (!raw || !raw.sections || !raw.sections.length) {
+    alert("Générez d'abord le CV optimisé avant de télécharger le PDF.");
+    return;
+  }
+
+  try {
+    var JsPDF = await ensureJsPdfDirect();
+    var data = v33Organize(raw);
+
+    var doc = new JsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    var pageW = 210;
+    var pageH = 297;
+
+    // Feuille A4 portrait réelle.
+    var marginL = 15;
+    var marginR = 15;
+    var marginT = 16;
+    var marginB = 16;
+    var contentW = pageW - marginL - marginR;
+
+    var y = marginT;
+
+    var blue = [26, 58, 110];
+    var dark = [18, 24, 38];
+    var text = [25, 29, 38];
+    var muted = [75, 85, 99];
+    var border = [216, 226, 238];
+    var chipBg = [236, 246, 252];
+    var chipBorder = [205, 226, 240];
+    var greenBg = [230, 247, 237];
+    var greenBorder = [187, 225, 203];
+    var greenText = [22, 101, 52];
+
+    var activeSection = null;
+
+    function setColor(c) {
+      doc.setTextColor(c[0], c[1], c[2]);
+    }
+
+    function setDraw(c) {
+      doc.setDrawColor(c[0], c[1], c[2]);
+    }
+
+    function bottom() {
+      return pageH - marginB;
+    }
+
+    function startPage() {
+      doc.addPage();
+      y = marginT + 4;
+    }
+
+    function finalizeSectionSegment(limitY) {
+      if (!activeSection) return;
+
+      var x = activeSection.x;
+      var w = activeSection.w;
+      var y0 = activeSection.y0;
+      var y1 = Math.max(limitY || y, y0 + 10);
+      var h = y1 - y0;
+
+      setDraw(border);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(x, y0, w, h, 1.5, 1.5, "S");
+
+      doc.setFillColor(blue[0], blue[1], blue[2]);
+      doc.rect(x, y0, 1.4, h, "F");
+    }
+
+    function ensureInSection(h) {
+      if (y + h <= bottom()) return;
+
+      finalizeSectionSegment(bottom() - 1);
+      startPage();
+
+      activeSection = {
+        x: marginL,
+        w: contentW,
+        y0: y
+      };
+
+      y += 3;
+    }
+
+    function ensurePlain(h) {
+      if (y + h > bottom()) startPage();
+    }
+
+    function font(size, style, color) {
+      doc.setFont("helvetica", style || "normal");
+      doc.setFontSize(size);
+      setColor(color || text);
+    }
+
+    function writeWrapped(txt, x, w, size, style, lineH, after, opts) {
+      opts = opts || {};
+      txt = v33Clean(txt);
+      if (!txt) return;
+
+      font(size, style || "normal", opts.color || text);
+
+      var lines = doc.splitTextToSize(txt, w);
+      lines.forEach(function(line) {
+        if (activeSection) ensureInSection(lineH + 1);
+        else ensurePlain(lineH + 1);
+
+        doc.text(line, x, y);
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function writeBullet(txt, x, w) {
+      txt = v33Clean(String(txt || "").replace(/^[-–—•]\s*/, ""));
+      if (!txt) return;
+
+      font(8.25, "normal", text);
+
+      var bulletW = 3;
+      var lines = doc.splitTextToSize(txt, w - bulletW);
+
+      lines.forEach(function(line, idx) {
+        ensureInSection(4.0);
+
+        if (idx === 0) {
+          doc.text("•", x, y);
+          doc.text(line, x + bulletW, y);
+        } else {
+          doc.text(line, x + bulletW, y);
+        }
+
+        y += 3.7;
+      });
+
+      y += 0.6;
+    }
+
+    function center(txt, size, style, lineH, after, color) {
+      txt = v33Clean(txt);
+      if (!txt) return;
+
+      font(size, style || "normal", color || text);
+
+      var lines = doc.splitTextToSize(txt, contentW);
+      lines.forEach(function(line) {
+        ensurePlain(lineH + 1);
+        doc.text(line, pageW / 2, y, { align: "center" });
+        y += lineH;
+      });
+
+      y += after || 0;
+    }
+
+    function drawHeader() {
+      if (data.score) {
+        var score = data.score.replace(/^📊\s*/, "");
+        font(7.8, "bold", greenText);
+
+        var sw = Math.min(55, doc.getTextWidth(score) + 10);
+        var sx = marginL;
+        doc.setFillColor(greenBg[0], greenBg[1], greenBg[2]);
+        setDraw(greenBorder);
+        doc.roundedRect(sx, y - 4, sw, 7.5, 3.5, 3.5, "FD");
+        doc.text(score, sx + 5, y + 0.8);
+
+        y += 10;
+      }
+
+      center(data.name || "MOUSSA YELLY FALL", 15.5, "bold", 5.8, 0.8, dark);
+      center(data.profile || "", 9.6, "bold", 4.3, 1.2, blue);
+
+      if (data.contacts && data.contacts.length) {
+        center(data.contacts.join("   |   "), 8.15, "normal", 3.9, 3.8, muted);
+      } else {
+        y += 2;
+      }
+
+      setDraw(blue);
+      doc.setLineWidth(0.45);
+      doc.line(marginL, y, pageW - marginR, y);
+      y += 6.5;
+    }
+
+    function openSection(title) {
+      ensurePlain(16);
+
+      activeSection = {
+        x: marginL,
+        w: contentW,
+        y0: y
+      };
+
+      var innerX = marginL + 4.5;
+      var innerW = contentW - 9;
+
+      y += 7;
+      font(11.2, "bold", blue);
+      doc.text(String(title || "").toUpperCase(), innerX, y);
+
+      y += 3.8;
+      setDraw(border);
+      doc.setLineWidth(0.25);
+      doc.line(innerX, y, innerX + innerW, y);
+
+      y += 5.2;
+    }
+
+    function closeSection(extraBottom) {
+      y += extraBottom || 2.2;
+      finalizeSectionSegment(y);
+      activeSection = null;
+      y += 5.5;
+    }
+
+    function drawExperience(e, isLast) {
+      var exp = v33ParseExperience(e);
+      var x = marginL + 5;
+      var w = contentW - 10;
+
+      ensureInSection(16);
+
+      font(9.6, "bold", blue);
+
+      var dateW = exp.date ? Math.min(45, doc.getTextWidth(exp.date) + 2) : 0;
+      var roleW = w - dateW - 4;
+      var roleLines = doc.splitTextToSize(exp.role || "Expérience professionnelle", roleW);
+
+      roleLines.forEach(function(line, idx) {
+        ensureInSection(4.5);
+        doc.text(line, x, y);
+
+        if (idx === 0 && exp.date) {
+          font(8.7, "bold", muted);
+          doc.text(exp.date, x + w, y, { align: "right" });
+          font(9.6, "bold", blue);
+        }
+
+        y += 4.1;
+      });
+
+      if (exp.company) {
+        font(8.2, "bold", blue);
+        var compLines = doc.splitTextToSize(exp.company, w);
+        compLines.forEach(function(line) {
+          ensureInSection(4.2);
+          doc.text(line, x, y);
+          // soulignement léger comme dans le modèle
+          setDraw(blue);
+          doc.setLineWidth(0.15);
+          doc.line(x, y + 0.9, x + Math.min(doc.getTextWidth(line), w), y + 0.9);
+          y += 3.7;
+        });
+      }
+
+      var tasks = exp.tasks.length ? exp.tasks : exp.extra;
+      tasks.forEach(function(task) {
+        writeBullet(task, x + 1.5, w - 2);
+      });
+
+      if (!isLast) {
+        y += 2.5;
+        setDraw([226, 232, 240]);
+        doc.setLineWidth(0.15);
+        doc.line(x, y, x + w, y);
+        y += 4;
+      }
+    }
+
+    function drawFormations() {
+      if (!data.formations.length) return;
+
+      openSection("FORMATION");
+
+      data.formations.forEach(function(entry, idx) {
+        var f = v33ParseFormation(entry);
+        var x = marginL + 5;
+        var w = contentW - 10;
+
+        ensureInSection(12);
+
+        font(9.5, "bold", blue);
+
+        var dateW = f.date ? Math.min(45, doc.getTextWidth(f.date) + 2) : 0;
+        var schoolW = w - dateW - 4;
+        var schoolLines = doc.splitTextToSize(f.school || "Établissement", schoolW);
+
+        schoolLines.forEach(function(line, lineIdx) {
+          ensureInSection(4.6);
+          doc.text(line, x, y);
+
+          if (lineIdx === 0 && f.date) {
+            font(8.5, "bold", muted);
+            doc.text(f.date, x + w, y, { align: "right" });
+            font(9.5, "bold", blue);
+          }
+
+          y += 4.0;
+        });
+
+        if (f.degree) {
+          writeWrapped(f.degree, x, w, 8.3, "normal", 3.7, idx === data.formations.length - 1 ? 0 : 2.5);
+        }
+
+        if (idx < data.formations.length - 1) {
+          setDraw([226, 232, 240]);
+          doc.setLineWidth(0.15);
+          doc.line(x, y, x + w, y);
+          y += 3;
+        }
+      });
+
+      closeSection(1.5);
+    }
+
+    function drawChipsSection(title, items) {
+      if (!items || !items.length) return;
+
+      openSection(title);
+
+      var x0 = marginL + 5;
+      var w = contentW - 10;
+      var x = x0;
+      var rowH = 6.2;
+
+      font(7.8, "normal", blue);
+
+      items.forEach(function(item) {
+        item = v33Clean(item);
+        if (!item) return;
+
+        var chipW = Math.min(w, doc.getTextWidth(item) + 6.5);
+
+        if (x + chipW > x0 + w) {
+          x = x0;
+          y += rowH;
+        }
+
+        ensureInSection(rowH + 1);
+
+        doc.setFillColor(chipBg[0], chipBg[1], chipBg[2]);
+        setDraw(chipBorder);
+        doc.setLineWidth(0.22);
+        doc.roundedRect(x, y - 4.2, chipW, 5.4, 2.7, 2.7, "FD");
+
+        font(7.6, "normal", blue);
+        doc.text(item, x + 3.2, y - 0.5);
+
+        x += chipW + 2.5;
+      });
+
+      y += 4.5;
+      closeSection(1.5);
+    }
+
+    function drawLanguages() {
+      if (!data.languages.length) return;
+
+      openSection("LANGUES");
+
+      var x = marginL + 5;
+      var w = contentW - 10;
+
+      data.languages.forEach(function(lang) {
+        writeWrapped(lang, x, w, 9.2, "normal", 4.2, 0.6);
+      });
+
+      closeSection(1.5);
+    }
+
+    drawHeader();
+
+    if (data.experiences.length) {
+      openSection("EXPÉRIENCES PROFESSIONNELLES");
+      data.experiences.forEach(function(e, idx) {
+        drawExperience(e, idx === data.experiences.length - 1);
+      });
+      closeSection(1.5);
+    }
+
+    drawFormations();
+
+    // Comme le CV joint : une section SKILLS pour compétences métier,
+    // puis une seconde section SKILLS pour logiciels en tags.
+    drawChipsSection("SKILLS", data.skills);
+    drawChipsSection("SKILLS", data.software);
+    drawLanguages();
+
+    doc.save("cv_optimise.pdf");
+  } catch(e) {
+    console.error("Export PDF CV V33 impossible :", e);
+    alert("Export PDF impossible : " + (e.message || e));
+  }
+}
+
+
 </script>
 </body>
 </html>
