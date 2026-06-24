@@ -1104,6 +1104,99 @@ select:focus{border-color:var(--accent)}
   text-align:right!important;
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CORRECTIF V40 — MULTI-CANDIDATURES RECRUTEUR + INVALIDATION RÉSULTATS
+───────────────────────────────────────────────────────────────────────────── */
+.stale-note{
+  margin:10px 0 0;
+  padding:9px 11px;
+  border:1px solid rgba(245,158,11,.35);
+  background:rgba(245,158,11,.10);
+  color:var(--text);
+  border-radius:12px;
+  font-size:12px;
+}
+.rec-multi-wrap{
+  margin-top:18px;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+.rec-multi-card{
+  border:1px solid rgba(79,142,247,.22);
+  background:rgba(255,255,255,.04);
+  border-radius:16px;
+  padding:14px;
+}
+.rec-multi-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+  margin-bottom:10px;
+}
+.rec-rank{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:30px;
+  height:30px;
+  padding:0 8px;
+  border-radius:999px;
+  background:rgba(79,142,247,.18);
+  color:var(--text);
+  font-weight:800;
+  font-size:12px;
+}
+.rec-candidate-name{
+  font-weight:800;
+  color:var(--text);
+  font-size:14px;
+}
+.rec-candidate-file{
+  color:var(--muted);
+  font-size:11px;
+  margin-top:2px;
+}
+.rec-pill-score{
+  font-weight:900;
+  font-size:18px;
+  color:#22c55e;
+}
+.rec-pill-score.orange{color:#f59e0b}
+.rec-pill-score.red{color:#ef4444}
+.rec-reco{
+  margin:8px 0 10px;
+  font-size:12px;
+  font-weight:700;
+}
+.rec-reco.ok{color:#22c55e}
+.rec-reco.no{color:#f59e0b}
+.rec-mini-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.rec-mini-title{
+  font-size:11px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  font-weight:800;
+  margin-bottom:6px;
+}
+.rec-mini-list{
+  margin:0;
+  padding-left:16px;
+  font-size:12px;
+  line-height:1.45;
+}
+@media(max-width:760px){
+  .rec-mini-grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -1178,7 +1271,7 @@ select:focus{border-color:var(--accent)}
       <button type="button" class="iface-card recruiter" onclick="selectInterface('recruiter')">
         <div class="iface-icon">🎯</div>
         <div class="iface-name">Recruteur</div>
-        <div class="iface-desc">Comparer un CV avec une offre et obtenir un score de compatibilité.</div>
+        <div class="iface-desc">Comparer un ou plusieurs CV avec une offre, classer les candidats et obtenir un score de compatibilité.</div>
       </button>
       <button type="button" class="iface-card chat-choice" onclick="selectInterface('chat')">
         <div class="iface-icon">💬</div>
@@ -1554,10 +1647,10 @@ select:focus{border-color:var(--accent)}
       <div class="rec-card">
         <div class="rec-card-title">CV du candidat <span class="cbadge">PDF ou texte</span></div>
         <div class="uz" id="recCvZone">
-          <input type="file" id="recCvFile" accept=".pdf,application/pdf" onchange="uploadRecCV(this)">
+          <input type="file" id="recCvFile" accept=".pdf,.txt,application/pdf,text/plain" multiple onchange="uploadRecCV(this)">
           <div class="uz-icon">📂</div>
-          <div class="uz-text">Téléversez le CV PDF ou <strong>cliquez</strong></div>
-          <div class="uz-hint">PDF texte natif recommandé</div>
+          <div class="uz-text">Téléversez un ou plusieurs CV ou <strong>cliquez</strong></div>
+          <div class="uz-hint">PDF ou TXT — plusieurs CV possibles</div>
         </div>
         <div class="fload" id="recCvLoad"><div class="mspin"></div>Lecture du CV PDF...</div>
         <div class="fbadge" id="recCvBadge"><span>✅</span><span id="recCvName">-</span><button onclick="clearRecCV()">✕</button></div>
@@ -1602,7 +1695,7 @@ select:focus{border-color:var(--accent)}
     </div>
 
     <button class="rec-generate-btn" id="recAnalyzeBtn" onclick="analyzeRecruiterMatch()">
-      <div class="bspin"></div><span>Analyser la compatibilité</span>
+      <div class="bspin"></div><span>Analyser la/les candidature(s)</span>
     </button>
 
     <div class="rec-score-zone" id="recScoreZone">
@@ -9958,6 +10051,546 @@ async function dlLetterPdf() {
     alert("Export PDF impossible : " + (e.message || e));
   }
 }
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V40 — ENTRÉES TOUJOURS FRAÎCHES + MULTI-CANDIDATURES
+   ========================================================================== */
+
+var MYF_REC_CV_LIST = [];
+var MYF_GENERATION_DIRTY = false;
+
+function myf40Clean(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function myf40Short(text, max) {
+  text = myf40Clean(text);
+  return text.length > max ? text.slice(0, max - 1) + "…" : text;
+}
+
+function myf40ResetGeneratedOutputs(reason) {
+  MYF_GENERATION_DIRTY = true;
+
+  try { LAST_LETTER_JSON = null; } catch(e) {}
+
+  ["lmOut", "cvOut"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = "";
+  });
+
+  var letter = document.getElementById("letterRender");
+  var cv = document.getElementById("cvRender");
+  if (letter) letter.classList.remove("show");
+  if (cv) cv.classList.remove("show");
+
+  var res = document.getElementById("resSection");
+  if (res) {
+    res.classList.remove("show");
+    if (reason && !document.getElementById("myfStaleNote")) {
+      var note = document.createElement("div");
+      note.id = "myfStaleNote";
+      note.className = "stale-note";
+      note.textContent = "Les données ont changé. Relancez la génération pour obtenir une nouvelle lettre et un nouveau CV.";
+      res.parentNode.insertBefore(note, res);
+    }
+  }
+
+  var score = document.getElementById("scoreZone");
+  if (score) score.innerHTML = "";
+}
+
+function myf40HideStaleNote() {
+  var note = document.getElementById("myfStaleNote");
+  if (note) note.remove();
+}
+
+function myf40SetOfferTab(tab) {
+  curTab = tab;
+  ["text","link","file"].forEach(function(t) {
+    var btn = document.getElementById("tab-" + t);
+    var panel = document.getElementById("tab-" + t);
+  });
+}
+
+// On garde l'ancien switchTab mais on invalide les résultats.
+if (typeof switchTab === "function") {
+  var __myf40_switchTab_base = switchTab;
+  switchTab = function(tab) {
+    __myf40_switchTab_base(tab);
+    myf40ResetGeneratedOutputs("offer-tab");
+  };
+}
+
+// On garde l'ancien tChip mais chaque changement de ton invalide les résultats.
+if (typeof tChip === "function") {
+  var __myf40_tChip_base = tChip;
+  tChip = function(el) {
+    __myf40_tChip_base(el);
+    myf40ResetGeneratedOutputs("tone");
+  };
+}
+
+// CV candidat : si l'utilisateur colle un nouveau CV complet dans le textarea,
+// il devient prioritaire par rapport à l'ancien fichier uploadé.
+function getCVText() {
+  var manualEl = document.getElementById("cvText");
+  var manual = manualEl ? manualEl.value.trim() : "";
+
+  if (manual.length > 80) return manual;
+
+  if (cvData && cvData.content) {
+    return cvData.content + (manual ? "\n\n--- Infos complémentaires ---\n" + manual : "");
+  }
+
+  return manual;
+}
+
+// Offre : le mode actif est respecté, et les champs modifiés invalident l'ancien résultat.
+function getOfText() {
+  var text = document.getElementById("ofText") ? document.getElementById("ofText").value.trim() : "";
+  var url = document.getElementById("ofUrl") ? document.getElementById("ofUrl").value.trim() : "";
+
+  if (curTab === "text") return text;
+  if (curTab === "link") return url ? "URL offre : " + url : "";
+  if (curTab === "file" && ofData && ofData.content) return ofData.content;
+
+  // Sécurité : si l'onglet actif est vide mais qu'un autre champ vient d'être rempli,
+  // on prend l'information disponible la plus récente/utile.
+  if (text.length > 20) return text;
+  if (url.length > 10) return "URL offre : " + url;
+  if (ofData && ofData.content) return ofData.content;
+
+  return "";
+}
+
+async function uploadCV(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+
+  document.getElementById("cvLoad").classList.add("show");
+  document.getElementById("cvBadge").classList.remove("show");
+
+  try {
+    cvData = await readAny(file);
+    document.getElementById("cvName").textContent = file.name;
+    document.getElementById("cvBadge").classList.add("show");
+    myf40ResetGeneratedOutputs("new-cv-file");
+    updPipeline();
+  } catch(e) {
+    showErr("Erreur CV : " + e.message);
+  } finally {
+    document.getElementById("cvLoad").classList.remove("show");
+    try { input.value = ""; } catch(e) {}
+  }
+}
+
+async function uploadOf(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+
+  document.getElementById("ofLoad").classList.add("show");
+  document.getElementById("ofBadge").classList.remove("show");
+
+  try {
+    ofData = await readAny(file);
+    curTab = "file";
+    document.getElementById("ofName").textContent = file.name;
+    document.getElementById("ofBadge").classList.add("show");
+    myf40ResetGeneratedOutputs("new-offer-file");
+    updPipeline();
+  } catch(e) {
+    showErr("Erreur offre : " + e.message);
+  } finally {
+    document.getElementById("ofLoad").classList.remove("show");
+    try { input.value = ""; } catch(e) {}
+  }
+}
+
+function clearCV() {
+  cvData = null;
+  var file = document.getElementById("cvFile");
+  var badge = document.getElementById("cvBadge");
+  if (file) file.value = "";
+  if (badge) badge.classList.remove("show");
+  myf40ResetGeneratedOutputs("clear-cv");
+  updPipeline();
+}
+
+function clearOf() {
+  ofData = null;
+  var file = document.getElementById("ofFile");
+  var badge = document.getElementById("ofBadge");
+  if (file) file.value = "";
+  if (badge) badge.classList.remove("show");
+  myf40ResetGeneratedOutputs("clear-offer");
+  updPipeline();
+}
+
+(function myf40BindFreshInputs() {
+  var bindings = [
+    ["cvText", "input"],
+    ["ofText", "input"],
+    ["ofUrl", "input"],
+    ["lang", "change"],
+    ["llen", "change"],
+    ["ptype", "change"],
+    ["model", "change"],
+    ["extra", "input"]
+  ];
+
+  bindings.forEach(function(pair) {
+    var el = document.getElementById(pair[0]);
+    if (!el) return;
+
+    el.addEventListener(pair[1], function() {
+      if (pair[0] === "cvText" && el.value.trim().length > 80 && cvData) {
+        // Nouveau CV collé : on évite d'utiliser l'ancien CV uploadé.
+        cvData = null;
+        var badge = document.getElementById("cvBadge");
+        if (badge) badge.classList.remove("show");
+      }
+
+      if (pair[0] === "ofText" && el.value.trim().length > 20) {
+        curTab = "text";
+      }
+
+      if (pair[0] === "ofUrl" && el.value.trim().length > 10) {
+        curTab = "link";
+      }
+
+      myf40ResetGeneratedOutputs(pair[0]);
+      if (typeof updPipeline === "function") updPipeline();
+    });
+  });
+})();
+
+// On enveloppe generateAll pour effacer l'avertissement et forcer les données fraîches.
+if (typeof generateAll === "function") {
+  var __myf40_generateAll_base = generateAll;
+  generateAll = async function() {
+    myf40HideStaleNote();
+    MYF_GENERATION_DIRTY = false;
+    return await __myf40_generateAll_base();
+  };
+}
+
+/* ───────────────────────── RECRUTEUR : PLUSIEURS CV ───────────────────────── */
+
+async function uploadRecCV(input) {
+  var files = Array.from(input.files || []);
+  if (!files.length) return;
+
+  document.getElementById("recCvLoad").classList.add("show");
+  document.getElementById("recCvBadge").classList.remove("show");
+
+  try {
+    MYF_REC_CV_LIST = [];
+
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      var data = await readAny(file);
+
+      MYF_REC_CV_LIST.push({
+        name: file.name,
+        content: data.content || "",
+        index: i + 1
+      });
+    }
+
+    recCvData = MYF_REC_CV_LIST[0] || null;
+
+    var label = MYF_REC_CV_LIST.length === 1
+      ? MYF_REC_CV_LIST[0].name
+      : MYF_REC_CV_LIST.length + " CV sélectionnés : " + MYF_REC_CV_LIST.map(function(x){ return x.name; }).join(", ");
+
+    document.getElementById("recCvName").textContent = myf40Short(label, 110);
+    document.getElementById("recCvBadge").classList.add("show");
+
+    var zone = document.getElementById("recScoreZone");
+    if (zone) zone.classList.remove("show");
+  } catch(e) {
+    alert("Erreur CV recruteur : " + e.message);
+  } finally {
+    document.getElementById("recCvLoad").classList.remove("show");
+    try { input.value = ""; } catch(e) {}
+  }
+}
+
+function clearRecCV() {
+  recCvData = null;
+  MYF_REC_CV_LIST = [];
+
+  var file = document.getElementById("recCvFile");
+  var badge = document.getElementById("recCvBadge");
+  if (file) file.value = "";
+  if (badge) badge.classList.remove("show");
+
+  var zone = document.getElementById("recScoreZone");
+  if (zone) zone.classList.remove("show");
+}
+
+async function getRecCVItems() {
+  var manual = document.getElementById("recCvText") ? document.getElementById("recCvText").value.trim() : "";
+
+  if (MYF_REC_CV_LIST.length) {
+    return MYF_REC_CV_LIST.map(function(item) {
+      return {
+        name: item.name,
+        content: item.content + (manual ? "\n\n--- Notes complémentaires recruteur ---\n" + manual : "")
+      };
+    }).filter(function(item) {
+      return item.content.trim().length > 20;
+    });
+  }
+
+  if (recCvData && recCvData.content) {
+    return [{
+      name: recCvData.name || "CV candidat",
+      content: recCvData.content + (manual ? "\n\n--- Notes complémentaires recruteur ---\n" + manual : "")
+    }];
+  }
+
+  if (manual) {
+    return [{
+      name: "Candidature collée",
+      content: manual
+    }];
+  }
+
+  return [];
+}
+
+async function getRecCVText() {
+  var items = await getRecCVItems();
+  return items.length ? items[0].content : "";
+}
+
+function myf40ScoreClass(score) {
+  if (score >= 75) return "green";
+  if (score >= 55) return "orange";
+  return "red";
+}
+
+function myf40ListHtml(items) {
+  items = normalizeStringList(items).slice(0, 5);
+  if (!items.length) return "<li>Aucune donnée détectée.</li>";
+  return items.map(function(x) { return "<li>" + escapeHtml(x) + "</li>"; }).join("");
+}
+
+function myf40ContactHtml(contact) {
+  var html = [];
+  if (contact.name) html.push('<span class="contact-btn">👤 ' + escapeHtml(contact.name) + '</span>');
+  if (contact.email) html.push('<a class="contact-btn email" data-rec-mail="1" href="' + buildCandidateMail(contact) + '">✉ ' + escapeHtml(contact.email) + '</a>');
+  if (contact.phone) html.push('<a class="contact-btn phone" href="tel:' + escapeHtml(contact.phone.replace(/\s+/g, "")) + '">☎ ' + escapeHtml(contact.phone) + '</a>');
+  return html.join("\n") || '<span class="contact-btn">Coordonnées non détectées dans le CV</span>';
+}
+
+async function myf40AnalyzeOneCandidate(item, offer, model) {
+  var cv = item.content || "";
+  var full = "";
+
+  var baseContact = extractCandidateContact(cv);
+  var jobFallback = extractJobTitle(offer);
+
+  var sys =
+    "Tu es un recruteur senior. Analyse l'adéquation entre un CV candidat et une offre d'emploi. "
+    + "Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans bloc ``` et sans texte avant ou après. "
+    + "Utilise uniquement des guillemets doubles pour les clés et les chaînes. "
+    + "Schéma obligatoire : "
+    + "{\"score\":0,\"verdict\":\"\",\"job_title\":\"\",\"strengths\":[],\"gaps\":[],\"contact\":{\"name\":\"\",\"email\":\"\",\"phone\":\"\"},\"analysis\":\"\"}. "
+    + "score doit être un nombre entre 0 et 100. "
+    + "verdict doit dire clairement si la prise de contact est recommandée ou non. "
+    + "strengths et gaps doivent être des tableaux de chaînes. "
+    + "contact doit contenir le nom, l'e-mail et le téléphone trouvés dans le CV. "
+    + "Si une coordonnée n'est pas détectée, mets une chaîne vide. "
+    + "L'analyse doit être claire, concise et en français.";
+
+  var user =
+    "NOM DU FICHIER CV : " + (item.name || "CV candidat") + "\n\n"
+    + "CV CANDIDAT:\n" + cv.slice(0, 12000)
+    + "\n\nOFFRE:\n" + offer.slice(0, 12000)
+    + "\n\nRetourne uniquement l'objet JSON valide.";
+
+  try {
+    await streamCall(sys, user, model, function(chunk) { full = chunk; });
+
+    var data = extractJsonObject(full);
+    if (!data || typeof data !== "object") data = fallbackRecruiterAnalysis(cv, offer, full);
+
+    var score = Math.max(0, Math.min(100, parseRecruiterScore(data.score)));
+    var aiContact = data.contact && typeof data.contact === "object" ? data.contact : {};
+
+    return {
+      file: item.name || "CV candidat",
+      score: score,
+      data: data,
+      contact: {
+        name: aiContact.name || baseContact.name || "",
+        email: aiContact.email || baseContact.email || "",
+        phone: aiContact.phone || baseContact.phone || "",
+        job_title: data.job_title || jobFallback
+      },
+      error: ""
+    };
+  } catch(err) {
+    var fallback = fallbackRecruiterAnalysis(cv, offer, full);
+    var scoreFallback = Math.max(0, Math.min(100, parseRecruiterScore(fallback.score)));
+
+    return {
+      file: item.name || "CV candidat",
+      score: scoreFallback,
+      data: fallback,
+      contact: Object.assign({}, fallback.contact, { job_title: fallback.job_title }),
+      error: err.message || String(err)
+    };
+  }
+}
+
+function myf40RenderRecruiterResults(results, threshold) {
+  results.sort(function(a, b) { return b.score - a.score; });
+
+  var top = results[0];
+  if (!top) return;
+
+  CURRENT_MATCH_SCORE = top.score;
+  REC_LAST_CONTACT = top.contact || {};
+
+  var cls = recScoreClass(top.score);
+  var pct = document.getElementById("recPct");
+  var bar = document.getElementById("recBar");
+
+  pct.textContent = top.score + "%";
+  pct.className = "match-pct " + cls;
+  bar.style.width = top.score + "%";
+  bar.className = "match-bar-fill " + cls;
+
+  document.getElementById("recVerdict").textContent =
+    top.score >= threshold
+      ? "Meilleur candidat au-dessus du seuil : prise de contact recommandée"
+      : "Meilleur candidat sous le seuil : analyse complémentaire recommandée";
+
+  document.getElementById("recStrengths").innerHTML = recList(top.data.strengths, "ok");
+  document.getElementById("recGaps").innerHTML = recList(top.data.gaps, "gap");
+  document.getElementById("recContactInfo").innerHTML = myf40ContactHtml(REC_LAST_CONTACT);
+
+  var title = results.length > 1
+    ? "<strong>Classement des candidatures analysées</strong>"
+    : "<strong>Analyse détaillée</strong>";
+
+  var cards = results.map(function(r, idx) {
+    var scoreCls = myf40ScoreClass(r.score);
+    var ok = r.score >= threshold;
+    var name = (r.contact && r.contact.name) || r.file || ("Candidat " + (idx + 1));
+    var errorLine = r.error ? '<div class="rec-reco no">Analyse IA partielle : ' + escapeHtml(r.error) + '</div>' : "";
+
+    return ''
+      + '<div class="rec-multi-card">'
+      + '  <div class="rec-multi-head">'
+      + '    <div style="display:flex;gap:10px;align-items:flex-start">'
+      + '      <div class="rec-rank">#' + (idx + 1) + '</div>'
+      + '      <div>'
+      + '        <div class="rec-candidate-name">' + escapeHtml(name) + '</div>'
+      + '        <div class="rec-candidate-file">' + escapeHtml(r.file || "") + '</div>'
+      + '      </div>'
+      + '    </div>'
+      + '    <div class="rec-pill-score ' + scoreCls + '">' + r.score + '%</div>'
+      + '  </div>'
+      + '  <div class="rec-reco ' + (ok ? "ok" : "no") + '">' + (ok ? "Candidat au-dessus du seuil : prise de contact recommandée" : "Candidat sous le seuil : prudence / analyse complémentaire") + '</div>'
+      + errorLine
+      + '  <div class="rec-mini-grid">'
+      + '    <div><div class="rec-mini-title">Points forts</div><ul class="rec-mini-list">' + myf40ListHtml(r.data.strengths) + '</ul></div>'
+      + '    <div><div class="rec-mini-title">Écarts / risques</div><ul class="rec-mini-list">' + myf40ListHtml(r.data.gaps) + '</ul></div>'
+      + '  </div>'
+      + '  <div style="margin-top:10px;font-size:12px;line-height:1.55;color:var(--muted)">' + escapeHtml(r.data.analysis || "") + '</div>'
+      + '</div>';
+  }).join("");
+
+  document.getElementById("recAnalysisFull").innerHTML =
+    '<div class="rec-multi-wrap">' + title + cards + '</div>';
+
+  document.getElementById("recMeetingDate").onchange = updateRecruiterMailLinks;
+  document.getElementById("recScoreZone").classList.add("show");
+  updateRecContactPanel();
+}
+
+async function analyzeRecruiterMatch() {
+  if (!API_KEY) {
+    alert("Vous devez être connecté pour analyser une candidature.");
+    return;
+  }
+
+  var btn = document.getElementById("recAnalyzeBtn");
+  var spin = btn.querySelector(".bspin");
+  var label = btn.querySelector("span");
+
+  btn.disabled = true;
+  spin.style.display = "block";
+  label.textContent = "Lecture des candidatures...";
+
+  var items = [];
+  var offer = "";
+
+  try {
+    items = await getRecCVItems();
+    offer = await getRecOfferText();
+  } catch(readErr) {
+    btn.disabled = false;
+    spin.style.display = "none";
+    label.textContent = "Analyser la/les candidature(s)";
+    alert("Erreur de lecture des documents : " + readErr.message);
+    return;
+  }
+
+  if (!items.length || !offer) {
+    btn.disabled = false;
+    spin.style.display = "none";
+    label.textContent = "Analyser la/les candidature(s)";
+    alert("Ajoutez au moins un CV et une offre avant de lancer l'analyse.");
+    return;
+  }
+
+  var threshold = Number(document.getElementById("recThreshold").value || 70);
+  var model = document.getElementById("recModel").value;
+  var results = [];
+
+  try {
+    for (var i = 0; i < items.length; i++) {
+      label.textContent = items.length > 1
+        ? "Analyse candidat " + (i + 1) + " / " + items.length + "..."
+        : "Analyse en cours...";
+
+      var result = await myf40AnalyzeOneCandidate(items[i], offer, model);
+      results.push(result);
+    }
+
+    myf40RenderRecruiterResults(results, threshold);
+  } catch(err) {
+    alert("Erreur analyse recruteur : " + (err.message || err));
+  } finally {
+    btn.disabled = false;
+    spin.style.display = "none";
+    label.textContent = "Analyser la/les candidature(s)";
+  }
+}
+
+// Invalider aussi les résultats recruteur si l'offre ou les CV changent.
+(function myf40BindRecruiterInputs() {
+  ["recCvText", "recOfferText", "recOfferUrl", "recThreshold", "recModel"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+
+    el.addEventListener(id === "recThreshold" || id === "recModel" ? "change" : "input", function() {
+      var zone = document.getElementById("recScoreZone");
+      if (zone) zone.classList.remove("show");
+    });
+  });
+})();
 
 
 </script>
