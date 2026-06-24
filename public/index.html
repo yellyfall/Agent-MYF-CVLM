@@ -1197,6 +1197,34 @@ select:focus{border-color:var(--accent)}
   .rec-mini-grid{grid-template-columns:1fr}
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CORRECTIF V41 — IMAGE CHAT : APERÇU ROBUSTE
+───────────────────────────────────────────────────────────────────────────── */
+.generated-image-card img{
+  width:100%;
+  max-height:520px;
+  object-fit:contain;
+  background:#0b0f19;
+  border-radius:14px;
+  display:block;
+}
+.generated-image-error{
+  padding:12px;
+  border:1px solid rgba(239,68,68,.35);
+  background:rgba(239,68,68,.10);
+  color:var(--text);
+  border-radius:12px;
+  font-size:13px;
+  line-height:1.45;
+}
+.generated-image-debug{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:11px;
+  word-break:break-all;
+}
+
 </style>
 </head>
 <body>
@@ -10591,6 +10619,191 @@ async function analyzeRecruiterMatch() {
     });
   });
 })();
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V41 — IMAGE CHAT : PLUS D'IMAGE CASSÉE
+   ========================================================================== */
+
+function myf41IsDataImage(value) {
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(String(value || ""));
+}
+
+function myf41NormalizeImageUrl(value) {
+  value = String(value || "").trim();
+  if (!value) return "";
+
+  if (myf41IsDataImage(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  // Corrige les chemins relatifs retournés par le serveur.
+  if (value.charAt(0) === "/") return BASE + value;
+  return BASE + "/" + value.replace(/^\.?\//, "");
+}
+
+function myf41ExtractImageUrls(imageData) {
+  imageData = imageData || {};
+
+  var urls = [];
+
+  // Priorité au base64 quand il existe : c'est le plus fiable car aucun souci de route /generated.
+  [
+    imageData.data_url,
+    imageData.image_data_url,
+    imageData.base64_url,
+    imageData.image_url,
+    imageData.download_url,
+    imageData.url,
+    imageData.file_url,
+    imageData.path
+  ].forEach(function(u) {
+    var nu = myf41NormalizeImageUrl(u);
+    if (nu && urls.indexOf(nu) === -1) urls.push(nu);
+  });
+
+  // Compatibilité avec les réponses OpenAI/Mistral éventuelles.
+  if (imageData.b64_json) {
+    var mime = imageData.mime || ("image/" + (imageData.output_format || "png"));
+    urls.unshift("data:" + mime + ";base64," + imageData.b64_json);
+  }
+
+  if (imageData.image_base64) {
+    var mime2 = imageData.mime || "image/png";
+    urls.unshift("data:" + mime2 + ";base64," + imageData.image_base64);
+  }
+
+  return urls;
+}
+
+function myf41DownloadDataUrl(dataUrl, filename) {
+  var a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename || "image-myfs-ai.png";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ a.remove(); }, 100);
+}
+
+function addGeneratedImageBubble(imageData, prompt, mode) {
+  var msgs = document.getElementById("chatMsgs");
+  var typing = document.getElementById("chatTyping");
+  if (!msgs || !typing) return;
+
+  var urls = myf41ExtractImageUrls(imageData);
+  if (!urls.length) {
+    addBubble("ai", "L’image n’a pas pu être affichée : le serveur n’a retourné ni URL ni image base64 exploitable.");
+    return;
+  }
+
+  var card = document.createElement("div");
+  card.className = "artifact-card generated-image-card";
+
+  var title = document.createElement("div");
+  title.className = "artifact-card-title";
+  title.textContent = "🎨 Image IA générée";
+
+  var desc = document.createElement("div");
+  desc.className = "artifact-card-desc";
+  desc.textContent = "Prompt : " + normalizeSpaces(prompt).slice(0, 320);
+
+  var img = document.createElement("img");
+  img.alt = prompt || "Image générée par l'IA";
+
+  var error = document.createElement("div");
+  error.className = "generated-image-error";
+  error.style.display = "none";
+
+  var debug = document.createElement("div");
+  debug.className = "generated-image-debug";
+
+  var actions = document.createElement("div");
+  actions.className = "generated-image-actions";
+
+  var open = document.createElement("a");
+  open.className = "artifact-download";
+  open.target = "_blank";
+  open.rel = "noopener";
+  open.textContent = "👁 Ouvrir l'image";
+
+  var download = document.createElement("a");
+  download.className = "artifact-download";
+  download.textContent = "⬇ Télécharger l'image";
+
+  var currentIndex = 0;
+  var filename = imageData.filename || "image-myfs-ai.png";
+
+  function setLinks(url) {
+    open.href = url;
+
+    if (myf41IsDataImage(url)) {
+      download.href = "#";
+      download.removeAttribute("download");
+      download.onclick = function(ev) {
+        ev.preventDefault();
+        myf41DownloadDataUrl(url, filename);
+      };
+    } else {
+      download.onclick = null;
+      download.href = url;
+      download.download = filename;
+    }
+  }
+
+  function tryUrl(index) {
+    if (index >= urls.length) {
+      img.style.display = "none";
+      open.style.display = "none";
+      download.style.display = "none";
+      error.style.display = "block";
+      error.innerHTML = "L’image a été générée, mais le lien retourné est inaccessible depuis le navigateur.<br>Solution : remplace aussi le fichier <strong>server.js</strong> par la version corrigée V41 fournie.";
+      debug.textContent = "Derniers liens testés : " + urls.slice(0, 3).join(" | ");
+      return;
+    }
+
+    currentIndex = index;
+    var url = urls[index];
+    setLinks(url);
+    img.src = url;
+  }
+
+  img.onerror = function() {
+    tryUrl(currentIndex + 1);
+  };
+
+  img.onload = function() {
+    error.style.display = "none";
+    img.style.display = "block";
+    open.style.display = "";
+    download.style.display = "";
+  };
+
+  actions.appendChild(open);
+  actions.appendChild(download);
+
+  card.appendChild(title);
+  card.appendChild(desc);
+  card.appendChild(img);
+  card.appendChild(error);
+  card.appendChild(debug);
+  card.appendChild(actions);
+
+  msgs.insertBefore(card, typing);
+  tryUrl(0);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// Petit ajustement pour l'historique du chat : on privilégie data_url si disponible.
+if (typeof generateImageFromBackend === "function") {
+  var __myf41_generateImageFromBackend_base = generateImageFromBackend;
+  generateImageFromBackend = async function(prompt, options) {
+    var data = await __myf41_generateImageFromBackend_base(prompt, options);
+    data = data || {};
+    var urls = myf41ExtractImageUrls(data);
+    if (urls.length && !data.image_url) data.image_url = urls[0];
+    return data;
+  };
+}
 
 
 </script>
