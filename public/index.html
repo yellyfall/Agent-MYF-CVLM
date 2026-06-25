@@ -1225,6 +1225,54 @@ select:focus{border-color:var(--accent)}
   word-break:break-all;
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CORRECTIF V45 — APERÇU LETTRE STABLE, COMME LE MODÈLE
+───────────────────────────────────────────────────────────────────────────── */
+.letter-render.show{
+  display:flex!important;
+}
+.letter-page{
+  background:#fff!important;
+  color:#1a1a1a!important;
+  font-family:Georgia,"Times New Roman",serif!important;
+}
+.letter-header{
+  display:flex!important;
+  justify-content:space-between!important;
+  align-items:flex-start!important;
+  gap:40px!important;
+}
+.letter-sender{
+  text-align:left!important;
+  width:45%!important;
+}
+.letter-right{
+  margin-left:auto!important;
+  width:45%!important;
+  text-align:right!important;
+  align-self:flex-start!important;
+}
+.letter-recipient,
+.letter-date{
+  text-align:right!important;
+}
+.letter-date{
+  margin-top:28px!important;
+}
+.letter-subject{
+  font-style:italic!important;
+}
+.letter-subject strong,
+.letter-subject b{
+  font-style:normal!important;
+}
+.letter-body,
+.letter-body p{
+  text-align:justify!important;
+  text-align-last:left!important;
+}
+
 </style>
 </head>
 <body>
@@ -10986,17 +11034,20 @@ if (typeof dlLetterDoc === "function") {
 
 
 /* ==========================================================================
-   CORRECTIF MYF V44 — SYNCHRO APERÇU LETTRE SANS CHANGER LE DESIGN
+   CORRECTIF MYF V45 — APERÇU LETTRE STABLE, SANS JSON, DESIGN CONSERVÉ
    ========================================================================== */
 /*
-  Objectif :
-  - Corriger le bug où l'aperçu gardait l'ancienne lettre.
-  - Ne plus reconstruire l'aperçu depuis un texte brut mal interprété.
-  - Ne pas transformer l'aperçu en JSON.
-  - Garder exactement le visuel normal de la lettre.
+  Version de sécurité :
+  - Repart de l'aperçu stable.
+  - Vide l'ancien aperçu avant une nouvelle génération.
+  - Ne laisse jamais l'ancien aperçu apparaître après changement d'offre.
+  - Ne transforme plus du JSON brut en mise en page cassée.
+  - Normalise les clés si l'IA renvoie BODY/CLOSING/SIGNATURE en majuscules.
+  - Garde le design de l'aperçu : expéditeur gauche, destinataire/date droite,
+    objet en italique, corps justifié.
 */
 
-function myf44Clean(value) {
+function myf45Clean(value) {
   var s = String(value || "");
   if (typeof myf42CleanMarkdownArtifacts === "function") {
     s = myf42CleanMarkdownArtifacts(s);
@@ -11009,7 +11060,9 @@ function myf44Clean(value) {
     .trim();
 }
 
-function myf44ClearLetterPreviewOnly() {
+function myf45ClearLetterPreview() {
+  try { LAST_LETTER_JSON = null; } catch(e) {}
+
   [
     "lmSender",
     "lmRecipient",
@@ -11027,127 +11080,150 @@ function myf44ClearLetterPreviewOnly() {
   if (render) render.classList.remove("show");
 }
 
-function myf44NormalizeLetterObject(j) {
-  j = j || {};
-
-  function pick() {
-    for (var i = 0; i < arguments.length; i++) {
-      var key = arguments[i];
-      if (j[key] !== undefined && j[key] !== null && String(j[key]).trim() !== "") {
-        return j[key];
-      }
+function myf45Pick(obj) {
+  for (var i = 1; i < arguments.length; i++) {
+    var k = arguments[i];
+    if (obj && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
+      return obj[k];
     }
-    return "";
   }
+  return "";
+}
 
-  var normalized = {
-    sender_name: pick("sender_name", "senderName", "SENDER_NAME", "name", "candidate_name", "candidateName"),
-    sender_address: pick("sender_address", "senderAddress", "SENDER_ADDRESS", "address", "candidate_address"),
-    sender_phone: pick("sender_phone", "senderPhone", "SENDER_PHONE", "phone", "telephone", "candidate_phone"),
-    sender_email: pick("sender_email", "senderEmail", "SENDER_EMAIL", "email", "candidate_email"),
-    recipient_company: pick("recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "entreprise"),
-    recipient_name: pick("recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name"),
-    recipient_title: pick("recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title"),
-    recipient_address: pick("recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address"),
-    city: pick("city", "CITY", "ville"),
-    date: pick("date", "DATE"),
-    subject: pick("subject", "SUBJECT", "objet", "Objet"),
-    salutation: pick("salutation", "SALUTATION", "greeting", "accroche"),
-    body: pick("body", "BODY", "corps", "letter_body", "content", "contenu"),
-    closing: pick("closing", "CLOSING", "formule", "formule_politesse"),
-    signature: pick("signature", "SIGNATURE")
+function myf45NormalizeLetterObject(obj) {
+  obj = obj || {};
+
+  var j = {
+    sender_name: myf45Pick(obj, "sender_name", "senderName", "SENDER_NAME", "candidate_name", "name"),
+    sender_address: myf45Pick(obj, "sender_address", "senderAddress", "SENDER_ADDRESS", "candidate_address", "address"),
+    sender_phone: myf45Pick(obj, "sender_phone", "senderPhone", "SENDER_PHONE", "candidate_phone", "phone", "telephone"),
+    sender_email: myf45Pick(obj, "sender_email", "senderEmail", "SENDER_EMAIL", "candidate_email", "email"),
+    recipient_company: myf45Pick(obj, "recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "entreprise"),
+    recipient_name: myf45Pick(obj, "recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name"),
+    recipient_title: myf45Pick(obj, "recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title"),
+    recipient_address: myf45Pick(obj, "recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address"),
+    city: myf45Pick(obj, "city", "CITY", "ville"),
+    date: myf45Pick(obj, "date", "DATE"),
+    subject: myf45Pick(obj, "subject", "SUBJECT", "objet", "Objet"),
+    salutation: myf45Pick(obj, "salutation", "SALUTATION", "greeting"),
+    body: myf45Pick(obj, "body", "BODY", "letter_body", "content", "contenu", "corps"),
+    closing: myf45Pick(obj, "closing", "CLOSING", "formule", "formule_politesse"),
+    signature: myf45Pick(obj, "signature", "SIGNATURE")
   };
 
-  Object.keys(normalized).forEach(function(key) {
-    normalized[key] = myf44Clean(normalized[key]);
+  Object.keys(j).forEach(function(k) {
+    j[k] = myf45Clean(j[k]);
   });
 
-  normalized.subject = normalized.subject
+  j.subject = j.subject
     .replace(/^Objet\s*:\s*/i, "")
     .replace(/^Subject\s*:\s*/i, "")
     .trim();
 
-  return normalized;
+  return j;
 }
 
-function myf44LooksLikeValidLetterObject(j) {
-  if (!j || typeof j !== "object") return false;
-
-  var n = myf44NormalizeLetterObject(j);
-
+function myf45IsValidLetterObject(obj) {
+  var j = myf45NormalizeLetterObject(obj || {});
   return !!(
-    (n.body && n.body.length > 80) ||
-    (n.subject && n.salutation && n.closing) ||
-    (n.sender_name && n.recipient_company && n.body)
+    j.sender_name &&
+    (j.subject || j.recipient_company) &&
+    j.body &&
+    j.body.length > 80
   );
 }
 
-// On rend extractJsonObject plus tolérant aux clés en MAJUSCULES,
-// mais sans transformer du texte brut en aperçu.
+function myf45TryParseJson(raw) {
+  raw = String(raw || "").trim();
+  if (!raw) return null;
+
+  var obj = null;
+
+  try {
+    if (typeof extractJsonObject === "function") obj = extractJsonObject(raw);
+  } catch(e) {}
+
+  if (!obj) {
+    try {
+      obj = JSON.parse(raw);
+    } catch(e2) {}
+  }
+
+  if (!obj || typeof obj !== "object") return null;
+
+  obj = myf45NormalizeLetterObject(obj);
+  return myf45IsValidLetterObject(obj) ? obj : null;
+}
+
+// Rend extractJsonObject plus compatible avec les clés en majuscules,
+// sans changer le design de l'aperçu.
 if (typeof extractJsonObject === "function") {
-  var __myf44_extractJsonObject_base = extractJsonObject;
-
+  var __myf45_extractJsonObject_base = extractJsonObject;
   extractJsonObject = function(text) {
-    var obj = __myf44_extractJsonObject_base(text);
-
+    var obj = __myf45_extractJsonObject_base(text);
     if (obj && typeof obj === "object") {
-      return myf44NormalizeLetterObject(obj);
+      return myf45NormalizeLetterObject(obj);
     }
-
     return obj;
   };
 }
 
-// On garde le renderLetter original, mais on vide toujours l'ancien aperçu avant.
+// RenderLetter : même design qu'avant, mais ancien contenu vidé avant réaffichage.
 if (typeof renderLetter === "function") {
-  var __myf44_renderLetter_base = renderLetter;
+  var __myf45_renderLetter_base = renderLetter;
 
-  renderLetter = function(j) {
-    myf44ClearLetterPreviewOnly();
+  renderLetter = function(obj) {
+    myf45ClearLetterPreview();
 
-    j = myf44NormalizeLetterObject(j || {});
+    var j = myf45NormalizeLetterObject(obj || {});
     try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
 
-    var result = __myf44_renderLetter_base(j);
+    var result = __myf45_renderLetter_base(j);
 
-    if (typeof switchLetterView === "function") {
-      switchLetterView("visual");
-    } else {
-      var render = document.getElementById("letterRender");
-      var out = document.getElementById("lmOut");
-      if (render) render.classList.add("show");
-      if (out) out.style.display = "none";
-    }
+    // Forcer l'affichage visuel propre.
+    var render = document.getElementById("letterRender");
+    var out = document.getElementById("lmOut");
+    if (render) render.classList.add("show");
+    if (out) out.style.display = "none";
+
+    var visualBtn = document.getElementById("lvBtnVisual");
+    var rawBtn = document.getElementById("lvBtnRaw");
+    if (visualBtn) visualBtn.classList.add("active");
+    if (rawBtn) rawBtn.classList.remove("active");
 
     return result;
   };
 }
 
-// Le texte brut, le DOC et le PDF utilisent le même objet propre.
 if (typeof buildLetterText === "function") {
-  var __myf44_buildLetterText_base = buildLetterText;
-
-  buildLetterText = function(j) {
-    return __myf44_buildLetterText_base(myf44NormalizeLetterObject(j || {}));
+  var __myf45_buildLetterText_base = buildLetterText;
+  buildLetterText = function(obj) {
+    return __myf45_buildLetterText_base(myf45NormalizeLetterObject(obj || {}));
   };
 }
 
 if (typeof v36LetterData === "function") {
-  var __myf44_v36LetterData_base = v36LetterData;
-
+  var __myf45_v36LetterData_base = v36LetterData;
   v36LetterData = function() {
-    return myf44NormalizeLetterObject(__myf44_v36LetterData_base() || {});
+    return myf45NormalizeLetterObject(__myf45_v36LetterData_base() || {});
   };
 }
 
-// Avant chaque génération, on supprime vraiment l'ancien aperçu,
-// mais on ne tente PAS de créer un aperçu depuis un texte brut JSON/mal formé.
+// Empêche l'ancien aperçu de rester quand on change d'offre/CV/ton.
+if (typeof myf40ResetGeneratedOutputs === "function") {
+  var __myf45_myf40ResetGeneratedOutputs_base = myf40ResetGeneratedOutputs;
+  myf40ResetGeneratedOutputs = function(reason) {
+    myf45ClearLetterPreview();
+    return __myf45_myf40ResetGeneratedOutputs_base(reason);
+  };
+}
+
+// Sécurise generateAll : vider avant, puis réafficher uniquement si JSON valide.
 if (typeof generateAll === "function") {
-  var __myf44_generateAll_base = generateAll;
+  var __myf45_generateAll_base = generateAll;
 
   generateAll = async function() {
-    try { LAST_LETTER_JSON = null; } catch(e) {}
-    myf44ClearLetterPreviewOnly();
+    myf45ClearLetterPreview();
 
     var out = document.getElementById("lmOut");
     if (out) {
@@ -11155,62 +11231,66 @@ if (typeof generateAll === "function") {
       out.style.display = "none";
     }
 
-    var result = await __myf44_generateAll_base.apply(this, arguments);
+    var result = await __myf45_generateAll_base.apply(this, arguments);
 
-    // Sécurité après génération :
-    // si une lettre structurée valide existe, on la réaffiche proprement.
     setTimeout(function() {
       try {
-        if (typeof LAST_LETTER_JSON !== "undefined" && myf44LooksLikeValidLetterObject(LAST_LETTER_JSON)) {
-          renderLetter(myf44NormalizeLetterObject(LAST_LETTER_JSON));
+        // 1) Priorité à LAST_LETTER_JSON si renderLetter l'a rempli.
+        if (typeof LAST_LETTER_JSON !== "undefined" && LAST_LETTER_JSON && myf45IsValidLetterObject(LAST_LETTER_JSON)) {
+          renderLetter(myf45NormalizeLetterObject(LAST_LETTER_JSON));
           return;
         }
 
+        // 2) Sinon, on tente de lire le texte brut seulement s'il contient un JSON exploitable.
         var raw = document.getElementById("lmOut") ? document.getElementById("lmOut").textContent : "";
-        var obj = null;
+        var parsed = myf45TryParseJson(raw);
 
-        if (typeof extractJsonObject === "function") {
-          obj = extractJsonObject(raw);
+        if (parsed) {
+          renderLetter(parsed);
+          return;
         }
 
-        if (myf44LooksLikeValidLetterObject(obj)) {
-          renderLetter(myf44NormalizeLetterObject(obj));
-        } else {
-          // Pas d'aperçu si la sortie n'est pas structurée :
-          // cela évite le rendu JSON que tu viens d'avoir.
-          myf44ClearLetterPreviewOnly();
-          if (out && out.textContent.trim().length > 20) {
-            out.style.display = "block";
-            var rawBtn = document.getElementById("lvBtnRaw");
-            var visBtn = document.getElementById("lvBtnVisual");
-            if (rawBtn) rawBtn.classList.add("active");
-            if (visBtn) visBtn.classList.remove("active");
-          }
+        // 3) S'il n'y a pas de structure valide, on ne montre pas un faux aperçu.
+        var render = document.getElementById("letterRender");
+        if (render && !(render.textContent || "").trim()) {
+          render.classList.remove("show");
         }
       } catch(e) {
-        console.warn("Synchronisation aperçu lettre V44 impossible :", e);
+        console.warn("V45 sync aperçu lettre impossible :", e);
       }
-    }, 120);
+    }, 100);
 
     return result;
   };
 }
 
-// Quand l'utilisateur clique sur Aperçu, on n'affiche que si une vraie lettre structurée existe.
+// Si l'utilisateur clique sur Aperçu, on n'affiche jamais un ancien aperçu vide/mauvais.
 if (typeof switchLetterView === "function") {
-  var __myf44_switchLetterView_base = switchLetterView;
+  var __myf45_switchLetterView_base = switchLetterView;
 
   switchLetterView = function(mode) {
     if (mode === "visual") {
       var render = document.getElementById("letterRender");
       var hasPreview = render && (render.textContent || "").trim().length > 20;
 
-      if (!hasPreview && typeof LAST_LETTER_JSON !== "undefined" && myf44LooksLikeValidLetterObject(LAST_LETTER_JSON)) {
-        renderLetter(myf44NormalizeLetterObject(LAST_LETTER_JSON));
+      if (!hasPreview) {
+        if (typeof LAST_LETTER_JSON !== "undefined" && LAST_LETTER_JSON && myf45IsValidLetterObject(LAST_LETTER_JSON)) {
+          renderLetter(myf45NormalizeLetterObject(LAST_LETTER_JSON));
+        } else {
+          // Pas d'ancien aperçu à afficher.
+          if (render) render.classList.remove("show");
+          var out = document.getElementById("lmOut");
+          if (out) out.style.display = "block";
+          var rawBtn = document.getElementById("lvBtnRaw");
+          var visualBtn = document.getElementById("lvBtnVisual");
+          if (rawBtn) rawBtn.classList.add("active");
+          if (visualBtn) visualBtn.classList.remove("active");
+          return;
+        }
       }
     }
 
-    return __myf44_switchLetterView_base(mode);
+    return __myf45_switchLetterView_base(mode);
   };
 }
 
