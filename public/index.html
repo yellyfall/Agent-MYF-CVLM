@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MYF’s AI</title>
-<meta name="myf-build" content="v24-secure-session-proxy-standalone">
+<meta name="myf-build" content="v46-preview-sync-from-uploaded-stable-file">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -10982,6 +10982,312 @@ if (typeof dlLetterDoc === "function") {
 
   observer.observe(target, { childList: true, characterData: true, subtree: true });
 })();
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V46 — SYNCHRO TEXTE BRUT -> APERÇU LETTRE, SANS CHANGER LE DESIGN
+   ========================================================================== */
+/*
+  Ce correctif est volontairement minimal :
+  - il ne touche pas au CSS de l'aperçu ;
+  - il ne change pas la syntaxe/structure visuelle existante ;
+  - il vide seulement l'ancien aperçu quand une nouvelle génération commence ;
+  - il reconstruit l'aperçu depuis le texte brut uniquement si le texte brut est une vraie lettre exploitable ;
+  - il évite d'afficher du JSON brut dans l'aperçu.
+*/
+
+function myf46Clean(value) {
+  var s = String(value || "");
+  if (typeof myf42CleanMarkdownArtifacts === "function") {
+    s = myf42CleanMarkdownArtifacts(s);
+  }
+  return s
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+
+function myf46ClearLetterPreviewContent() {
+  [
+    "lmSender",
+    "lmRecipient",
+    "lmDate",
+    "lmSubject",
+    "lmBody",
+    "lmClosing",
+    "lmSignature"
+  ].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = "";
+  });
+}
+
+function myf46Pick(obj) {
+  for (var i = 1; i < arguments.length; i++) {
+    var key = arguments[i];
+    if (obj && obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim() !== "") {
+      return obj[key];
+    }
+  }
+  return "";
+}
+
+function myf46NormalizeLetterObject(obj) {
+  obj = obj || {};
+
+  var j = {
+    sender_name: myf46Pick(obj, "sender_name", "senderName", "SENDER_NAME", "candidate_name", "name"),
+    sender_address: myf46Pick(obj, "sender_address", "senderAddress", "SENDER_ADDRESS", "candidate_address", "address"),
+    sender_phone: myf46Pick(obj, "sender_phone", "senderPhone", "SENDER_PHONE", "candidate_phone", "phone", "telephone"),
+    sender_email: myf46Pick(obj, "sender_email", "senderEmail", "SENDER_EMAIL", "candidate_email", "email"),
+    recipient_company: myf46Pick(obj, "recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "entreprise"),
+    recipient_name: myf46Pick(obj, "recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name"),
+    recipient_title: myf46Pick(obj, "recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title"),
+    recipient_address: myf46Pick(obj, "recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address"),
+    city: myf46Pick(obj, "city", "CITY", "ville"),
+    date: myf46Pick(obj, "date", "DATE"),
+    subject: myf46Pick(obj, "subject", "SUBJECT", "objet", "Objet"),
+    salutation: myf46Pick(obj, "salutation", "SALUTATION", "greeting"),
+    body: myf46Pick(obj, "body", "BODY", "letter_body", "content", "contenu", "corps"),
+    closing: myf46Pick(obj, "closing", "CLOSING", "formule", "formule_politesse"),
+    signature: myf46Pick(obj, "signature", "SIGNATURE")
+  };
+
+  Object.keys(j).forEach(function(k) {
+    j[k] = myf46Clean(j[k]);
+  });
+
+  j.subject = j.subject
+    .replace(/^Objet\s*:\s*/i, "")
+    .replace(/^Subject\s*:\s*/i, "")
+    .trim();
+
+  return j;
+}
+
+function myf46IsUsableLetterObject(obj) {
+  var j = myf46NormalizeLetterObject(obj || {});
+  return !!(
+    j.sender_name &&
+    j.body &&
+    j.body.length > 60 &&
+    (j.subject || j.recipient_company || j.salutation)
+  );
+}
+
+function myf46TryJson(raw) {
+  raw = String(raw || "").trim();
+  if (!raw) return null;
+
+  var obj = null;
+
+  try {
+    if (typeof extractJsonObject === "function") obj = extractJsonObject(raw);
+  } catch(e) {}
+
+  if (!obj) {
+    try { obj = JSON.parse(raw); } catch(e2) {}
+  }
+
+  if (!obj || typeof obj !== "object") return null;
+
+  obj = myf46NormalizeLetterObject(obj);
+  return myf46IsUsableLetterObject(obj) ? obj : null;
+}
+
+function myf46ParseLetterText(raw) {
+  raw = myf46Clean(raw);
+  if (!raw || raw.length < 80) return null;
+
+  // Si c'est manifestement du JSON mais qu'il n'est pas exploitable, on n'essaie PAS
+  // de le convertir en aperçu. Cela évite le rendu cassé avec { "sender_name": ... }.
+  if (/^\s*\{/.test(raw) || /"sender_name"|"BODY"|"CLOSING"|"SIGNATURE"/i.test(raw)) {
+    return myf46TryJson(raw);
+  }
+
+  var groups = raw
+    .split(/\n\s*\n+/)
+    .map(myf46Clean)
+    .filter(Boolean);
+
+  if (groups.length < 7) return null;
+
+  function lines(group) {
+    return String(group || "")
+      .split(/\n+/)
+      .map(myf46Clean)
+      .filter(Boolean);
+  }
+
+  // Format attendu du texte brut actuel :
+  // bloc 0 = expéditeur, bloc 1 = destinataire, bloc 2 = date,
+  // bloc 3 = objet, bloc 4 = salutation, blocs suivants = corps, closing, signature.
+  var sender = lines(groups[0]);
+  var recipient = lines(groups[1]);
+
+  var dateBlock = groups[2] || "";
+  var subjectBlock = groups[3] || "";
+  var salutation = groups[4] || "";
+
+  if (!/^Objet\s*:/i.test(subjectBlock) && !/^Subject\s*:/i.test(subjectBlock)) {
+    return null;
+  }
+
+  var closing = groups[groups.length - 2] || "";
+  var signature = groups[groups.length - 1] || "";
+  var body = groups.slice(5, -2).join("\n\n");
+
+  if (!body || body.length < 60) return null;
+
+  var city = "";
+  var date = dateBlock;
+  var m = dateBlock.match(/^([^,]+),\s*(.+)$/);
+  if (m) {
+    city = myf46Clean(m[1]);
+    date = myf46Clean(m[2]);
+  }
+
+  var j = {
+    sender_name: sender[0] || "",
+    sender_address: sender[1] || "",
+    sender_phone: sender[2] || "",
+    sender_email: sender[3] || "",
+    recipient_company: recipient[0] || "",
+    recipient_name: recipient[1] || "",
+    recipient_title: "",
+    recipient_address: recipient.slice(2).join(", "),
+    city: city,
+    date: date,
+    subject: subjectBlock.replace(/^Objet\s*:\s*/i, "").replace(/^Subject\s*:\s*/i, ""),
+    salutation: salutation,
+    body: body,
+    closing: closing,
+    signature: signature
+  };
+
+  j = myf46NormalizeLetterObject(j);
+  return myf46IsUsableLetterObject(j) ? j : null;
+}
+
+function myf46RenderFromObject(obj) {
+  if (!obj || !myf46IsUsableLetterObject(obj)) return false;
+
+  var j = myf46NormalizeLetterObject(obj);
+
+  if (typeof renderLetter !== "function") return false;
+
+  // Important : on garde renderLetter existant, donc le design/syntaxe de l'aperçu ne change pas.
+  renderLetter(j);
+
+  try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
+
+  if (typeof buildLetterText === "function") {
+    var out = document.getElementById("lmOut");
+    if (out) out.textContent = buildLetterText(j);
+  }
+
+  return true;
+}
+
+function myf46SyncPreviewFromRaw() {
+  var out = document.getElementById("lmOut");
+  if (!out) return false;
+
+  var raw = out.textContent || "";
+  if (!raw.trim()) return false;
+
+  var obj = myf46TryJson(raw) || myf46ParseLetterText(raw);
+  if (!obj) return false;
+
+  return myf46RenderFromObject(obj);
+}
+
+// Normalisation des clés JSON avant renderLetter, sans changer son HTML/CSS.
+if (typeof renderLetter === "function") {
+  var __myf46_renderLetter_base = renderLetter;
+
+  renderLetter = function(obj) {
+    myf46ClearLetterPreviewContent();
+
+    obj = myf46NormalizeLetterObject(obj || {});
+    try { LAST_LETTER_JSON = Object.assign({}, obj); } catch(e) {}
+
+    return __myf46_renderLetter_base(obj);
+  };
+}
+
+// Normalisation du texte brut construit.
+if (typeof buildLetterText === "function") {
+  var __myf46_buildLetterText_base = buildLetterText;
+
+  buildLetterText = function(obj) {
+    obj = myf46NormalizeLetterObject(obj || {});
+    return __myf46_buildLetterText_base(obj);
+  };
+}
+
+// PDF/DOC utilisent également les données propres.
+if (typeof v36LetterData === "function") {
+  var __myf46_v36LetterData_base = v36LetterData;
+
+  v36LetterData = function() {
+    return myf46NormalizeLetterObject(__myf46_v36LetterData_base() || {});
+  };
+}
+
+// Quand les données changent, on efface l'ancien aperçu pour éviter qu'il réapparaisse.
+if (typeof myf40ResetGeneratedOutputs === "function") {
+  var __myf46_reset_base = myf40ResetGeneratedOutputs;
+
+  myf40ResetGeneratedOutputs = function(reason) {
+    myf46ClearLetterPreviewContent();
+    return __myf46_reset_base(reason);
+  };
+}
+
+// Avant et après une nouvelle génération : nettoyage + resynchronisation.
+if (typeof generateAll === "function") {
+  var __myf46_generateAll_base = generateAll;
+
+  generateAll = async function() {
+    myf46ClearLetterPreviewContent();
+    try { LAST_LETTER_JSON = null; } catch(e) {}
+
+    var result = await __myf46_generateAll_base.apply(this, arguments);
+
+    // Après génération, si le texte brut est le bon, l'aperçu est recalé dessus.
+    setTimeout(function() {
+      try {
+        if (!myf46SyncPreviewFromRaw()) {
+          // Si pas de texte brut exploitable, mais un objet JSON existe, on l'utilise.
+          if (typeof LAST_LETTER_JSON !== "undefined" && myf46IsUsableLetterObject(LAST_LETTER_JSON)) {
+            myf46RenderFromObject(LAST_LETTER_JSON);
+          }
+        }
+      } catch(e) {
+        console.warn("Synchronisation aperçu lettre V46 impossible :", e);
+      }
+    }, 80);
+
+    return result;
+  };
+}
+
+// Quand l'utilisateur clique sur Aperçu après avoir modifié le texte brut,
+// l'aperçu se met à jour depuis le texte brut si possible.
+if (typeof switchLetterView === "function") {
+  var __myf46_switchLetterView_base = switchLetterView;
+
+  switchLetterView = function(mode) {
+    if (mode === "visual") {
+      myf46SyncPreviewFromRaw();
+    }
+    return __myf46_switchLetterView_base(mode);
+  };
+}
 
 
 </script>
