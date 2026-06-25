@@ -1516,7 +1516,7 @@ app.post("/api/live-search", async (req, res) => {
     fail(res, "Recherche web impossible : " + e.message, 500);
   }
 });
-  
+
 // ─────────────────────────────────────────────────────────────
 // FALLBACK SPA + DÉMARRAGE
 // ─────────────────────────────────────────────────────────────
