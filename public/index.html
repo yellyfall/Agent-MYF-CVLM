@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MYF’s AI</title>
-<meta name="myf-build" content="v47-letter-hard-sync">
+<meta name="myf-build" content="v48-letter-strict-sync">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -10986,21 +10986,22 @@ if (typeof dlLetterDoc === "function") {
 
 
 /* ==========================================================================
-   CORRECTIF MYF V47 — SYNCHRO LETTRE TEXTE BRUT / APERÇU SANS CHANGER LE DESIGN
+   CORRECTIF MYF V48 — SYNCHRO STRICTE LETTRE TEXTE BRUT / APERÇU
    ========================================================================== */
 /*
-  Correction minimale demandée :
-  - repartir du fichier HTML fourni ;
-  - ne PAS modifier le CSS ni la syntaxe/design de l'aperçu ;
-  - vider la lettre en mémoire dès qu'une donnée change ;
-  - vider les champs de l'ancien aperçu avant toute nouvelle génération ;
-  - reconstruire l'aperçu depuis le texte brut quand on clique sur Aperçu ;
-  - garder texte brut et aperçu synchrones après chaque génération.
+  Correction minimale :
+  - Base = fichier HTML fourni par l'utilisateur.
+  - Aucun changement CSS.
+  - Aucun changement de structure/design de l'aperçu.
+  - Dès qu'une donnée change : suppression de l'ancienne lettre en mémoire + aperçu vidé.
+  - À chaque nouvelle génération : départ à zéro.
+  - Après génération : l'aperçu est reconstruit avec les mêmes données que le texte brut.
+  - Le texte brut et l'aperçu restent synchrones.
 */
 
-var MYF47_LETTER_DIRTY = false;
+var MYF48_RENDERING_LETTER = false;
 
-function myf47Clean(value) {
+function myf48Clean(value) {
   var s = String(value || "");
   if (typeof myf42CleanMarkdownArtifacts === "function") {
     s = myf42CleanMarkdownArtifacts(s);
@@ -11013,11 +11014,7 @@ function myf47Clean(value) {
     .trim();
 }
 
-function myf47ClearLetterMemory(keepRaw) {
-  MYF47_LETTER_DIRTY = true;
-
-  try { LAST_LETTER_JSON = null; } catch(e) {}
-
+function myf48ClearPreviewOnly() {
   [
     "lmSender",
     "lmRecipient",
@@ -11033,14 +11030,21 @@ function myf47ClearLetterMemory(keepRaw) {
 
   var render = document.getElementById("letterRender");
   if (render) render.classList.remove("show");
+}
 
-  if (!keepRaw) {
-    var out = document.getElementById("lmOut");
-    if (out) out.textContent = "";
+function myf48ClearLetterAll() {
+  try { LAST_LETTER_JSON = null; } catch(e) {}
+
+  myf48ClearPreviewOnly();
+
+  var out = document.getElementById("lmOut");
+  if (out) {
+    out.textContent = "";
+    out.style.display = "none";
   }
 }
 
-function myf47Pick(obj) {
+function myf48Pick(obj) {
   for (var i = 1; i < arguments.length; i++) {
     var key = arguments[i];
     if (obj && obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim() !== "") {
@@ -11050,29 +11054,29 @@ function myf47Pick(obj) {
   return "";
 }
 
-function myf47NormalizeLetterObject(obj) {
+function myf48NormalizeLetterObject(obj) {
   obj = obj || {};
 
   var j = {
-    sender_name: myf47Pick(obj, "sender_name", "senderName", "SENDER_NAME", "candidate_name", "name"),
-    sender_address: myf47Pick(obj, "sender_address", "senderAddress", "SENDER_ADDRESS", "candidate_address", "address"),
-    sender_phone: myf47Pick(obj, "sender_phone", "senderPhone", "SENDER_PHONE", "candidate_phone", "phone", "telephone"),
-    sender_email: myf47Pick(obj, "sender_email", "senderEmail", "SENDER_EMAIL", "candidate_email", "email"),
-    recipient_company: myf47Pick(obj, "recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "entreprise"),
-    recipient_name: myf47Pick(obj, "recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name"),
-    recipient_title: myf47Pick(obj, "recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title"),
-    recipient_address: myf47Pick(obj, "recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address"),
-    city: myf47Pick(obj, "city", "CITY", "ville"),
-    date: myf47Pick(obj, "date", "DATE"),
-    subject: myf47Pick(obj, "subject", "SUBJECT", "objet", "Objet"),
-    salutation: myf47Pick(obj, "salutation", "SALUTATION", "greeting"),
-    body: myf47Pick(obj, "body", "BODY", "letter_body", "content", "contenu", "corps"),
-    closing: myf47Pick(obj, "closing", "CLOSING", "formule", "formule_politesse"),
-    signature: myf47Pick(obj, "signature", "SIGNATURE")
+    sender_name: myf48Pick(obj, "sender_name", "senderName", "SENDER_NAME", "candidate_name", "candidateName", "name"),
+    sender_address: myf48Pick(obj, "sender_address", "senderAddress", "SENDER_ADDRESS", "candidate_address", "candidateAddress", "address"),
+    sender_phone: myf48Pick(obj, "sender_phone", "senderPhone", "SENDER_PHONE", "candidate_phone", "candidatePhone", "phone", "telephone"),
+    sender_email: myf48Pick(obj, "sender_email", "senderEmail", "SENDER_EMAIL", "candidate_email", "candidateEmail", "email"),
+    recipient_company: myf48Pick(obj, "recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "companyName", "entreprise"),
+    recipient_name: myf48Pick(obj, "recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name", "contactName"),
+    recipient_title: myf48Pick(obj, "recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title", "contactTitle"),
+    recipient_address: myf48Pick(obj, "recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address", "companyAddress"),
+    city: myf48Pick(obj, "city", "CITY", "ville"),
+    date: myf48Pick(obj, "date", "DATE"),
+    subject: myf48Pick(obj, "subject", "SUBJECT", "objet", "Objet"),
+    salutation: myf48Pick(obj, "salutation", "SALUTATION", "greeting"),
+    body: myf48Pick(obj, "body", "BODY", "letter_body", "letterBody", "content", "contenu", "corps"),
+    closing: myf48Pick(obj, "closing", "CLOSING", "formule", "formule_politesse", "formal_closing"),
+    signature: myf48Pick(obj, "signature", "SIGNATURE")
   };
 
   Object.keys(j).forEach(function(k) {
-    j[k] = myf47Clean(j[k]);
+    j[k] = myf48Clean(j[k]);
   });
 
   j.subject = j.subject
@@ -11083,17 +11087,17 @@ function myf47NormalizeLetterObject(obj) {
   return j;
 }
 
-function myf47IsValidLetterObject(obj) {
-  var j = myf47NormalizeLetterObject(obj || {});
+function myf48IsValidLetter(j) {
+  j = myf48NormalizeLetterObject(j || {});
   return !!(
     j.sender_name &&
     j.body &&
     j.body.length > 60 &&
-    (j.subject || j.recipient_company || j.salutation)
+    (j.subject || j.recipient_company || j.salutation || j.closing)
   );
 }
 
-function myf47TryJson(raw) {
+function myf48ParseJson(raw) {
   raw = String(raw || "").trim();
   if (!raw) return null;
 
@@ -11109,22 +11113,22 @@ function myf47TryJson(raw) {
 
   if (!obj || typeof obj !== "object") return null;
 
-  obj = myf47NormalizeLetterObject(obj);
-  return myf47IsValidLetterObject(obj) ? obj : null;
+  obj = myf48NormalizeLetterObject(obj);
+  return myf48IsValidLetter(obj) ? obj : null;
 }
 
-function myf47ParseStructuredRawLetter(raw) {
-  raw = myf47Clean(raw);
+function myf48ParseTextBrut(raw) {
+  raw = myf48Clean(raw);
   if (!raw || raw.length < 80) return null;
 
-  // Si c'est du JSON, on ne le transforme pas comme un texte classique.
+  // Ne pas tenter d'interpréter un JSON cassé comme une lettre classique.
   if (/^\s*\{/.test(raw) || /"sender_name"|"BODY"|"CLOSING"|"SIGNATURE"/i.test(raw)) {
-    return myf47TryJson(raw);
+    return myf48ParseJson(raw);
   }
 
   var groups = raw
     .split(/\n\s*\n+/)
-    .map(myf47Clean)
+    .map(myf48Clean)
     .filter(Boolean);
 
   if (groups.length < 7) return null;
@@ -11132,7 +11136,7 @@ function myf47ParseStructuredRawLetter(raw) {
   function lines(group) {
     return String(group || "")
       .split(/\n+/)
-      .map(myf47Clean)
+      .map(myf48Clean)
       .filter(Boolean);
   }
 
@@ -11157,8 +11161,8 @@ function myf47ParseStructuredRawLetter(raw) {
   var date = dateBlock;
   var m = dateBlock.match(/^([^,]+),\s*(.+)$/);
   if (m) {
-    city = myf47Clean(m[1]);
-    date = myf47Clean(m[2]);
+    city = myf48Clean(m[1]);
+    date = myf48Clean(m[2]);
   }
 
   var j = {
@@ -11179,182 +11183,173 @@ function myf47ParseStructuredRawLetter(raw) {
     signature: signature
   };
 
-  j = myf47NormalizeLetterObject(j);
-  return myf47IsValidLetterObject(j) ? j : null;
+  j = myf48NormalizeLetterObject(j);
+  return myf48IsValidLetter(j) ? j : null;
 }
 
-function myf47RenderObjectWithExistingDesign(obj) {
-  if (!obj || !myf47IsValidLetterObject(obj)) return false;
-  if (typeof renderLetter !== "function") return false;
+function myf48CurrentLetterFromRaw() {
+  var out = document.getElementById("lmOut");
+  var raw = out ? out.textContent || "" : "";
+  return myf48ParseJson(raw) || myf48ParseTextBrut(raw);
+}
 
-  var j = myf47NormalizeLetterObject(obj);
+function myf48RenderSynced(j) {
+  if (!j || !myf48IsValidLetter(j) || typeof renderLetter !== "function") return false;
 
-  // On utilise renderLetter existant : donc le design/syntaxe de l'aperçu ne change pas.
-  renderLetter(j);
+  j = myf48NormalizeLetterObject(j);
+
+  MYF48_RENDERING_LETTER = true;
+  try {
+    renderLetter(j);
+  } finally {
+    MYF48_RENDERING_LETTER = false;
+  }
 
   try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
 
+  // Le texte brut est toujours reconstruit depuis le même objet que l'aperçu.
   if (typeof buildLetterText === "function") {
     var out = document.getElementById("lmOut");
     if (out) out.textContent = buildLetterText(j);
   }
 
-  MYF47_LETTER_DIRTY = false;
   return true;
 }
 
-function myf47SyncPreviewFromRaw() {
-  var out = document.getElementById("lmOut");
-  if (!out) return false;
-
-  var raw = out.textContent || "";
-  if (!raw.trim()) return false;
-
-  var obj = myf47TryJson(raw) || myf47ParseStructuredRawLetter(raw);
-  if (!obj) return false;
-
-  return myf47RenderObjectWithExistingDesign(obj);
-}
-
-// 1) Normaliser renderLetter sans changer son rendu interne.
+// 1) Normalisation de l'objet JSON avant l'ancien renderLetter.
+// On garde exactement le renderLetter d'origine : donc le design ne change pas.
 if (typeof renderLetter === "function") {
-  var __myf47_renderLetter_base = renderLetter;
+  var __myf48_renderLetter_base = renderLetter;
 
-  renderLetter = function(obj) {
-    // Efface l'ancien contenu avant d'écrire le nouveau.
-    [
-      "lmSender",
-      "lmRecipient",
-      "lmDate",
-      "lmSubject",
-      "lmBody",
-      "lmClosing",
-      "lmSignature"
-    ].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.innerHTML = "";
-    });
+  renderLetter = function(j) {
+    myf48ClearPreviewOnly();
 
-    obj = myf47NormalizeLetterObject(obj || {});
-    try { LAST_LETTER_JSON = Object.assign({}, obj); } catch(e) {}
+    j = myf48NormalizeLetterObject(j || {});
+    try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
 
-    var result = __myf47_renderLetter_base(obj);
-    MYF47_LETTER_DIRTY = false;
-    return result;
+    return __myf48_renderLetter_base(j);
   };
 }
 
-// 2) Normaliser buildLetterText pour que texte brut et aperçu utilisent les mêmes données.
+// 2) Texte brut et aperçu utilisent les mêmes clés normalisées.
 if (typeof buildLetterText === "function") {
-  var __myf47_buildLetterText_base = buildLetterText;
+  var __myf48_buildLetterText_base = buildLetterText;
 
-  buildLetterText = function(obj) {
-    return __myf47_buildLetterText_base(myf47NormalizeLetterObject(obj || {}));
+  buildLetterText = function(j) {
+    return __myf48_buildLetterText_base(myf48NormalizeLetterObject(j || {}));
   };
 }
 
-// 3) Nettoyer aussi la donnée utilisée par le PDF lettre si la fonction existe.
+// 3) Export PDF/DOC : même source synchronisée.
 if (typeof v36LetterData === "function") {
-  var __myf47_v36LetterData_base = v36LetterData;
+  var __myf48_v36LetterData_base = v36LetterData;
 
   v36LetterData = function() {
-    return myf47NormalizeLetterObject(__myf47_v36LetterData_base() || {});
+    var fromRaw = myf48CurrentLetterFromRaw();
+    if (fromRaw) return myf48NormalizeLetterObject(fromRaw);
+    return myf48NormalizeLetterObject(__myf48_v36LetterData_base() || {});
   };
 }
 
-// 4) Dès qu'une donnée d'entrée change : supprimer l'ancienne lettre de l'aperçu et de la mémoire.
-function myf47BindChangeReset() {
+// 4) Dès qu'une modification est faite, on supprime l'ancienne lettre en mémoire.
+function myf48BindInputChanges() {
   [
     "cvText",
     "ofText",
     "ofUrl",
+    "extra",
     "lang",
     "llen",
     "ptype",
     "model",
-    "extra",
     "cvFile",
     "ofFile"
   ].forEach(function(id) {
     var el = document.getElementById(id);
-    if (!el || el.__myf47Bound) return;
+    if (!el || el.__myf48Bound) return;
 
-    el.__myf47Bound = true;
+    el.__myf48Bound = true;
     var evt = (el.tagName === "SELECT" || el.type === "file") ? "change" : "input";
 
     el.addEventListener(evt, function() {
-      myf47ClearLetterMemory(false);
+      myf48ClearLetterAll();
     });
   });
 }
 
-myf47BindChangeReset();
+myf48BindInputChanges();
 
-// 5) Changement de ton : supprimer l'ancienne lettre en mémoire.
+// Ton de la lettre
 if (typeof tChip === "function") {
-  var __myf47_tChip_base = tChip;
+  var __myf48_tChip_base = tChip;
 
   tChip = function(el) {
-    myf47ClearLetterMemory(false);
-    return __myf47_tChip_base(el);
+    myf48ClearLetterAll();
+    return __myf48_tChip_base(el);
   };
 }
 
-// 6) Changement d'onglet offre : supprimer l'ancienne lettre en mémoire.
+// Onglet offre
 if (typeof switchTab === "function") {
-  var __myf47_switchTab_base = switchTab;
+  var __myf48_switchTab_base = switchTab;
 
   switchTab = function(tab) {
-    myf47ClearLetterMemory(false);
-    return __myf47_switchTab_base(tab);
+    myf48ClearLetterAll();
+    return __myf48_switchTab_base(tab);
   };
 }
 
-// 7) Si le correctif V40 existe déjà, on le complète sans le casser.
+// Si le reset global existe déjà, on ajoute la purge mémoire lettre.
 if (typeof myf40ResetGeneratedOutputs === "function") {
-  var __myf47_reset_base = myf40ResetGeneratedOutputs;
+  var __myf48_reset_base = myf40ResetGeneratedOutputs;
 
   myf40ResetGeneratedOutputs = function(reason) {
-    myf47ClearLetterMemory(false);
-    return __myf47_reset_base(reason);
+    myf48ClearLetterAll();
+    return __myf48_reset_base(reason);
   };
 }
 
-// 8) Nouvelle génération : repartir à zéro, puis resynchroniser à la fin.
+// 5) Nouvelle génération : repartir à zéro puis resynchroniser après.
 if (typeof generateAll === "function") {
-  var __myf47_generateAll_base = generateAll;
+  var __myf48_generateAll_base = generateAll;
 
   generateAll = async function() {
-    myf47ClearLetterMemory(false);
+    myf48ClearLetterAll();
 
-    var result = await __myf47_generateAll_base.apply(this, arguments);
+    var result = await __myf48_generateAll_base.apply(this, arguments);
 
-    // Après génération, le texte brut est la source de vérité.
     setTimeout(function() {
       try {
-        if (!myf47SyncPreviewFromRaw()) {
-          if (typeof LAST_LETTER_JSON !== "undefined" && LAST_LETTER_JSON && myf47IsValidLetterObject(LAST_LETTER_JSON)) {
-            myf47RenderObjectWithExistingDesign(LAST_LETTER_JSON);
-          }
+        var fromRaw = myf48CurrentLetterFromRaw();
+
+        if (fromRaw) {
+          myf48RenderSynced(fromRaw);
+          return;
+        }
+
+        if (typeof LAST_LETTER_JSON !== "undefined" && myf48IsValidLetter(LAST_LETTER_JSON)) {
+          myf48RenderSynced(LAST_LETTER_JSON);
         }
       } catch(e) {
-        console.warn("Synchronisation lettre V47 impossible :", e);
+        console.warn("Synchronisation V48 impossible :", e);
       }
-    }, 80);
+    }, 120);
 
     return result;
   };
 }
 
-// 9) Quand on clique sur Aperçu : toujours recalculer l'aperçu depuis le texte brut.
+// 6) Quand on clique sur Aperçu : l'aperçu se recale sur le texte brut.
 if (typeof switchLetterView === "function") {
-  var __myf47_switchLetterView_base = switchLetterView;
+  var __myf48_switchLetterView_base = switchLetterView;
 
   switchLetterView = function(mode) {
-    if (mode === "visual") {
-      myf47SyncPreviewFromRaw();
+    if (mode === "visual" && !MYF48_RENDERING_LETTER) {
+      var fromRaw = myf48CurrentLetterFromRaw();
+      if (fromRaw) myf48RenderSynced(fromRaw);
     }
-    return __myf47_switchLetterView_base(mode);
+
+    return __myf48_switchLetterView_base(mode);
   };
 }
 
