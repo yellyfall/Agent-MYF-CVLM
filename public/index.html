@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MYF’s AI</title>
-<meta name="myf-build" content="v47-reset-letter-preview-memory">
+<meta name="myf-build" content="v47-letter-hard-sync">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -10986,21 +10986,37 @@ if (typeof dlLetterDoc === "function") {
 
 
 /* ==========================================================================
-   CORRECTIF MYF V47 — RESET MÉMOIRE APERÇU LETTRE À CHAQUE MODIFICATION
+   CORRECTIF MYF V47 — SYNCHRO LETTRE TEXTE BRUT / APERÇU SANS CHANGER LE DESIGN
    ========================================================================== */
 /*
-  Correction volontairement minimale :
-  - Ne change PAS le design de l'aperçu.
-  - Ne change PAS la structure HTML/CSS de la lettre.
-  - Ne reconstruit PAS l'aperçu depuis du texte brut.
-  - Supprime uniquement l'ancienne lettre de la mémoire/aperçu dès qu'une donnée change.
-  - Au moment d'une nouvelle génération, l'agent repart de zéro.
+  Correction minimale demandée :
+  - repartir du fichier HTML fourni ;
+  - ne PAS modifier le CSS ni la syntaxe/design de l'aperçu ;
+  - vider la lettre en mémoire dès qu'une donnée change ;
+  - vider les champs de l'ancien aperçu avant toute nouvelle génération ;
+  - reconstruire l'aperçu depuis le texte brut quand on clique sur Aperçu ;
+  - garder texte brut et aperçu synchrones après chaque génération.
 */
 
-function myf47ClearLetterPreviewMemory(clearRaw) {
-  try {
-    LAST_LETTER_JSON = null;
-  } catch(e) {}
+var MYF47_LETTER_DIRTY = false;
+
+function myf47Clean(value) {
+  var s = String(value || "");
+  if (typeof myf42CleanMarkdownArtifacts === "function") {
+    s = myf42CleanMarkdownArtifacts(s);
+  }
+  return s
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+
+function myf47ClearLetterMemory(keepRaw) {
+  MYF47_LETTER_DIRTY = true;
+
+  try { LAST_LETTER_JSON = null; } catch(e) {}
 
   [
     "lmSender",
@@ -11016,208 +11032,329 @@ function myf47ClearLetterPreviewMemory(clearRaw) {
   });
 
   var render = document.getElementById("letterRender");
-  if (render) {
-    render.classList.remove("show");
-  }
+  if (render) render.classList.remove("show");
 
-  if (clearRaw) {
+  if (!keepRaw) {
     var out = document.getElementById("lmOut");
-    if (out) {
-      out.textContent = "";
-      out.style.display = "none";
+    if (out) out.textContent = "";
+  }
+}
+
+function myf47Pick(obj) {
+  for (var i = 1; i < arguments.length; i++) {
+    var key = arguments[i];
+    if (obj && obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim() !== "") {
+      return obj[key];
     }
   }
-
-  var visualBtn = document.getElementById("lvBtnVisual");
-  var rawBtn = document.getElementById("lvBtnRaw");
-  if (visualBtn) visualBtn.classList.add("active");
-  if (rawBtn) rawBtn.classList.remove("active");
+  return "";
 }
 
-function myf47MarkLetterInputsChanged() {
-  myf47ClearLetterPreviewMemory(true);
+function myf47NormalizeLetterObject(obj) {
+  obj = obj || {};
 
-  // On évite que les boutons PDF/DOC récupèrent une ancienne lettre.
-  try {
-    LAST_LETTER_JSON = null;
-  } catch(e) {}
+  var j = {
+    sender_name: myf47Pick(obj, "sender_name", "senderName", "SENDER_NAME", "candidate_name", "name"),
+    sender_address: myf47Pick(obj, "sender_address", "senderAddress", "SENDER_ADDRESS", "candidate_address", "address"),
+    sender_phone: myf47Pick(obj, "sender_phone", "senderPhone", "SENDER_PHONE", "candidate_phone", "phone", "telephone"),
+    sender_email: myf47Pick(obj, "sender_email", "senderEmail", "SENDER_EMAIL", "candidate_email", "email"),
+    recipient_company: myf47Pick(obj, "recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "entreprise"),
+    recipient_name: myf47Pick(obj, "recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name"),
+    recipient_title: myf47Pick(obj, "recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title"),
+    recipient_address: myf47Pick(obj, "recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address"),
+    city: myf47Pick(obj, "city", "CITY", "ville"),
+    date: myf47Pick(obj, "date", "DATE"),
+    subject: myf47Pick(obj, "subject", "SUBJECT", "objet", "Objet"),
+    salutation: myf47Pick(obj, "salutation", "SALUTATION", "greeting"),
+    body: myf47Pick(obj, "body", "BODY", "letter_body", "content", "contenu", "corps"),
+    closing: myf47Pick(obj, "closing", "CLOSING", "formule", "formule_politesse"),
+    signature: myf47Pick(obj, "signature", "SIGNATURE")
+  };
 
-  // Le résultat n'est plus à jour.
-  var note = document.getElementById("myf47LetterResetNote");
-  var res = document.getElementById("resSection");
-
-  if (res && !note) {
-    note = document.createElement("div");
-    note.id = "myf47LetterResetNote";
-    note.className = "stale-note";
-    note.textContent = "Les informations ont changé. La lettre précédente a été supprimée de l’aperçu. Relancez la génération pour créer une nouvelle lettre.";
-    res.parentNode.insertBefore(note, res);
-  }
-}
-
-function myf47RemoveResetNote() {
-  var note = document.getElementById("myf47LetterResetNote");
-  if (note) note.remove();
-}
-
-// Champs qui doivent supprimer l'ancienne lettre en aperçu dès qu'ils changent.
-(function myf47BindInputReset() {
-  var fields = [
-    ["cvText", "input"],
-    ["ofText", "input"],
-    ["ofUrl", "input"],
-    ["extra", "input"],
-    ["lang", "change"],
-    ["llen", "change"],
-    ["ptype", "change"],
-    ["model", "change"]
-  ];
-
-  fields.forEach(function(pair) {
-    var el = document.getElementById(pair[0]);
-    if (!el) return;
-
-    el.addEventListener(pair[1], function() {
-      myf47MarkLetterInputsChanged();
-    });
+  Object.keys(j).forEach(function(k) {
+    j[k] = myf47Clean(j[k]);
   });
 
-  // Changement de fichier CV
-  var cvFile = document.getElementById("cvFile");
-  if (cvFile) {
-    cvFile.addEventListener("change", function() {
-      myf47MarkLetterInputsChanged();
-    });
+  j.subject = j.subject
+    .replace(/^Objet\s*:\s*/i, "")
+    .replace(/^Subject\s*:\s*/i, "")
+    .trim();
+
+  return j;
+}
+
+function myf47IsValidLetterObject(obj) {
+  var j = myf47NormalizeLetterObject(obj || {});
+  return !!(
+    j.sender_name &&
+    j.body &&
+    j.body.length > 60 &&
+    (j.subject || j.recipient_company || j.salutation)
+  );
+}
+
+function myf47TryJson(raw) {
+  raw = String(raw || "").trim();
+  if (!raw) return null;
+
+  var obj = null;
+
+  try {
+    if (typeof extractJsonObject === "function") obj = extractJsonObject(raw);
+  } catch(e) {}
+
+  if (!obj) {
+    try { obj = JSON.parse(raw); } catch(e2) {}
   }
 
-  // Changement de fichier offre
-  var ofFile = document.getElementById("ofFile");
-  if (ofFile) {
-    ofFile.addEventListener("change", function() {
-      myf47MarkLetterInputsChanged();
-    });
-  }
-})();
+  if (!obj || typeof obj !== "object") return null;
 
-// Changement de ton : on garde le comportement d'origine, puis on vide l'ancienne lettre.
+  obj = myf47NormalizeLetterObject(obj);
+  return myf47IsValidLetterObject(obj) ? obj : null;
+}
+
+function myf47ParseStructuredRawLetter(raw) {
+  raw = myf47Clean(raw);
+  if (!raw || raw.length < 80) return null;
+
+  // Si c'est du JSON, on ne le transforme pas comme un texte classique.
+  if (/^\s*\{/.test(raw) || /"sender_name"|"BODY"|"CLOSING"|"SIGNATURE"/i.test(raw)) {
+    return myf47TryJson(raw);
+  }
+
+  var groups = raw
+    .split(/\n\s*\n+/)
+    .map(myf47Clean)
+    .filter(Boolean);
+
+  if (groups.length < 7) return null;
+
+  function lines(group) {
+    return String(group || "")
+      .split(/\n+/)
+      .map(myf47Clean)
+      .filter(Boolean);
+  }
+
+  var sender = lines(groups[0]);
+  var recipient = lines(groups[1]);
+
+  var dateBlock = groups[2] || "";
+  var subjectBlock = groups[3] || "";
+  var salutation = groups[4] || "";
+
+  if (!/^Objet\s*:/i.test(subjectBlock) && !/^Subject\s*:/i.test(subjectBlock)) {
+    return null;
+  }
+
+  var closing = groups[groups.length - 2] || "";
+  var signature = groups[groups.length - 1] || "";
+  var body = groups.slice(5, -2).join("\n\n");
+
+  if (!body || body.length < 60) return null;
+
+  var city = "";
+  var date = dateBlock;
+  var m = dateBlock.match(/^([^,]+),\s*(.+)$/);
+  if (m) {
+    city = myf47Clean(m[1]);
+    date = myf47Clean(m[2]);
+  }
+
+  var j = {
+    sender_name: sender[0] || "",
+    sender_address: sender[1] || "",
+    sender_phone: sender[2] || "",
+    sender_email: sender[3] || "",
+    recipient_company: recipient[0] || "",
+    recipient_name: recipient[1] || "",
+    recipient_title: "",
+    recipient_address: recipient.slice(2).join(", "),
+    city: city,
+    date: date,
+    subject: subjectBlock.replace(/^Objet\s*:\s*/i, "").replace(/^Subject\s*:\s*/i, ""),
+    salutation: salutation,
+    body: body,
+    closing: closing,
+    signature: signature
+  };
+
+  j = myf47NormalizeLetterObject(j);
+  return myf47IsValidLetterObject(j) ? j : null;
+}
+
+function myf47RenderObjectWithExistingDesign(obj) {
+  if (!obj || !myf47IsValidLetterObject(obj)) return false;
+  if (typeof renderLetter !== "function") return false;
+
+  var j = myf47NormalizeLetterObject(obj);
+
+  // On utilise renderLetter existant : donc le design/syntaxe de l'aperçu ne change pas.
+  renderLetter(j);
+
+  try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
+
+  if (typeof buildLetterText === "function") {
+    var out = document.getElementById("lmOut");
+    if (out) out.textContent = buildLetterText(j);
+  }
+
+  MYF47_LETTER_DIRTY = false;
+  return true;
+}
+
+function myf47SyncPreviewFromRaw() {
+  var out = document.getElementById("lmOut");
+  if (!out) return false;
+
+  var raw = out.textContent || "";
+  if (!raw.trim()) return false;
+
+  var obj = myf47TryJson(raw) || myf47ParseStructuredRawLetter(raw);
+  if (!obj) return false;
+
+  return myf47RenderObjectWithExistingDesign(obj);
+}
+
+// 1) Normaliser renderLetter sans changer son rendu interne.
+if (typeof renderLetter === "function") {
+  var __myf47_renderLetter_base = renderLetter;
+
+  renderLetter = function(obj) {
+    // Efface l'ancien contenu avant d'écrire le nouveau.
+    [
+      "lmSender",
+      "lmRecipient",
+      "lmDate",
+      "lmSubject",
+      "lmBody",
+      "lmClosing",
+      "lmSignature"
+    ].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = "";
+    });
+
+    obj = myf47NormalizeLetterObject(obj || {});
+    try { LAST_LETTER_JSON = Object.assign({}, obj); } catch(e) {}
+
+    var result = __myf47_renderLetter_base(obj);
+    MYF47_LETTER_DIRTY = false;
+    return result;
+  };
+}
+
+// 2) Normaliser buildLetterText pour que texte brut et aperçu utilisent les mêmes données.
+if (typeof buildLetterText === "function") {
+  var __myf47_buildLetterText_base = buildLetterText;
+
+  buildLetterText = function(obj) {
+    return __myf47_buildLetterText_base(myf47NormalizeLetterObject(obj || {}));
+  };
+}
+
+// 3) Nettoyer aussi la donnée utilisée par le PDF lettre si la fonction existe.
+if (typeof v36LetterData === "function") {
+  var __myf47_v36LetterData_base = v36LetterData;
+
+  v36LetterData = function() {
+    return myf47NormalizeLetterObject(__myf47_v36LetterData_base() || {});
+  };
+}
+
+// 4) Dès qu'une donnée d'entrée change : supprimer l'ancienne lettre de l'aperçu et de la mémoire.
+function myf47BindChangeReset() {
+  [
+    "cvText",
+    "ofText",
+    "ofUrl",
+    "lang",
+    "llen",
+    "ptype",
+    "model",
+    "extra",
+    "cvFile",
+    "ofFile"
+  ].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el || el.__myf47Bound) return;
+
+    el.__myf47Bound = true;
+    var evt = (el.tagName === "SELECT" || el.type === "file") ? "change" : "input";
+
+    el.addEventListener(evt, function() {
+      myf47ClearLetterMemory(false);
+    });
+  });
+}
+
+myf47BindChangeReset();
+
+// 5) Changement de ton : supprimer l'ancienne lettre en mémoire.
 if (typeof tChip === "function") {
   var __myf47_tChip_base = tChip;
 
   tChip = function(el) {
-    var result = __myf47_tChip_base.apply(this, arguments);
-    myf47MarkLetterInputsChanged();
-    return result;
+    myf47ClearLetterMemory(false);
+    return __myf47_tChip_base(el);
   };
 }
 
-// Changement d'onglet de l'offre : texte / URL / fichier
+// 6) Changement d'onglet offre : supprimer l'ancienne lettre en mémoire.
 if (typeof switchTab === "function") {
   var __myf47_switchTab_base = switchTab;
 
   switchTab = function(tab) {
-    var result = __myf47_switchTab_base.apply(this, arguments);
-    myf47MarkLetterInputsChanged();
-    return result;
+    myf47ClearLetterMemory(false);
+    return __myf47_switchTab_base(tab);
   };
 }
 
-// Upload CV : après remplacement du CV, on supprime l'ancienne lettre de l'aperçu.
-if (typeof uploadCV === "function") {
-  var __myf47_uploadCV_base = uploadCV;
+// 7) Si le correctif V40 existe déjà, on le complète sans le casser.
+if (typeof myf40ResetGeneratedOutputs === "function") {
+  var __myf47_reset_base = myf40ResetGeneratedOutputs;
 
-  uploadCV = async function(input) {
-    var result = await __myf47_uploadCV_base.apply(this, arguments);
-    myf47MarkLetterInputsChanged();
-    return result;
+  myf40ResetGeneratedOutputs = function(reason) {
+    myf47ClearLetterMemory(false);
+    return __myf47_reset_base(reason);
   };
 }
 
-// Upload offre : après remplacement de l'offre, on supprime l'ancienne lettre de l'aperçu.
-if (typeof uploadOf === "function") {
-  var __myf47_uploadOf_base = uploadOf;
-
-  uploadOf = async function(input) {
-    var result = await __myf47_uploadOf_base.apply(this, arguments);
-    myf47MarkLetterInputsChanged();
-    return result;
-  };
-}
-
-// Suppression CV
-if (typeof clearCV === "function") {
-  var __myf47_clearCV_base = clearCV;
-
-  clearCV = function() {
-    var result = __myf47_clearCV_base.apply(this, arguments);
-    myf47MarkLetterInputsChanged();
-    return result;
-  };
-}
-
-// Suppression offre
-if (typeof clearOf === "function") {
-  var __myf47_clearOf_base = clearOf;
-
-  clearOf = function() {
-    var result = __myf47_clearOf_base.apply(this, arguments);
-    myf47MarkLetterInputsChanged();
-    return result;
-  };
-}
-
-// Nouvelle génération : on repart vraiment à zéro avant d'appeler la génération d'origine.
-// Le renderLetter d'origine reste inchangé : donc le design de l'aperçu ne change pas.
+// 8) Nouvelle génération : repartir à zéro, puis resynchroniser à la fin.
 if (typeof generateAll === "function") {
   var __myf47_generateAll_base = generateAll;
 
   generateAll = async function() {
-    myf47RemoveResetNote();
-    myf47ClearLetterPreviewMemory(true);
+    myf47ClearLetterMemory(false);
 
     var result = await __myf47_generateAll_base.apply(this, arguments);
+
+    // Après génération, le texte brut est la source de vérité.
+    setTimeout(function() {
+      try {
+        if (!myf47SyncPreviewFromRaw()) {
+          if (typeof LAST_LETTER_JSON !== "undefined" && LAST_LETTER_JSON && myf47IsValidLetterObject(LAST_LETTER_JSON)) {
+            myf47RenderObjectWithExistingDesign(LAST_LETTER_JSON);
+          }
+        }
+      } catch(e) {
+        console.warn("Synchronisation lettre V47 impossible :", e);
+      }
+    }, 80);
 
     return result;
   };
 }
 
-// Sécurité : si l'utilisateur clique sur "Aperçu" alors qu'il n'y a plus de lettre en mémoire,
-// on n'affiche pas l'ancien aperçu.
+// 9) Quand on clique sur Aperçu : toujours recalculer l'aperçu depuis le texte brut.
 if (typeof switchLetterView === "function") {
   var __myf47_switchLetterView_base = switchLetterView;
 
   switchLetterView = function(mode) {
     if (mode === "visual") {
-      var hasLetter = false;
-
-      try {
-        hasLetter = !!LAST_LETTER_JSON;
-      } catch(e) {}
-
-      var hasVisibleContent = [
-        "lmSender",
-        "lmRecipient",
-        "lmDate",
-        "lmSubject",
-        "lmBody",
-        "lmClosing",
-        "lmSignature"
-      ].some(function(id) {
-        var el = document.getElementById(id);
-        return el && (el.textContent || "").trim().length > 0;
-      });
-
-      if (!hasLetter && !hasVisibleContent) {
-        var render = document.getElementById("letterRender");
-        var out = document.getElementById("lmOut");
-
-        if (render) render.classList.remove("show");
-        if (out) out.style.display = "none";
-
-        return;
-      }
+      myf47SyncPreviewFromRaw();
     }
-
-    return __myf47_switchLetterView_base.apply(this, arguments);
+    return __myf47_switchLetterView_base(mode);
   };
 }
 
