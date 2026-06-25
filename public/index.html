@@ -10986,20 +10986,17 @@ if (typeof dlLetterDoc === "function") {
 
 
 /* ==========================================================================
-   CORRECTIF MYF V43 — APERÇU LETTRE TOUJOURS SYNCHRONISÉ AVEC TEXTE BRUT
+   CORRECTIF MYF V44 — SYNCHRO APERÇU LETTRE SANS CHANGER LE DESIGN
    ========================================================================== */
 /*
-  Problème corrigé :
-  - Après une nouvelle génération, le texte brut pouvait être le bon,
-    mais l'aperçu visuel pouvait rester sur l'ancienne lettre.
-  Solution :
-  - On vide complètement l'ancien aperçu avant chaque génération.
-  - À la fin de chaque génération, on reconstruit l'aperçu depuis la lettre réellement présente dans lmOut.
-  - Si l'IA renvoie du JSON, on l'utilise.
-  - Si l'IA renvoie un texte brut, on le convertit en structure de lettre pour afficher l'aperçu.
+  Objectif :
+  - Corriger le bug où l'aperçu gardait l'ancienne lettre.
+  - Ne plus reconstruire l'aperçu depuis un texte brut mal interprété.
+  - Ne pas transformer l'aperçu en JSON.
+  - Garder exactement le visuel normal de la lettre.
 */
 
-function myf43Clean(value) {
+function myf44Clean(value) {
   var s = String(value || "");
   if (typeof myf42CleanMarkdownArtifacts === "function") {
     s = myf42CleanMarkdownArtifacts(s);
@@ -11012,9 +11009,7 @@ function myf43Clean(value) {
     .trim();
 }
 
-function myf43ClearLetterPreview() {
-  try { LAST_LETTER_JSON = null; } catch(e) {}
-
+function myf44ClearLetterPreviewOnly() {
   [
     "lmSender",
     "lmRecipient",
@@ -11032,210 +11027,127 @@ function myf43ClearLetterPreview() {
   if (render) render.classList.remove("show");
 }
 
-function myf43LinesToHtml(value) {
-  return escapeHtml(myf43Clean(value)).replace(/\n/g, "<br>");
-}
+function myf44NormalizeLetterObject(j) {
+  j = j || {};
 
-function myf43ParseLetterText(raw) {
-  raw = myf43Clean(raw);
-
-  if (!raw || raw.length < 20) return null;
-
-  // 1) Cas JSON brut
-  var obj = null;
-  try {
-    if (typeof extractJsonObject === "function") obj = extractJsonObject(raw);
-  } catch(e) {}
-
-  if (!obj) {
-    try { obj = JSON.parse(raw); } catch(e2) {}
+  function pick() {
+    for (var i = 0; i < arguments.length; i++) {
+      var key = arguments[i];
+      if (j[key] !== undefined && j[key] !== null && String(j[key]).trim() !== "") {
+        return j[key];
+      }
+    }
+    return "";
   }
 
-  if (obj && typeof obj === "object") {
-    if (typeof myf42CleanLetterObject === "function") obj = myf42CleanLetterObject(obj);
-    return obj;
-  }
-
-  // 2) Cas texte structuré type buildLetterText()
-  var groups = raw
-    .split(/\n\s*\n+/)
-    .map(myf43Clean)
-    .filter(Boolean);
-
-  if (groups.length < 5) return null;
-
-  function splitLines(group) {
-    return String(group || "")
-      .split(/\n+/)
-      .map(myf43Clean)
-      .filter(Boolean);
-  }
-
-  var senderLines = splitLines(groups[0]);
-  var recipientLines = splitLines(groups[1]);
-
-  var dateGroupIndex = 2;
-  var subjectGroupIndex = 3;
-
-  // Si le deuxième bloc n'est pas destinataire mais date/objet, on s'adapte.
-  if (/^Objet\s*:/i.test(groups[2] || "")) {
-    dateGroupIndex = -1;
-    subjectGroupIndex = 2;
-  }
-
-  var dateLine = dateGroupIndex >= 0 ? groups[dateGroupIndex] : "";
-  var subjectLine = groups[subjectGroupIndex] || "";
-
-  var salutationIndex = subjectGroupIndex + 1;
-  var salutation = groups[salutationIndex] || "";
-
-  var signature = groups[groups.length - 1] || "";
-  var closing = groups.length >= salutationIndex + 3 ? groups[groups.length - 2] : "";
-  var bodyGroups = groups.slice(salutationIndex + 1, Math.max(salutationIndex + 1, groups.length - 2));
-
-  var subject = subjectLine.replace(/^Objet\s*:\s*/i, "").replace(/^Subject\s*:\s*/i, "");
-
-  var sender_name = senderLines[0] || "";
-  var sender_address = senderLines[1] || "";
-  var sender_phone = senderLines[2] || "";
-  var sender_email = senderLines[3] || "";
-
-  var recipient_company = recipientLines[0] || "";
-  var recipient_name = recipientLines[1] || "";
-  var recipient_address = recipientLines.slice(2).join(", ");
-
-  var city = "";
-  var date = dateLine;
-
-  var m = dateLine.match(/^([^,]+),\s*(.+)$/);
-  if (m) {
-    city = myf43Clean(m[1]);
-    date = myf43Clean(m[2]);
-  }
-
-  var parsed = {
-    sender_name: sender_name,
-    sender_address: sender_address,
-    sender_phone: sender_phone,
-    sender_email: sender_email,
-    recipient_company: recipient_company,
-    recipient_name: recipient_name,
-    recipient_title: "",
-    recipient_address: recipient_address,
-    city: city,
-    date: date,
-    subject: subject,
-    salutation: salutation,
-    body: bodyGroups.join("\n\n"),
-    closing: closing,
-    signature: signature
+  var normalized = {
+    sender_name: pick("sender_name", "senderName", "SENDER_NAME", "name", "candidate_name", "candidateName"),
+    sender_address: pick("sender_address", "senderAddress", "SENDER_ADDRESS", "address", "candidate_address"),
+    sender_phone: pick("sender_phone", "senderPhone", "SENDER_PHONE", "phone", "telephone", "candidate_phone"),
+    sender_email: pick("sender_email", "senderEmail", "SENDER_EMAIL", "email", "candidate_email"),
+    recipient_company: pick("recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "entreprise"),
+    recipient_name: pick("recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name"),
+    recipient_title: pick("recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title"),
+    recipient_address: pick("recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address"),
+    city: pick("city", "CITY", "ville"),
+    date: pick("date", "DATE"),
+    subject: pick("subject", "SUBJECT", "objet", "Objet"),
+    salutation: pick("salutation", "SALUTATION", "greeting", "accroche"),
+    body: pick("body", "BODY", "corps", "letter_body", "content", "contenu"),
+    closing: pick("closing", "CLOSING", "formule", "formule_politesse"),
+    signature: pick("signature", "SIGNATURE")
   };
 
-  if (typeof myf42CleanLetterObject === "function") parsed = myf42CleanLetterObject(parsed);
+  Object.keys(normalized).forEach(function(key) {
+    normalized[key] = myf44Clean(normalized[key]);
+  });
 
-  return parsed;
+  normalized.subject = normalized.subject
+    .replace(/^Objet\s*:\s*/i, "")
+    .replace(/^Subject\s*:\s*/i, "")
+    .trim();
+
+  return normalized;
 }
 
-function myf43RenderLetterObject(j) {
+function myf44LooksLikeValidLetterObject(j) {
   if (!j || typeof j !== "object") return false;
 
-  if (typeof myf42CleanLetterObject === "function") j = myf42CleanLetterObject(j);
+  var n = myf44NormalizeLetterObject(j);
 
-  try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
+  return !!(
+    (n.body && n.body.length > 80) ||
+    (n.subject && n.salutation && n.closing) ||
+    (n.sender_name && n.recipient_company && n.body)
+  );
+}
 
-  if (typeof renderLetter === "function") {
-    renderLetter(j);
-  } else {
-    function set(id, html) {
-      var el = document.getElementById(id);
-      if (el) el.innerHTML = html;
+// On rend extractJsonObject plus tolérant aux clés en MAJUSCULES,
+// mais sans transformer du texte brut en aperçu.
+if (typeof extractJsonObject === "function") {
+  var __myf44_extractJsonObject_base = extractJsonObject;
+
+  extractJsonObject = function(text) {
+    var obj = __myf44_extractJsonObject_base(text);
+
+    if (obj && typeof obj === "object") {
+      return myf44NormalizeLetterObject(obj);
     }
 
-    var senderHtml = "";
-    if (j.sender_name) senderHtml += "<strong>" + myf43LinesToHtml(j.sender_name) + "</strong>";
-    if (j.sender_address) senderHtml += "<br>" + myf43LinesToHtml(j.sender_address);
-    if (j.sender_phone) senderHtml += "<br>" + myf43LinesToHtml(j.sender_phone);
-    if (j.sender_email) senderHtml += "<br>" + myf43LinesToHtml(j.sender_email);
-
-    var recipientHtml = "";
-    if (j.recipient_company) recipientHtml += "<strong>" + myf43LinesToHtml(j.recipient_company) + "</strong><br>";
-    if (j.recipient_name) recipientHtml += myf43LinesToHtml(j.recipient_name) + (j.recipient_title ? ", " + myf43LinesToHtml(j.recipient_title) : "") + "<br>";
-    if (j.recipient_address) recipientHtml += myf43LinesToHtml(j.recipient_address);
-
-    set("lmSender", senderHtml);
-    set("lmRecipient", recipientHtml);
-    set("lmDate", myf43LinesToHtml((j.city ? j.city + ", " : "") + (j.date || "")));
-    set("lmSubject", "Objet : <span>" + myf43LinesToHtml(j.subject || "") + "</span>");
-
-    var bodyHtml = "";
-    if (j.salutation) bodyHtml += myf43LinesToHtml(j.salutation) + "<br><br>";
-    String(j.body || "").split(/\n\n+/).forEach(function(p) {
-      if (p.trim()) bodyHtml += "<p>" + myf43LinesToHtml(p) + "</p>";
-    });
-    set("lmBody", bodyHtml);
-
-    set("lmClosing", myf43LinesToHtml(j.closing || ""));
-    set("lmSignature", myf43LinesToHtml(j.signature || j.sender_name || ""));
-
-    var render = document.getElementById("letterRender");
-    var out = document.getElementById("lmOut");
-    if (render) render.classList.add("show");
-    if (out) out.style.display = "none";
-  }
-
-  if (typeof buildLetterText === "function") {
-    var out = document.getElementById("lmOut");
-    if (out) out.textContent = myf43Clean(buildLetterText(j));
-  }
-
-  // Toujours revenir sur l'aperçu après une génération réussie.
-  if (typeof switchLetterView === "function") {
-    switchLetterView("visual");
-  } else {
-    var render2 = document.getElementById("letterRender");
-    var out2 = document.getElementById("lmOut");
-    if (render2) render2.classList.add("show");
-    if (out2) out2.style.display = "none";
-  }
-
-  return true;
+    return obj;
+  };
 }
 
-function myf43SyncLetterPreviewFromRaw() {
-  var out = document.getElementById("lmOut");
-  if (!out) return false;
-
-  var raw = myf43Clean(out.textContent || "");
-  if (!raw || raw.length < 20) return false;
-
-  var parsed = myf43ParseLetterText(raw);
-  if (!parsed) return false;
-
-  return myf43RenderLetterObject(parsed);
-}
-
-// Renforce renderLetter lui-même : chaque appel doit écraser l'ancien aperçu, jamais l'accumuler.
+// On garde le renderLetter original, mais on vide toujours l'ancien aperçu avant.
 if (typeof renderLetter === "function") {
-  var __myf43_renderLetter_base = renderLetter;
+  var __myf44_renderLetter_base = renderLetter;
 
   renderLetter = function(j) {
-    myf43ClearLetterPreview();
-    if (typeof myf42CleanLetterObject === "function") {
-      j = myf42CleanLetterObject(Object.assign({}, j || {}));
+    myf44ClearLetterPreviewOnly();
+
+    j = myf44NormalizeLetterObject(j || {});
+    try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
+
+    var result = __myf44_renderLetter_base(j);
+
+    if (typeof switchLetterView === "function") {
+      switchLetterView("visual");
+    } else {
+      var render = document.getElementById("letterRender");
+      var out = document.getElementById("lmOut");
+      if (render) render.classList.add("show");
+      if (out) out.style.display = "none";
     }
-    LAST_LETTER_JSON = j;
-    var result = __myf43_renderLetter_base(j);
-    if (typeof switchLetterView === "function") switchLetterView("visual");
+
     return result;
   };
 }
 
-// À chaque génération, on vide l'ancien aperçu au départ et on synchronise à la fin.
+// Le texte brut, le DOC et le PDF utilisent le même objet propre.
+if (typeof buildLetterText === "function") {
+  var __myf44_buildLetterText_base = buildLetterText;
+
+  buildLetterText = function(j) {
+    return __myf44_buildLetterText_base(myf44NormalizeLetterObject(j || {}));
+  };
+}
+
+if (typeof v36LetterData === "function") {
+  var __myf44_v36LetterData_base = v36LetterData;
+
+  v36LetterData = function() {
+    return myf44NormalizeLetterObject(__myf44_v36LetterData_base() || {});
+  };
+}
+
+// Avant chaque génération, on supprime vraiment l'ancien aperçu,
+// mais on ne tente PAS de créer un aperçu depuis un texte brut JSON/mal formé.
 if (typeof generateAll === "function") {
-  var __myf43_generateAll_base = generateAll;
+  var __myf44_generateAll_base = generateAll;
 
   generateAll = async function() {
-    myf43ClearLetterPreview();
+    try { LAST_LETTER_JSON = null; } catch(e) {}
+    myf44ClearLetterPreviewOnly();
 
     var out = document.getElementById("lmOut");
     if (out) {
@@ -11243,35 +11155,62 @@ if (typeof generateAll === "function") {
       out.style.display = "none";
     }
 
-    var result = await __myf43_generateAll_base.apply(this, arguments);
+    var result = await __myf44_generateAll_base.apply(this, arguments);
 
-    // L'ancien generateAll peut parfois rester en texte brut si le JSON est imparfait.
-    // On reconstruit donc l'aperçu depuis lmOut dans tous les cas.
+    // Sécurité après génération :
+    // si une lettre structurée valide existe, on la réaffiche proprement.
     setTimeout(function() {
-      myf43SyncLetterPreviewFromRaw();
-    }, 80);
+      try {
+        if (typeof LAST_LETTER_JSON !== "undefined" && myf44LooksLikeValidLetterObject(LAST_LETTER_JSON)) {
+          renderLetter(myf44NormalizeLetterObject(LAST_LETTER_JSON));
+          return;
+        }
+
+        var raw = document.getElementById("lmOut") ? document.getElementById("lmOut").textContent : "";
+        var obj = null;
+
+        if (typeof extractJsonObject === "function") {
+          obj = extractJsonObject(raw);
+        }
+
+        if (myf44LooksLikeValidLetterObject(obj)) {
+          renderLetter(myf44NormalizeLetterObject(obj));
+        } else {
+          // Pas d'aperçu si la sortie n'est pas structurée :
+          // cela évite le rendu JSON que tu viens d'avoir.
+          myf44ClearLetterPreviewOnly();
+          if (out && out.textContent.trim().length > 20) {
+            out.style.display = "block";
+            var rawBtn = document.getElementById("lvBtnRaw");
+            var visBtn = document.getElementById("lvBtnVisual");
+            if (rawBtn) rawBtn.classList.add("active");
+            if (visBtn) visBtn.classList.remove("active");
+          }
+        }
+      } catch(e) {
+        console.warn("Synchronisation aperçu lettre V44 impossible :", e);
+      }
+    }, 120);
 
     return result;
   };
 }
 
-// Quand l'utilisateur clique sur Aperçu, on reconstruit depuis le texte brut si besoin.
+// Quand l'utilisateur clique sur Aperçu, on n'affiche que si une vraie lettre structurée existe.
 if (typeof switchLetterView === "function") {
-  var __myf43_switchLetterView_base = switchLetterView;
+  var __myf44_switchLetterView_base = switchLetterView;
 
   switchLetterView = function(mode) {
     if (mode === "visual") {
       var render = document.getElementById("letterRender");
       var hasPreview = render && (render.textContent || "").trim().length > 20;
-      var out = document.getElementById("lmOut");
-      var hasRaw = out && (out.textContent || "").trim().length > 20;
 
-      if (hasRaw && !hasPreview) {
-        myf43SyncLetterPreviewFromRaw();
+      if (!hasPreview && typeof LAST_LETTER_JSON !== "undefined" && myf44LooksLikeValidLetterObject(LAST_LETTER_JSON)) {
+        renderLetter(myf44NormalizeLetterObject(LAST_LETTER_JSON));
       }
     }
 
-    return __myf43_switchLetterView_base(mode);
+    return __myf44_switchLetterView_base(mode);
   };
 }
 
