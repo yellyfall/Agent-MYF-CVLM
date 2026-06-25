@@ -68,6 +68,26 @@ CREATE TABLE IF NOT EXISTS usage_log (
 app.use(express.json({ limit: "35mb" }));
 app.use(express.static(PUBLIC_DIR));
 
+// Route explicite pour les images générées.
+// Sans cette route, le chat peut afficher une icône d'image cassée même si l'image a bien été créée.
+app.use("/generated", express.static(GENERATED_DIR, {
+  maxAge: "1h",
+  immutable: false,
+  setHeaders: (res) => {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+  },
+}));
+
+app.get("/api/generated/:filename", (req, res) => {
+  const filename = path.basename(String(req.params.filename || ""));
+  if (!filename) return res.status(404).send("Image introuvable.");
+  const filepath = path.join(GENERATED_DIR, filename);
+  if (!fs.existsSync(filepath)) return res.status(404).send("Image introuvable.");
+  res.sendFile(filepath);
+});
+
+
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, X-Session-Token, Authorization");
@@ -406,7 +426,7 @@ async function ensureImageAgent(apiKey) {
     body: {
       model: process.env.MISTRAL_IMAGE_AGENT_MODEL || "mistral-medium-latest",
       name: "MYF Image Agent",
-      description: "Agent image sécurisé côté serveur pour Agent IA de MYF.",
+      description: "Agent image sécurisé côté serveur pour MYF’s AI.",
       instructions: "Use the image_generation tool only when the user explicitly asks for an image, logo, poster, photo, visual, illustration or realistic rendering.",
       tools: [{ type: "image_generation" }],
       completion_args: { temperature: 0.3, top_p: 0.95 },
@@ -452,11 +472,14 @@ async function generateImageWithKey(prompt, apiKey) {
   const filename = "image-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex") + "." + ext;
   fs.writeFileSync(path.join(GENERATED_DIR, filename), bytes);
 
+  const mime = "image/" + (ext === "jpg" ? "jpeg" : ext);
+
   return {
     filename,
     image_url: "/generated/" + filename,
     download_url: "/generated/" + filename,
-    mime: "image/" + (ext === "jpg" ? "jpeg" : ext),
+    data_url: "data:" + mime + ";base64," + bytes.toString("base64"),
+    mime,
     provider: "mistral",
     key_used: keyHash(apiKey),
   };
@@ -1502,7 +1525,7 @@ app.get("*", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("✅ Agent IA de MYF — serveur sécurisé démarré sur le port " + PORT);
+  console.log("✅ MYF’s AI — serveur sécurisé démarré sur le port " + PORT);
   console.log("📂 Base SQLite : " + DB_PATH);
   console.log("🔑 Clés Mistral côté serveur : " + mistralKeys().length);
 });
