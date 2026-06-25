@@ -2341,7 +2341,7 @@ async function generateAll(){
       +"- When custom instructions are provided, they have priority over generic wording.\n"
       +"- Respect exclusions such as topics not to mention.\n"
       +"- Emphasize requested skills, projects, tools, mobility, salary expectations or availability only if supported by the CV or user instructions.\n"
-      +"DO NOT invent information not in the CV or in the custom instructions. Return ONLY the JSON object.";
+      +"DO NOT invent information not in the CV or in the custom instructions. Return ONLY the JSON object. Do not use markdown, asterisks, stars, bullets, headings, separators, or decorative characters inside JSON values.";
 
     var userLM="LANGUAGE: "+lang+" ("+langLabel+") — write all fields in "+lang+".\n\n"
       +"=== LETTER GENERATION PARAMETERS ===\n"
@@ -2352,7 +2352,7 @@ async function generateAll(){
       +"=== END PARAMETERS ===\n\n"
       +"=== CV ===\n"+cvText+"\n=== END CV ===\n\n"
       +"=== JOB OFFER ===\n"+ofText+"\n=== END OFFER ===\n\n"
-      +"Write the cover letter by strictly applying the selected tone(s) and the custom instructions when provided. Return ONLY valid JSON, no markdown.";
+      +"Write the cover letter by strictly applying the selected tone(s) and the custom instructions when provided. Return ONLY valid JSON, no markdown, no asterisks, no stars, no headings, no separators, no decorative characters.";
 
     document.getElementById("resSection").classList.add("show");
     document.getElementById("lmOut").textContent="";
@@ -10804,6 +10804,184 @@ if (typeof generateImageFromBackend === "function") {
     return data;
   };
 }
+
+
+
+/* ==========================================================================
+   CORRECTIF MYF V42 — NETTOYAGE MARKDOWN LETTRE : ***, **, ###, ETC.
+   ========================================================================== */
+/*
+  Objectif :
+  - Supprimer les caractères parasites générés parfois par l'IA dans la lettre.
+  - Nettoyer : ***, **texte**, *texte*, ###, --- , ```json, ``` etc.
+  - Appliquer le nettoyage partout : aperçu, texte brut, DOC, PDF.
+*/
+
+function myf42CleanMarkdownArtifacts(value) {
+  var s = String(value || "");
+
+  if (!s) return "";
+
+  s = s
+    // Blocs markdown
+    .replace(/```(?:json|html|text|markdown)?/gi, "")
+    .replace(/```/g, "")
+
+    // Lignes décoratives seules : ***, --- , ___
+    .replace(/^\s*[\*\-_]{3,}\s*$/gm, "")
+
+    // Titres markdown
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+
+    // Gras / italique markdown autour d'un texte
+    .replace(/\*\*\*([^*\n][\s\S]*?[^*\n])\*\*\*/g, "$1")
+    .replace(/\*\*([^*\n][\s\S]*?[^*\n])\*\*/g, "$1")
+    .replace(/\*([^*\n][^*\n]*?)\*/g, "$1")
+
+    // Soulignements markdown
+    .replace(/___([^_\n][\s\S]*?[^_\n])___/g, "$1")
+    .replace(/__([^_\n][\s\S]*?[^_\n])__/g, "$1")
+
+    // Guillemets markdown quote au début de ligne
+    .replace(/^\s*>\s?/gm, "")
+
+    // Puces trop lourdes en début de ligne dans une lettre
+    .replace(/^\s*[-–—•]\s+/gm, "")
+
+    // Astérisques restants isolés
+    .replace(/\s\*{1,3}\s/g, " ")
+    .replace(/^\*{1,3}\s*/gm, "")
+    .replace(/\s*\*{1,3}$/gm, "")
+
+    // Espaces / retours à la ligne propres
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+
+  return s;
+}
+
+function myf42CleanLetterObject(j) {
+  j = j || {};
+
+  [
+    "sender_name",
+    "sender_address",
+    "sender_phone",
+    "sender_email",
+    "recipient_company",
+    "recipient_name",
+    "recipient_title",
+    "recipient_address",
+    "city",
+    "date",
+    "subject",
+    "salutation",
+    "body",
+    "closing",
+    "signature"
+  ].forEach(function(key) {
+    if (j[key] !== undefined && j[key] !== null) {
+      j[key] = myf42CleanMarkdownArtifacts(j[key]);
+    }
+  });
+
+  // Nettoyage spécifique objet : ne pas garder "Objet :" en double dans subject.
+  if (j.subject) {
+    j.subject = j.subject
+      .replace(/^Objet\s*:\s*/i, "")
+      .replace(/^Subject\s*:\s*/i, "")
+      .trim();
+  }
+
+  return j;
+}
+
+// Nettoyage automatique dès qu'on affiche la lettre.
+if (typeof renderLetter === "function") {
+  var __myf42_renderLetter_base = renderLetter;
+
+  renderLetter = function(j) {
+    j = myf42CleanLetterObject(Object.assign({}, j || {}));
+    LAST_LETTER_JSON = j;
+    return __myf42_renderLetter_base(j);
+  };
+}
+
+// Nettoyage du texte brut.
+if (typeof buildLetterText === "function") {
+  var __myf42_buildLetterText_base = buildLetterText;
+
+  buildLetterText = function(j) {
+    j = myf42CleanLetterObject(Object.assign({}, j || {}));
+    return myf42CleanMarkdownArtifacts(__myf42_buildLetterText_base(j));
+  };
+}
+
+// Nettoyage de la donnée utilisée par le PDF V36/V37.
+if (typeof v36LetterData === "function") {
+  var __myf42_v36LetterData_base = v36LetterData;
+
+  v36LetterData = function() {
+    return myf42CleanLetterObject(__myf42_v36LetterData_base() || {});
+  };
+}
+
+// Sécurité supplémentaire pour le bouton copier.
+if (typeof cpLmText === "function") {
+  var __myf42_cpLmText_base = cpLmText;
+
+  cpLmText = function() {
+    var out = document.getElementById("lmOut");
+    if (out) out.textContent = myf42CleanMarkdownArtifacts(out.textContent || "");
+    return __myf42_cpLmText_base();
+  };
+}
+
+// Sécurité supplémentaire pour le .txt
+if (typeof dlTxt === "function") {
+  var __myf42_dlTxt_base = dlTxt;
+
+  dlTxt = function(id, filename) {
+    if (id === "lmOut") {
+      var el = document.getElementById(id);
+      if (el) el.textContent = myf42CleanMarkdownArtifacts(el.textContent || "");
+    }
+    return __myf42_dlTxt_base(id, filename);
+  };
+}
+
+// Sécurité supplémentaire pour le .doc si la fonction utilise LAST_LETTER_JSON.
+if (typeof dlLetterDoc === "function") {
+  var __myf42_dlLetterDoc_base = dlLetterDoc;
+
+  dlLetterDoc = function() {
+    try {
+      if (typeof LAST_LETTER_JSON !== "undefined" && LAST_LETTER_JSON) {
+        LAST_LETTER_JSON = myf42CleanLetterObject(Object.assign({}, LAST_LETTER_JSON));
+        var out = document.getElementById("lmOut");
+        if (out) out.textContent = myf42CleanMarkdownArtifacts(out.textContent || "");
+      }
+    } catch(e) {}
+    return __myf42_dlLetterDoc_base();
+  };
+}
+
+// Nettoyage après génération IA : si lmOut contient déjà des ***.
+(function myf42WatchLetterOutput() {
+  var target = document.getElementById("lmOut");
+  if (!target || !window.MutationObserver) return;
+
+  var observer = new MutationObserver(function() {
+    var clean = myf42CleanMarkdownArtifacts(target.textContent || "");
+    if (clean && clean !== target.textContent) {
+      target.textContent = clean;
+    }
+  });
+
+  observer.observe(target, { childList: true, characterData: true, subtree: true });
+})();
 
 
 </script>
