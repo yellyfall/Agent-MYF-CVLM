@@ -1518,7 +1518,7 @@ app.post("/api/live-search", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// FALLBACK SPA + DÉMARRAGE
+// FALLBACK SPA + DÉMARRAGE  
 // ─────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
