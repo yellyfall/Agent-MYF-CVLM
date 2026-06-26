@@ -2379,12 +2379,22 @@ async function generateAll(){
     if (lmJson) lmJson = normalizeLetterDate(lmJson);
 
     if (lmJson) {
+      // Suspendre l'observateur MutationObserver pendant les écritures critiques
+      if (window.__myf42_lmOutObserver) window.__myf42_lmOutObserver.pause();
+
+      // 1. Rendre l'aperçu visuel (remplit lmSender, lmBody, etc.)
       renderLetter(lmJson);
-      // Reconstruire le texte brut proprement
+
+      // 2. Écrire le texte brut proprement
       var lmText = buildLetterText(lmJson);
       document.getElementById("lmOut").textContent = lmText;
-      // Forcer l'affichage de l'aperçu visuel (le texte brut ne doit pas rester visible)
-      switchLetterView("visual");
+
+      // 3. Reprendre l'observateur
+      if (window.__myf42_lmOutObserver) window.__myf42_lmOutObserver.resume();
+
+      // 4. Forcer l'aperçu visuel après la boucle d'événements
+      setTimeout(function() { switchLetterView("visual"); }, 0);
+
     } else {
       // fallback : afficher brut
       document.getElementById("lmOut").textContent = lmRaw;
@@ -2497,10 +2507,16 @@ function normalizeLetterDate(j) {
 function renderLetter(j) {
   j = normalizeLetterDate(j);
   LAST_LETTER_JSON = j;
-  function e(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function e(id, html) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.innerHTML = html || "";
+      el.style.color = "#1a1a1a"; // force couleur même si thème sombre
+    }
+  }
   function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
 
-  // Expéditeur (en haut à droite)
+  // Expéditeur (en haut à gauche)
   var senderHtml = "<strong>"+esc(j.sender_name)+"</strong>";
   if (j.sender_address) senderHtml += "<br>"+esc(j.sender_address);
   if (j.sender_phone)   senderHtml += "<br>"+esc(j.sender_phone);
@@ -2514,7 +2530,7 @@ function renderLetter(j) {
   if (j.recipient_address) recipHtml += formatHtmlInline(j.recipient_address);
   e("lmRecipient", recipHtml);
 
-  // Date (en dessous à droite → aligné droite via CSS letter-date)
+  // Date (alignée droite sous le destinataire)
   e("lmDate", esc((j.city||"")?j.city+", "+j.date:j.date));
 
   // Objet
@@ -2528,12 +2544,15 @@ function renderLetter(j) {
   // Formule de politesse
   e("lmClosing", esc(j.closing));
 
-  // Signature
+  // Signature (à droite)
   e("lmSignature", esc(j.signature));
+
+  // Forcer la page et ses éléments en couleurs correctes (immunité contre le thème sombre)
+  var page = document.querySelector("#letterRender .letter-page");
+  if (page) { page.style.background = "#fff"; page.style.color = "#1a1a1a"; }
 
   document.getElementById("letterRender").classList.add("show");
   document.getElementById("lmOut").style.display = "none";
-  // Activer le vue visuelle
   switchLetterView("visual");
 }
 
@@ -10995,14 +11014,25 @@ if (typeof dlLetterDoc === "function") {
   var target = document.getElementById("lmOut");
   if (!target || !window.MutationObserver) return;
 
+  var _observing = true;
+
   var observer = new MutationObserver(function() {
+    if (!_observing) return;
     var clean = myf42CleanMarkdownArtifacts(target.textContent || "");
     if (clean && clean !== target.textContent) {
+      _observing = false;
       target.textContent = clean;
+      _observing = true;
     }
   });
 
   observer.observe(target, { childList: true, characterData: true, subtree: true });
+
+  // Expose pour suspendre l'observateur pendant les écritures critiques
+  window.__myf42_lmOutObserver = {
+    pause: function() { _observing = false; },
+    resume: function() { _observing = true; }
+  };
 })();
 
 
