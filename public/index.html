@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MYF’s AI</title>
-<meta name="myf-build" content="v48-letter-strict-sync">
+<meta name="myf-build" content="v24-secure-session-proxy-standalone">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -280,7 +280,7 @@ select:focus{border-color:var(--accent)}
 /* ─ LETTRE VISUELLE ─ */
 .letter-render{display:none;flex-direction:column;gap:0;background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;font-family:"Georgia",serif;font-size:13.5px;line-height:1.8}
 .letter-render.show{display:flex}
-.letter-page{padding:52px 60px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box}
+.letter-page{padding:52px 60px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box;background:#fff;color:#1a1a1a}
 @media(max-width:640px){.letter-page{padding:28px 20px}}
 .letter-header{
     display:flex;
@@ -292,6 +292,7 @@ select:focus{border-color:var(--accent)}
 .letter-sender{
     width:45%;
     text-align:left;
+    color:#1a1a1a;
 }
 
 .letter-right{
@@ -304,18 +305,20 @@ select:focus{border-color:var(--accent)}
 .letter-recipient{
     text-align:right;
     width:100%;
+    color:#1a1a1a;
 }
 
 .letter-date{
     margin-top:20px;
     width:100%;
     text-align:right;
+    color:#444;
 }.letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}
 .letter-subject span{font-weight:400;font-style:italic;color:#444}
 .letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word;text-align:justify;text-align-last:left;hyphens:auto}
-.letter-body p{margin-bottom:16px;text-align:justify;text-align-last:left;break-inside:avoid-page;page-break-inside:avoid}
+.letter-body p{margin-bottom:16px;text-align:justify;text-align-last:left;break-inside:avoid-page;page-break-inside:avoid;color:#222}
 .letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8}
-.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111;text-align:right}
+.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111;text-align:right;width:100%}
 .letter-toolbar{display:flex;gap:6px;padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap}
 .letter-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;width:fit-content}
 .lv-btn{padding:5px 12px;border:none;background:none;color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s}
@@ -1524,7 +1527,7 @@ select:focus{border-color:var(--accent)}
           </div>
         </div>
         <!-- Aperçu visuel de la lettre -->
-<div class="letter-render show" id="letterRender">
+<div class="letter-render" id="letterRender">
   <div class="letter-page">
 
     <div class="letter-header">
@@ -2294,11 +2297,17 @@ async function generateAll(){
   document.getElementById("resSection").classList.remove("show");
   document.getElementById("prgSteps").classList.add("show");
   document.getElementById("lmOut").textContent="";
+  document.getElementById("lmOut").style.display="none";
   document.getElementById("cvOut").textContent="";
   document.getElementById("scoreZone").innerHTML="";
   // Réinitialiser les rendus visuels
   document.getElementById("letterRender").classList.remove("show");
   document.getElementById("cvRender").classList.remove("show");
+  // Réinitialiser les boutons de vue lettre sur "Aperçu"
+  var lvVisual = document.getElementById("lvBtnVisual");
+  var lvRaw = document.getElementById("lvBtnRaw");
+  if (lvVisual) lvVisual.classList.add("active");
+  if (lvRaw) lvRaw.classList.remove("active");
   ["pi1","pi2","pi3"].forEach(function(id){document.getElementById(id).className="pi";});
 
   try{
@@ -2356,6 +2365,9 @@ async function generateAll(){
 
     document.getElementById("resSection").classList.add("show");
     document.getElementById("lmOut").textContent="";
+    // Pendant le streaming, afficher temporairement le texte brut
+    document.getElementById("lmOut").style.display = "block";
+    document.getElementById("letterRender").classList.remove("show");
 
     var lmRaw = await streamCall(sysLM, userLM, model, function(t){
       // Pendant le streaming, afficher dans le texte brut
@@ -2367,10 +2379,22 @@ async function generateAll(){
     if (lmJson) lmJson = normalizeLetterDate(lmJson);
 
     if (lmJson) {
+      // Suspendre l'observateur MutationObserver pendant les écritures critiques
+      if (window.__myf42_lmOutObserver) window.__myf42_lmOutObserver.pause();
+
+      // 1. Rendre l'aperçu visuel (remplit lmSender, lmBody, etc.)
       renderLetter(lmJson);
-      // Reconstruire le texte brut proprement
+
+      // 2. Écrire le texte brut proprement
       var lmText = buildLetterText(lmJson);
       document.getElementById("lmOut").textContent = lmText;
+
+      // 3. Reprendre l'observateur
+      if (window.__myf42_lmOutObserver) window.__myf42_lmOutObserver.resume();
+
+      // 4. Forcer l'aperçu visuel après la boucle d'événements
+      setTimeout(function() { switchLetterView("visual"); }, 0);
+
     } else {
       // fallback : afficher brut
       document.getElementById("lmOut").textContent = lmRaw;
@@ -2483,10 +2507,16 @@ function normalizeLetterDate(j) {
 function renderLetter(j) {
   j = normalizeLetterDate(j);
   LAST_LETTER_JSON = j;
-  function e(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function e(id, html) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.innerHTML = html || "";
+      el.style.color = "#1a1a1a"; // force couleur même si thème sombre
+    }
+  }
   function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
 
-  // Expéditeur (en haut à droite)
+  // Expéditeur (en haut à gauche)
   var senderHtml = "<strong>"+esc(j.sender_name)+"</strong>";
   if (j.sender_address) senderHtml += "<br>"+esc(j.sender_address);
   if (j.sender_phone)   senderHtml += "<br>"+esc(j.sender_phone);
@@ -2500,7 +2530,7 @@ function renderLetter(j) {
   if (j.recipient_address) recipHtml += formatHtmlInline(j.recipient_address);
   e("lmRecipient", recipHtml);
 
-  // Date (en dessous à droite → aligné droite via CSS letter-date)
+  // Date (alignée droite sous le destinataire)
   e("lmDate", esc((j.city||"")?j.city+", "+j.date:j.date));
 
   // Objet
@@ -2514,12 +2544,15 @@ function renderLetter(j) {
   // Formule de politesse
   e("lmClosing", esc(j.closing));
 
-  // Signature
+  // Signature (à droite)
   e("lmSignature", esc(j.signature));
+
+  // Forcer la page et ses éléments en couleurs correctes (immunité contre le thème sombre)
+  var page = document.querySelector("#letterRender .letter-page");
+  if (page) { page.style.background = "#fff"; page.style.color = "#1a1a1a"; }
 
   document.getElementById("letterRender").classList.add("show");
   document.getElementById("lmOut").style.display = "none";
-  // Activer le vue visuelle
   switchLetterView("visual");
 }
 
@@ -2627,13 +2660,14 @@ function dlLetterDoc() {
     +".subject span{font-weight:normal;font-style:italic;color:#444}"
     +".body p{margin:0 0 12pt;color:#222;line-height:1.8}"
     +".closing{margin-top:24pt;color:#333;line-height:1.8}"
-    +".signature{margin-top:34pt;font-weight:bold;color:#111}"
+    +".signature-block{margin-top:34pt;width:100%;text-align:right}"
+    +".signature{display:inline-block;font-weight:bold;color:#111;text-align:right}"
     +"</style></head><body><div class='letter-page'>"
     +"<table class='top-table'><tr><td class='sender'>"+sender+"</td><td class='right'><div class='recipient'>"+recipient+"</div><div class='date'>"+dateLine+"</div></td></tr></table>"
     +"<div class='subject'>Objet : <span>"+formatHtmlLines(j.subject || "")+"</span></div>"
     +"<div class='body'>"+bodyHtml+"</div>"
     +"<div class='closing'>"+formatHtmlLines(j.closing || "")+"</div>"
-    +"<div class='signature'>"+formatHtmlLines(j.signature || j.sender_name || "")+"</div>"
+    +"<div class='signature-block'><span class='signature'>"+formatHtmlLines(j.signature || j.sender_name || "")+"</span></div>"
     +"</div></body></html>";
 
   var a=document.createElement("a");
@@ -2831,7 +2865,9 @@ function getLetterPdfNode() {
   var src = document.getElementById("letterRender");
   var hasText = (document.getElementById("lmOut") && document.getElementById("lmOut").textContent.trim().length > 20) || LAST_LETTER_JSON;
   if (!src || !hasText) { alert("Générez d'abord une lettre de motivation avant de télécharger le PDF."); return null; }
-  if (LAST_LETTER_JSON) renderLetter(Object.assign({}, LAST_LETTER_JSON));
+  if (!LAST_LETTER_JSON) { alert("Impossible de générer le PDF : les données de la lettre sont introuvables. Régénérez la lettre."); return null; }
+  // Toujours re-rendre avec les données actuelles pour garantir que le DOM est à jour
+  renderLetter(Object.assign({}, LAST_LETTER_JSON));
   var clone = src.cloneNode(true);
   clone.removeAttribute("id");
   clone.classList.add("show");
@@ -2841,6 +2877,7 @@ function getLetterPdfNode() {
   clone.style.border = "none";
   clone.style.borderRadius = "0";
   clone.style.background = "#fff";
+  clone.style.color = "#1a1a1a";
   var page = clone.querySelector(".letter-page");
   if (page) {
     page.style.width = "210mm";
@@ -2850,6 +2887,10 @@ function getLetterPdfNode() {
     page.style.padding = "16mm 25mm 18mm";
     page.style.boxSizing = "border-box";
   }
+  // Forcer les couleurs sur tous les éléments enfants (évite page blanche sur certains thèmes)
+  clone.querySelectorAll("*").forEach(function(el) {
+    el.style.color = el.style.color || "#1a1a1a";
+  });
   var body = clone.querySelector(".letter-body");
   if (body) { body.style.textAlign = "justify"; body.style.textAlignLast = "left"; body.style.hyphens = "auto"; }
   clone.querySelectorAll(".letter-body p").forEach(function(p){ p.style.textAlign = "justify"; p.style.textAlignLast = "left"; p.style.breakInside = "avoid-page"; p.style.pageBreakInside = "avoid"; });
@@ -9717,7 +9758,7 @@ async function dlLetterPdf() {
       size: 10.5,
       style: "normal",
       lineH: 5,
-      align: "left"
+      align: "right"
     });
 
     y = Math.max(ySender, yRecipient) + 7;
@@ -10973,385 +11014,26 @@ if (typeof dlLetterDoc === "function") {
   var target = document.getElementById("lmOut");
   if (!target || !window.MutationObserver) return;
 
+  var _observing = true;
+
   var observer = new MutationObserver(function() {
+    if (!_observing) return;
     var clean = myf42CleanMarkdownArtifacts(target.textContent || "");
     if (clean && clean !== target.textContent) {
+      _observing = false;
       target.textContent = clean;
+      _observing = true;
     }
   });
 
   observer.observe(target, { childList: true, characterData: true, subtree: true });
+
+  // Expose pour suspendre l'observateur pendant les écritures critiques
+  window.__myf42_lmOutObserver = {
+    pause: function() { _observing = false; },
+    resume: function() { _observing = true; }
+  };
 })();
-
-
-
-/* ==========================================================================
-   CORRECTIF MYF V48 — SYNCHRO STRICTE LETTRE TEXTE BRUT / APERÇU
-   ========================================================================== */
-/*
-  Correction minimale :
-  - Base = fichier HTML fourni par l'utilisateur.
-  - Aucun changement CSS.
-  - Aucun changement de structure/design de l'aperçu.
-  - Dès qu'une donnée change : suppression de l'ancienne lettre en mémoire + aperçu vidé.
-  - À chaque nouvelle génération : départ à zéro.
-  - Après génération : l'aperçu est reconstruit avec les mêmes données que le texte brut.
-  - Le texte brut et l'aperçu restent synchrones.
-*/
-
-var MYF48_RENDERING_LETTER = false;
-
-function myf48Clean(value) {
-  var s = String(value || "");
-  if (typeof myf42CleanMarkdownArtifacts === "function") {
-    s = myf42CleanMarkdownArtifacts(s);
-  }
-  return s
-    .replace(/\u00a0/g, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n[ \t]+/g, "\n")
-    .replace(/\n{4,}/g, "\n\n\n")
-    .trim();
-}
-
-function myf48ClearPreviewOnly() {
-  [
-    "lmSender",
-    "lmRecipient",
-    "lmDate",
-    "lmSubject",
-    "lmBody",
-    "lmClosing",
-    "lmSignature"
-  ].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.innerHTML = "";
-  });
-
-  var render = document.getElementById("letterRender");
-  if (render) render.classList.remove("show");
-}
-
-function myf48ClearLetterAll() {
-  try { LAST_LETTER_JSON = null; } catch(e) {}
-
-  myf48ClearPreviewOnly();
-
-  var out = document.getElementById("lmOut");
-  if (out) {
-    out.textContent = "";
-    out.style.display = "none";
-  }
-}
-
-function myf48Pick(obj) {
-  for (var i = 1; i < arguments.length; i++) {
-    var key = arguments[i];
-    if (obj && obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim() !== "") {
-      return obj[key];
-    }
-  }
-  return "";
-}
-
-function myf48NormalizeLetterObject(obj) {
-  obj = obj || {};
-
-  var j = {
-    sender_name: myf48Pick(obj, "sender_name", "senderName", "SENDER_NAME", "candidate_name", "candidateName", "name"),
-    sender_address: myf48Pick(obj, "sender_address", "senderAddress", "SENDER_ADDRESS", "candidate_address", "candidateAddress", "address"),
-    sender_phone: myf48Pick(obj, "sender_phone", "senderPhone", "SENDER_PHONE", "candidate_phone", "candidatePhone", "phone", "telephone"),
-    sender_email: myf48Pick(obj, "sender_email", "senderEmail", "SENDER_EMAIL", "candidate_email", "candidateEmail", "email"),
-    recipient_company: myf48Pick(obj, "recipient_company", "recipientCompany", "RECIPIENT_COMPANY", "company", "company_name", "companyName", "entreprise"),
-    recipient_name: myf48Pick(obj, "recipient_name", "recipientName", "RECIPIENT_NAME", "contact_name", "contactName"),
-    recipient_title: myf48Pick(obj, "recipient_title", "recipientTitle", "RECIPIENT_TITLE", "contact_title", "contactTitle"),
-    recipient_address: myf48Pick(obj, "recipient_address", "recipientAddress", "RECIPIENT_ADDRESS", "company_address", "companyAddress"),
-    city: myf48Pick(obj, "city", "CITY", "ville"),
-    date: myf48Pick(obj, "date", "DATE"),
-    subject: myf48Pick(obj, "subject", "SUBJECT", "objet", "Objet"),
-    salutation: myf48Pick(obj, "salutation", "SALUTATION", "greeting"),
-    body: myf48Pick(obj, "body", "BODY", "letter_body", "letterBody", "content", "contenu", "corps"),
-    closing: myf48Pick(obj, "closing", "CLOSING", "formule", "formule_politesse", "formal_closing"),
-    signature: myf48Pick(obj, "signature", "SIGNATURE")
-  };
-
-  Object.keys(j).forEach(function(k) {
-    j[k] = myf48Clean(j[k]);
-  });
-
-  j.subject = j.subject
-    .replace(/^Objet\s*:\s*/i, "")
-    .replace(/^Subject\s*:\s*/i, "")
-    .trim();
-
-  return j;
-}
-
-function myf48IsValidLetter(j) {
-  j = myf48NormalizeLetterObject(j || {});
-  return !!(
-    j.sender_name &&
-    j.body &&
-    j.body.length > 60 &&
-    (j.subject || j.recipient_company || j.salutation || j.closing)
-  );
-}
-
-function myf48ParseJson(raw) {
-  raw = String(raw || "").trim();
-  if (!raw) return null;
-
-  var obj = null;
-
-  try {
-    if (typeof extractJsonObject === "function") obj = extractJsonObject(raw);
-  } catch(e) {}
-
-  if (!obj) {
-    try { obj = JSON.parse(raw); } catch(e2) {}
-  }
-
-  if (!obj || typeof obj !== "object") return null;
-
-  obj = myf48NormalizeLetterObject(obj);
-  return myf48IsValidLetter(obj) ? obj : null;
-}
-
-function myf48ParseTextBrut(raw) {
-  raw = myf48Clean(raw);
-  if (!raw || raw.length < 80) return null;
-
-  // Ne pas tenter d'interpréter un JSON cassé comme une lettre classique.
-  if (/^\s*\{/.test(raw) || /"sender_name"|"BODY"|"CLOSING"|"SIGNATURE"/i.test(raw)) {
-    return myf48ParseJson(raw);
-  }
-
-  var groups = raw
-    .split(/\n\s*\n+/)
-    .map(myf48Clean)
-    .filter(Boolean);
-
-  if (groups.length < 7) return null;
-
-  function lines(group) {
-    return String(group || "")
-      .split(/\n+/)
-      .map(myf48Clean)
-      .filter(Boolean);
-  }
-
-  var sender = lines(groups[0]);
-  var recipient = lines(groups[1]);
-
-  var dateBlock = groups[2] || "";
-  var subjectBlock = groups[3] || "";
-  var salutation = groups[4] || "";
-
-  if (!/^Objet\s*:/i.test(subjectBlock) && !/^Subject\s*:/i.test(subjectBlock)) {
-    return null;
-  }
-
-  var closing = groups[groups.length - 2] || "";
-  var signature = groups[groups.length - 1] || "";
-  var body = groups.slice(5, -2).join("\n\n");
-
-  if (!body || body.length < 60) return null;
-
-  var city = "";
-  var date = dateBlock;
-  var m = dateBlock.match(/^([^,]+),\s*(.+)$/);
-  if (m) {
-    city = myf48Clean(m[1]);
-    date = myf48Clean(m[2]);
-  }
-
-  var j = {
-    sender_name: sender[0] || "",
-    sender_address: sender[1] || "",
-    sender_phone: sender[2] || "",
-    sender_email: sender[3] || "",
-    recipient_company: recipient[0] || "",
-    recipient_name: recipient[1] || "",
-    recipient_title: "",
-    recipient_address: recipient.slice(2).join(", "),
-    city: city,
-    date: date,
-    subject: subjectBlock.replace(/^Objet\s*:\s*/i, "").replace(/^Subject\s*:\s*/i, ""),
-    salutation: salutation,
-    body: body,
-    closing: closing,
-    signature: signature
-  };
-
-  j = myf48NormalizeLetterObject(j);
-  return myf48IsValidLetter(j) ? j : null;
-}
-
-function myf48CurrentLetterFromRaw() {
-  var out = document.getElementById("lmOut");
-  var raw = out ? out.textContent || "" : "";
-  return myf48ParseJson(raw) || myf48ParseTextBrut(raw);
-}
-
-function myf48RenderSynced(j) {
-  if (!j || !myf48IsValidLetter(j) || typeof renderLetter !== "function") return false;
-
-  j = myf48NormalizeLetterObject(j);
-
-  MYF48_RENDERING_LETTER = true;
-  try {
-    renderLetter(j);
-  } finally {
-    MYF48_RENDERING_LETTER = false;
-  }
-
-  try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
-
-  // Le texte brut est toujours reconstruit depuis le même objet que l'aperçu.
-  if (typeof buildLetterText === "function") {
-    var out = document.getElementById("lmOut");
-    if (out) out.textContent = buildLetterText(j);
-  }
-
-  return true;
-}
-
-// 1) Normalisation de l'objet JSON avant l'ancien renderLetter.
-// On garde exactement le renderLetter d'origine : donc le design ne change pas.
-if (typeof renderLetter === "function") {
-  var __myf48_renderLetter_base = renderLetter;
-
-  renderLetter = function(j) {
-    myf48ClearPreviewOnly();
-
-    j = myf48NormalizeLetterObject(j || {});
-    try { LAST_LETTER_JSON = Object.assign({}, j); } catch(e) {}
-
-    return __myf48_renderLetter_base(j);
-  };
-}
-
-// 2) Texte brut et aperçu utilisent les mêmes clés normalisées.
-if (typeof buildLetterText === "function") {
-  var __myf48_buildLetterText_base = buildLetterText;
-
-  buildLetterText = function(j) {
-    return __myf48_buildLetterText_base(myf48NormalizeLetterObject(j || {}));
-  };
-}
-
-// 3) Export PDF/DOC : même source synchronisée.
-if (typeof v36LetterData === "function") {
-  var __myf48_v36LetterData_base = v36LetterData;
-
-  v36LetterData = function() {
-    var fromRaw = myf48CurrentLetterFromRaw();
-    if (fromRaw) return myf48NormalizeLetterObject(fromRaw);
-    return myf48NormalizeLetterObject(__myf48_v36LetterData_base() || {});
-  };
-}
-
-// 4) Dès qu'une modification est faite, on supprime l'ancienne lettre en mémoire.
-function myf48BindInputChanges() {
-  [
-    "cvText",
-    "ofText",
-    "ofUrl",
-    "extra",
-    "lang",
-    "llen",
-    "ptype",
-    "model",
-    "cvFile",
-    "ofFile"
-  ].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (!el || el.__myf48Bound) return;
-
-    el.__myf48Bound = true;
-    var evt = (el.tagName === "SELECT" || el.type === "file") ? "change" : "input";
-
-    el.addEventListener(evt, function() {
-      myf48ClearLetterAll();
-    });
-  });
-}
-
-myf48BindInputChanges();
-
-// Ton de la lettre
-if (typeof tChip === "function") {
-  var __myf48_tChip_base = tChip;
-
-  tChip = function(el) {
-    myf48ClearLetterAll();
-    return __myf48_tChip_base(el);
-  };
-}
-
-// Onglet offre
-if (typeof switchTab === "function") {
-  var __myf48_switchTab_base = switchTab;
-
-  switchTab = function(tab) {
-    myf48ClearLetterAll();
-    return __myf48_switchTab_base(tab);
-  };
-}
-
-// Si le reset global existe déjà, on ajoute la purge mémoire lettre.
-if (typeof myf40ResetGeneratedOutputs === "function") {
-  var __myf48_reset_base = myf40ResetGeneratedOutputs;
-
-  myf40ResetGeneratedOutputs = function(reason) {
-    myf48ClearLetterAll();
-    return __myf48_reset_base(reason);
-  };
-}
-
-// 5) Nouvelle génération : repartir à zéro puis resynchroniser après.
-if (typeof generateAll === "function") {
-  var __myf48_generateAll_base = generateAll;
-
-  generateAll = async function() {
-    myf48ClearLetterAll();
-
-    var result = await __myf48_generateAll_base.apply(this, arguments);
-
-    setTimeout(function() {
-      try {
-        var fromRaw = myf48CurrentLetterFromRaw();
-
-        if (fromRaw) {
-          myf48RenderSynced(fromRaw);
-          return;
-        }
-
-        if (typeof LAST_LETTER_JSON !== "undefined" && myf48IsValidLetter(LAST_LETTER_JSON)) {
-          myf48RenderSynced(LAST_LETTER_JSON);
-        }
-      } catch(e) {
-        console.warn("Synchronisation V48 impossible :", e);
-      }
-    }, 120);
-
-    return result;
-  };
-}
-
-// 6) Quand on clique sur Aperçu : l'aperçu se recale sur le texte brut.
-if (typeof switchLetterView === "function") {
-  var __myf48_switchLetterView_base = switchLetterView;
-
-  switchLetterView = function(mode) {
-    if (mode === "visual" && !MYF48_RENDERING_LETTER) {
-      var fromRaw = myf48CurrentLetterFromRaw();
-      if (fromRaw) myf48RenderSynced(fromRaw);
-    }
-
-    return __myf48_switchLetterView_base(mode);
-  };
-}
 
 
 </script>
