@@ -280,7 +280,7 @@ select:focus{border-color:var(--accent)}
 /* ─ LETTRE VISUELLE ─ */
 .letter-render{display:none;flex-direction:column;gap:0;background:#fff;color:#1a1a1a;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;font-family:"Georgia",serif;font-size:13.5px;line-height:1.8}
 .letter-render.show{display:flex}
-.letter-page{padding:52px 60px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box}
+.letter-page{padding:52px 60px;max-width:780px;margin:0 auto;width:100%;box-sizing:border-box;background:#fff;color:#1a1a1a}
 @media(max-width:640px){.letter-page{padding:28px 20px}}
 .letter-header{
     display:flex;
@@ -292,6 +292,7 @@ select:focus{border-color:var(--accent)}
 .letter-sender{
     width:45%;
     text-align:left;
+    color:#1a1a1a;
 }
 
 .letter-right{
@@ -304,18 +305,20 @@ select:focus{border-color:var(--accent)}
 .letter-recipient{
     text-align:right;
     width:100%;
+    color:#1a1a1a;
 }
 
 .letter-date{
     margin-top:20px;
     width:100%;
     text-align:right;
+    color:#444;
 }.letter-subject{font-weight:700;font-size:13.5px;margin-bottom:28px;color:#111;border-bottom:2px solid #eee;padding-bottom:10px}
 .letter-subject span{font-weight:400;font-style:italic;color:#444}
 .letter-body{font-size:13.5px;line-height:1.9;color:#222;white-space:pre-wrap;word-wrap:break-word;text-align:justify;text-align-last:left;hyphens:auto}
-.letter-body p{margin-bottom:16px;text-align:justify;text-align-last:left;break-inside:avoid-page;page-break-inside:avoid}
+.letter-body p{margin-bottom:16px;text-align:justify;text-align-last:left;break-inside:avoid-page;page-break-inside:avoid;color:#222}
 .letter-closing{margin-top:32px;font-size:13px;color:#333;line-height:1.8}
-.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111;text-align:right}
+.letter-signature{margin-top:48px;font-size:13px;font-weight:700;color:#111;text-align:right;width:100%}
 .letter-toolbar{display:flex;gap:6px;padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap}
 .letter-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;width:fit-content}
 .lv-btn{padding:5px 12px;border:none;background:none;color:var(--muted);font-size:11.5px;font-family:"Inter",sans-serif;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s}
@@ -1524,7 +1527,7 @@ select:focus{border-color:var(--accent)}
           </div>
         </div>
         <!-- Aperçu visuel de la lettre -->
-<div class="letter-render show" id="letterRender">
+<div class="letter-render" id="letterRender">
   <div class="letter-page">
 
     <div class="letter-header">
@@ -2638,13 +2641,14 @@ function dlLetterDoc() {
     +".subject span{font-weight:normal;font-style:italic;color:#444}"
     +".body p{margin:0 0 12pt;color:#222;line-height:1.8}"
     +".closing{margin-top:24pt;color:#333;line-height:1.8}"
-    +".signature{margin-top:34pt;font-weight:bold;color:#111}"
+    +".signature-block{margin-top:34pt;width:100%;text-align:right}"
+    +".signature{display:inline-block;font-weight:bold;color:#111;text-align:right}"
     +"</style></head><body><div class='letter-page'>"
     +"<table class='top-table'><tr><td class='sender'>"+sender+"</td><td class='right'><div class='recipient'>"+recipient+"</div><div class='date'>"+dateLine+"</div></td></tr></table>"
     +"<div class='subject'>Objet : <span>"+formatHtmlLines(j.subject || "")+"</span></div>"
     +"<div class='body'>"+bodyHtml+"</div>"
     +"<div class='closing'>"+formatHtmlLines(j.closing || "")+"</div>"
-    +"<div class='signature'>"+formatHtmlLines(j.signature || j.sender_name || "")+"</div>"
+    +"<div class='signature-block'><span class='signature'>"+formatHtmlLines(j.signature || j.sender_name || "")+"</span></div>"
     +"</div></body></html>";
 
   var a=document.createElement("a");
@@ -2842,7 +2846,9 @@ function getLetterPdfNode() {
   var src = document.getElementById("letterRender");
   var hasText = (document.getElementById("lmOut") && document.getElementById("lmOut").textContent.trim().length > 20) || LAST_LETTER_JSON;
   if (!src || !hasText) { alert("Générez d'abord une lettre de motivation avant de télécharger le PDF."); return null; }
-  if (LAST_LETTER_JSON) renderLetter(Object.assign({}, LAST_LETTER_JSON));
+  if (!LAST_LETTER_JSON) { alert("Impossible de générer le PDF : les données de la lettre sont introuvables. Régénérez la lettre."); return null; }
+  // Toujours re-rendre avec les données actuelles pour garantir que le DOM est à jour
+  renderLetter(Object.assign({}, LAST_LETTER_JSON));
   var clone = src.cloneNode(true);
   clone.removeAttribute("id");
   clone.classList.add("show");
@@ -2852,6 +2858,7 @@ function getLetterPdfNode() {
   clone.style.border = "none";
   clone.style.borderRadius = "0";
   clone.style.background = "#fff";
+  clone.style.color = "#1a1a1a";
   var page = clone.querySelector(".letter-page");
   if (page) {
     page.style.width = "210mm";
@@ -2861,6 +2868,10 @@ function getLetterPdfNode() {
     page.style.padding = "16mm 25mm 18mm";
     page.style.boxSizing = "border-box";
   }
+  // Forcer les couleurs sur tous les éléments enfants (évite page blanche sur certains thèmes)
+  clone.querySelectorAll("*").forEach(function(el) {
+    el.style.color = el.style.color || "#1a1a1a";
+  });
   var body = clone.querySelector(".letter-body");
   if (body) { body.style.textAlign = "justify"; body.style.textAlignLast = "left"; body.style.hyphens = "auto"; }
   clone.querySelectorAll(".letter-body p").forEach(function(p){ p.style.textAlign = "justify"; p.style.textAlignLast = "left"; p.style.breakInside = "avoid-page"; p.style.pageBreakInside = "avoid"; });
@@ -9728,7 +9739,7 @@ async function dlLetterPdf() {
       size: 10.5,
       style: "normal",
       lineH: 5,
-      align: "left"
+      align: "right"
     });
 
     y = Math.max(ySender, yRecipient) + 7;
