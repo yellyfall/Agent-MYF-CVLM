@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MYF’s AI</title>
-<meta name="myf-build" content="v24-secure-session-proxy-standalone">
+<meta name="myf-build" content="v43-fresh-letter-preview-doc-pdf">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -11035,6 +11035,200 @@ if (typeof dlLetterDoc === "function") {
   };
 })();
 
+
+
+/* ========================================================================== 
+   CORRECTIF MYF V43 — LETTRE TOUJOURS FRAÎCHE POUR APERÇU / DOC / PDF
+   ========================================================================== */
+(function myf43FreshLetterFix() {
+  function cleanText(value) {
+    return String(value || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function clearHtml(id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = "";
+  }
+
+  function clearLetterVisual() {
+    ["lmSender", "lmRecipient", "lmDate", "lmSubject", "lmBody", "lmClosing", "lmSignature"].forEach(clearHtml);
+    var letter = document.getElementById("letterRender");
+    if (letter) letter.classList.remove("show");
+  }
+
+  function resetCurrentLetter() {
+    try { LAST_LETTER_JSON = null; } catch(e) {}
+    clearLetterVisual();
+  }
+
+  function currentRawLetterText() {
+    var out = document.getElementById("lmOut");
+    return cleanText(out ? (out.innerText || out.textContent || "") : "");
+  }
+
+  function hasMeaningfulLetterObject(j) {
+    return !!(j && cleanText((j.subject || "") + "\n" + (j.body || "") + "\n" + (j.salutation || "")).length > 20);
+  }
+
+  function tryExtractJsonFromRaw(raw) {
+    if (!raw) return null;
+
+    // Si l'IA a renvoyé du JSON en texte brut, on tente de le récupérer avant de faire un aperçu fallback.
+    try {
+      if (typeof extractJsonObject === "function") {
+        var parsed = extractJsonObject(raw);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch(e) {}
+
+    try {
+      var direct = JSON.parse(raw);
+      if (direct && typeof direct === "object") return direct;
+    } catch(e) {}
+
+    var start = raw.indexOf("{");
+    var end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        var sliced = JSON.parse(raw.slice(start, end + 1));
+        if (sliced && typeof sliced === "object") return sliced;
+      } catch(e) {}
+    }
+
+    return null;
+  }
+
+  function rawTextToLetterObject(raw) {
+    raw = cleanText(raw);
+    if (!raw) return null;
+
+    var parsed = tryExtractJsonFromRaw(raw);
+    if (parsed) return parsed;
+
+    var subject = "";
+    var body = raw;
+    var subjectMatch = raw.match(/^\s*(?:Objet|Subject)\s*:\s*(.+)$/im);
+    if (subjectMatch) {
+      subject = cleanText(subjectMatch[1]);
+      body = cleanText(raw.replace(subjectMatch[0], ""));
+    }
+
+    var lines = raw.split(/\n+/).map(cleanText).filter(Boolean);
+    var signature = lines.length ? lines[lines.length - 1] : "";
+
+    return {
+      sender_name: "",
+      sender_address: "",
+      sender_phone: "",
+      sender_email: "",
+      recipient_company: "",
+      recipient_name: "",
+      recipient_title: "",
+      recipient_address: "",
+      city: "",
+      date: (typeof getTodayLetterDate === "function")
+        ? getTodayLetterDate(document.getElementById("lang") ? document.getElementById("lang").value : "français")
+        : "",
+      subject: subject || "Lettre de motivation",
+      salutation: "",
+      body: body,
+      closing: "",
+      signature: signature
+    };
+  }
+
+  function ensureFreshLetterObjectFromScreen() {
+    if (typeof LAST_LETTER_JSON !== "undefined" && hasMeaningfulLetterObject(LAST_LETTER_JSON)) {
+      return LAST_LETTER_JSON;
+    }
+
+    var raw = currentRawLetterText();
+    if (!raw) return null;
+
+    var j = rawTextToLetterObject(raw);
+    if (!j) return null;
+
+    try {
+      if (typeof myf42CleanLetterObject === "function") j = myf42CleanLetterObject(j);
+      if (typeof normalizeLetterDate === "function") j = normalizeLetterDate(j);
+      LAST_LETTER_JSON = j;
+    } catch(e) {}
+
+    return j;
+  }
+
+  // 1) Avant chaque nouvelle génération, on efface l'ancienne lettre stockée.
+  if (typeof generateAll === "function" && !window.__myf43_generateAllWrapped) {
+    window.__myf43_generateAllWrapped = true;
+    var baseGenerateAll = generateAll;
+
+    generateAll = async function() {
+      resetCurrentLetter();
+      var out = document.getElementById("lmOut");
+      if (out) {
+        out.textContent = "";
+        out.style.display = "none";
+      }
+
+      try {
+        return await baseGenerateAll.apply(this, arguments);
+      } finally {
+        // Si la génération a affiché un texte brut exploitable mais n'a pas rempli LAST_LETTER_JSON,
+        // on fabrique une donnée courante pour que Aperçu / DOC / PDF ne retombent jamais sur l'ancienne lettre.
+        var raw = currentRawLetterText();
+        if (!(typeof LAST_LETTER_JSON !== "undefined" && hasMeaningfulLetterObject(LAST_LETTER_JSON)) && raw.length > 20) {
+          var j = ensureFreshLetterObjectFromScreen();
+          if (j && typeof renderLetter === "function") {
+            try { renderLetter(j); } catch(e) {}
+          }
+        }
+      }
+    };
+  }
+
+  // 2) Au clic sur Aperçu, si la donnée JSON n'existe pas encore, on reconstruit l'aperçu depuis le texte courant.
+  if (typeof switchLetterView === "function" && !window.__myf43_switchLetterWrapped) {
+    window.__myf43_switchLetterWrapped = true;
+    var baseSwitchLetterView = switchLetterView;
+
+    switchLetterView = function(mode) {
+      if (mode === "visual") {
+        var j = ensureFreshLetterObjectFromScreen();
+        if (j && typeof renderLetter === "function") {
+          try { renderLetter(j); } catch(e) {}
+        }
+      }
+      return baseSwitchLetterView.apply(this, arguments);
+    };
+  }
+
+  // 3) PDF : on force la donnée courante avant l'export.
+  if (typeof dlLetterPdf === "function" && !window.__myf43_dlLetterPdfWrapped) {
+    window.__myf43_dlLetterPdfWrapped = true;
+    var baseDlLetterPdf = dlLetterPdf;
+
+    dlLetterPdf = async function() {
+      ensureFreshLetterObjectFromScreen();
+      return await baseDlLetterPdf.apply(this, arguments);
+    };
+  }
+
+  // 4) Word/.doc : même principe, jamais d'ancienne lettre en mémoire.
+  if (typeof dlLetterDoc === "function" && !window.__myf43_dlLetterDocWrapped) {
+    window.__myf43_dlLetterDocWrapped = true;
+    var baseDlLetterDoc = dlLetterDoc;
+
+    dlLetterDoc = function() {
+      ensureFreshLetterObjectFromScreen();
+      return baseDlLetterDoc.apply(this, arguments);
+    };
+  }
+})();
 
 </script>
 </body>
