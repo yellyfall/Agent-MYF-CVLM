@@ -2271,6 +2271,80 @@ async function streamCall(sysPrompt,userMsg,model,onChunk){
   return full;
 }
 
+function buildFallbackLetterJson(rawText) {
+  var text = cleanMarkdown(String(rawText || ""))
+    .replace(/```(?:json|text|markdown)?/gi, "")
+    .replace(/```/g, "")
+    .replace(/\r/g, "")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+
+  var lines = text.split(/\n+/).map(function(line) { return line.trim(); }).filter(Boolean);
+  var subject = "";
+  var salutation = "";
+  var closing = "";
+  var signature = "";
+
+  var bodyLines = lines.filter(function(line) {
+    var subjectMatch = line.match(/^(objet|subject)\s*:\s*(.+)$/i);
+    if (subjectMatch && !subject) {
+      subject = subjectMatch[2].trim();
+      return false;
+    }
+    return true;
+  });
+
+  for (var i = 0; i < bodyLines.length; i++) {
+    if (/^(madame|monsieur|dear|estimad|senor|senora|guten tag|sehr geehrte)/i.test(bodyLines[i])) {
+      salutation = bodyLines.splice(i, 1)[0];
+      break;
+    }
+  }
+
+  for (var j = bodyLines.length - 1; j >= 0; j--) {
+    if (/^(je vous prie|veuillez agreer|veuillez agréer|veuillez recevoir|sincerely|yours faithfully|cordialement|bien cordialement|respectueusement)/i.test(bodyLines[j])) {
+      closing = bodyLines.splice(j, 1)[0];
+      break;
+    }
+  }
+
+  if (bodyLines.length > 1 && bodyLines[bodyLines.length - 1].length < 80) {
+    signature = bodyLines.pop();
+  }
+
+  return normalizeLetterDate({
+    sender_name: signature || "",
+    sender_address: "",
+    sender_phone: "",
+    sender_email: "",
+    recipient_company: "",
+    recipient_name: "",
+    recipient_title: "",
+    recipient_address: "",
+    city: "",
+    date: "",
+    subject: subject || "Candidature",
+    salutation: salutation || "",
+    body: bodyLines.join("\n\n"),
+    closing: closing || "",
+    signature: signature || ""
+  });
+}
+
+function normalizeGeneratedLetter(lmRaw, lmJson) {
+  var parsed = lmJson;
+  if (parsed && typeof myf43CoerceLetterJson === "function") {
+    parsed = myf43CoerceLetterJson(parsed);
+  }
+
+  if (parsed && typeof myf43LooksLikeLetter === "function" && !myf43LooksLikeLetter(parsed)) {
+    parsed = null;
+  }
+
+  if (!parsed) parsed = buildFallbackLetterJson(lmRaw);
+  return normalizeLetterDate(parsed || {});
+}
+
 // GENERATE
 async function generateAll(){
   var cvText=getCVText(); var ofText=getOfText();
@@ -2300,6 +2374,7 @@ async function generateAll(){
   document.getElementById("lmOut").style.display="none";
   document.getElementById("cvOut").textContent="";
   document.getElementById("scoreZone").innerHTML="";
+  LAST_LETTER_JSON = null;
   // Réinitialiser les rendus visuels
   document.getElementById("letterRender").classList.remove("show");
   document.getElementById("cvRender").classList.remove("show");
@@ -2375,8 +2450,7 @@ async function generateAll(){
     });
 
     // Parser le JSON avec extraction robuste, même si l'IA ajoute un bloc ```json
-    var lmJson = extractJsonObject(lmRaw);
-    if (lmJson) lmJson = normalizeLetterDate(lmJson);
+    var lmJson = normalizeGeneratedLetter(lmRaw, extractJsonObject(lmRaw));
 
     if (lmJson) {
       // Suspendre l'observateur MutationObserver pendant les écritures critiques
@@ -2398,6 +2472,7 @@ async function generateAll(){
     } else {
       // fallback : afficher brut
       document.getElementById("lmOut").textContent = lmRaw;
+      LAST_LETTER_JSON = null;
       document.getElementById("letterRender").classList.remove("show");
       document.getElementById("lmOut").style.display = "block";
     }
