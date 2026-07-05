@@ -12,6 +12,10 @@ services:
         value: production
       - key: DATA_DIR
         value: /data
+      - key: MISTRAL_API_KEYS
+        sync: false
+      - key: ADMIN_KEY
+        sync: false
 
     buildCommand: npm install
     startCommand: node server.js

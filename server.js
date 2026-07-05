@@ -126,6 +126,10 @@ function sha256(value) {
   return crypto.createHash("sha256").update(String(value || "")).digest("hex");
 }
 
+function cleanSecret(value) {
+  return String(value || "").trim().replace(/^["']|["']$/g, "").trim();
+}
+
 function adminSecret() {
   // Priorité à la variable d'environnement Render.
   // On nettoie les espaces/guillemets pour éviter "clé admin incorrecte"
@@ -276,6 +280,10 @@ function storedMistralKeys() {
   return splitKeys(raw);
 }
 
+function saveStoredMistralKeys(keys) {
+  setConfig("mistral_keys", JSON.stringify(unique(keys.map(cleanSecret).filter(Boolean))));
+}
+
 function mistralKeys() {
   const keys = [
     ...splitKeys(process.env.MISTRAL_API_KEYS),
@@ -319,6 +327,26 @@ async function mistralJson(pathname, options, apiKey) {
   }
 
   return parsed.json;
+}
+
+async function validateMistralApiKey(apiKey) {
+  const key = cleanSecret(apiKey);
+  if (!key) return false;
+
+  try {
+    const response = await fetch("https://api.mistral.ai/v1/models", {
+      headers: { Authorization: "Bearer " + key },
+    });
+    return response.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+function rememberMistralKey(apiKey) {
+  const key = cleanSecret(apiKey);
+  if (!key) return;
+  saveStoredMistralKeys([...storedMistralKeys(), key]);
 }
 
 async function openMistralStream(payload) {
@@ -1288,13 +1316,20 @@ app.post("/api/admin/setup", (req, res) => {
   ok(res, { role: "admin", session_token: session.token, expires_at: session.expires_at }, "Accès administrateur configuré.");
 });
 
-app.post("/api/admin/login", (req, res) => {
-  const key = String(req.body?.key || "").trim().replace(/^[\"\']|[\"\']$/g, "").trim();
+app.post("/api/admin/login", async (req, res) => {
+  const key = cleanSecret(req.body?.key);
   if (!key) return fail(res, "Clé admin manquante.");
 
   const stored = adminSecret();
-  if (!stored) setConfig("admin_key", key);
-  else if (key !== stored) return fail(res, "Clé admin incorrecte.", 401);
+  if (stored && key === stored) {
+    rememberMistralKey(key);
+  } else {
+    const isValidMistralKey = await validateMistralApiKey(key);
+    if (!isValidMistralKey) return fail(res, "Clé API Mistral invalide ou inaccessible.", 401);
+
+    rememberMistralKey(key);
+    if (!stored) setConfig("admin_key", key);
+  }
 
   const session = createSession("admin", "admin", 12);
   ok(res, { role: "admin", session_token: session.token, expires_at: session.expires_at });
