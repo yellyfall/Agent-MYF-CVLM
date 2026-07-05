@@ -2331,6 +2331,52 @@ function buildFallbackLetterJson(rawText) {
   });
 }
 
+function looseJsonValueToText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/,\s*$/g, "")
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .trim();
+}
+
+function extractLooseLetterJson(rawText) {
+  var text = String(rawText || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/```(?:json|text|markdown)?/gi, "")
+    .replace(/```/g, "")
+    .replace(/\r/g, "")
+    .trim();
+
+  var keys = [
+    "sender_name", "sender_address", "sender_phone", "sender_email",
+    "recipient_company", "recipient_name", "recipient_title", "recipient_address",
+    "city", "date", "subject", "salutation", "body", "closing", "signature"
+  ];
+
+  var hits = [];
+  keys.forEach(function(key) {
+    var re = new RegExp("[\"']?" + key + "[\"']?\\s*:", "i");
+    var m = re.exec(text);
+    if (m) hits.push({ key: key, start: m.index, valueStart: m.index + m[0].length });
+  });
+
+  if (hits.length < 3) return null;
+  hits.sort(function(a, b) { return a.start - b.start; });
+
+  var out = {};
+  for (var i = 0; i < hits.length; i++) {
+    var end = i + 1 < hits.length ? hits[i + 1].start : text.length;
+    var rawValue = text.slice(hits[i].valueStart, end);
+    out[hits[i].key] = looseJsonValueToText(rawValue);
+  }
+
+  if (!out.body && !out.subject && !out.salutation) return null;
+  return normalizeLetterDate(out);
+}
+
 function normalizeGeneratedLetter(lmRaw, lmJson) {
   var parsed = lmJson;
   if (parsed && typeof myf43CoerceLetterJson === "function") {
@@ -2341,6 +2387,7 @@ function normalizeGeneratedLetter(lmRaw, lmJson) {
     parsed = null;
   }
 
+  if (!parsed) parsed = extractLooseLetterJson(lmRaw);
   if (!parsed) parsed = buildFallbackLetterJson(lmRaw);
   return normalizeLetterDate(parsed || {});
 }
