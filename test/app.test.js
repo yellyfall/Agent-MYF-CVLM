@@ -1,65 +1,32 @@
-import {test} from 'node:test';
-import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import {createApplication} from '../server.js';
-import {hashPassword,checkPassword,signSession,verifySession,activeUser} from '../src/auth.js';
-import {validateOutput,buildMessages} from '../src/generation.js';
-const input={cv:'Alice Martin\nalice@example.com\nIngénieure solaire\nExpérience professionnelle\nIngénieure chez Soleil SAS - 2022 à 2025\n- Dimensionnement photovoltaïque avec PVsyst.\nFormation\nMaster énergie - Université de Lyon - 2022',offer:'Soleil Conseil recherche une ingénieure solaire pour le dimensionnement photovoltaïque. Maîtrise de PVsyst et AutoCAD demandée. Gestion de projets et suivi des études.',instructions:'Ton professionnel.',language:'fr',length:'équilibré'};
-const output={cv:input.cv,letter:'Alice Martin\nalice@example.com\nSoleil Conseil\nObjet : candidature au poste d’ingénieure solaire\nMadame, Monsieur,\nMon expérience en dimensionnement photovoltaïque chez Soleil SAS correspond aux missions de votre offre. Je souhaite contribuer à vos études.\nCordialement,\nAlice Martin',keywords:[{term:'PVsyst',evidence:'Dimensionnement photovoltaïque avec PVsyst.'},{term:'AutoCAD',evidence:''},{term:'Python',evidence:'citation inventée'}],warnings:['Vérifier la maîtrise d’AutoCAD avant de la mentionner.']};
-const mock=async(url,options)=>{
- if(url){assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');assert.equal(options.headers.Authorization,'Bearer mock');const payload=JSON.parse(options.body);assert.equal(payload.model,'openai/gpt-oss-120b');assert.equal(payload.max_completion_tokens,6500);assert.equal(payload.max_tokens,undefined);assert.equal(payload.response_format.type,'json_schema');assert.equal(payload.response_format.json_schema.strict,true);assert.equal(payload.reasoning_effort,'low');}
- return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify(output)}}]}),{headers:{'Content-Type':'application/json'}});
-};
-test('mots de passe, signature, expiration et preuves',async()=>{
- const hash=await hashPassword('une phrase vraiment longue');assert(await checkPassword('une phrase vraiment longue',hash));assert(!await checkPassword('incorrect',hash));
- const token=signSession({id:'x',version:1},'secret',1000);assert.equal(verifySession(token,'secret',1001).id,'x');assert.equal(verifySession(token+'x','secret',1001),null);assert.equal(verifySession(token,'autre',1001),null);assert.equal(verifySession(token,'secret',99999999),null);
- assert(!activeUser({status:'paused'}));assert(!activeUser({status:'active',expires_at:'2020-01-01'}));
- const result=validateOutput(output,input);assert.equal(result.keywords.length,2);assert(result.keywords[0].sourceVerified);assert(!result.keywords[1].sourceVerified);
- assert(buildMessages(input)[0].content.includes('DOCUMENTS NON FIABLES'));assert.deepEqual(JSON.parse(buildMessages(input)[1].content).cv,input.cv);
+const {test,after}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {Readable}=require('node:stream');const {DatabaseSync}=require('node:sqlite');const crypto=require('node:crypto');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'myf-test-'));process.env.DATA_DIR=dir;process.env.ADMIN_PASSWORD='test-admin-long';process.env.GROQ_API_KEY='test-server-secret';
+const old=new DatabaseSync(path.join(dir,'candidature.db'));old.exec('CREATE TABLE app_users(id TEXT,username TEXT,password TEXT,fullname TEXT,status TEXT,expires_at TEXT,created_at TEXT,role TEXT)');const salt='a'.repeat(32);const hash=crypto.scryptSync('old-password',salt,64).toString('hex');old.prepare('INSERT INTO app_users VALUES(?,?,?,?,?,?,?,?)').run('old-user','existing',salt+':'+hash,'Existing User','active',null,'2026-01-01','user');old.close();
+let sent;require.cache[require.resolve('node-fetch')]={exports:async(url,options)=>{sent={url,options,body:JSON.parse(options.body)};return {ok:true,body:Readable.from(['data: '+JSON.stringify({choices:[{delta:{content:'Bonjour'}}]})+'\n\n','data: '+JSON.stringify({choices:[{delta:{},finish_reason:'stop'}]})+'\n\ndata: [DONE]\n\n'])};}};
+const {app,db}=require('../server');const server=app.listen(0,'127.0.0.1');after(async()=>{await new Promise(r=>server.close(r));db.close();fs.rmSync(dir,{recursive:true,force:true});});
+async function api(route,body,token,method='POST'){const res=await fetch('http://127.0.0.1:'+server.address().port+'/api'+route,{method,headers:{'Content-Type':'application/json',...(token?{'x-session-token':token}:{})},...(method==='GET'?{}:{body:JSON.stringify(body||{})})});return {status:res.status,data:await res.json()};}
+test('Original accounts, admin controls, Groq proxy, revocation and migration',async()=>{
+ assert.equal((await api('/admin/login',{key:'arbitrary-provider-key'})).status,401);
+ const admin=(await api('/admin/login',{key:process.env.ADMIN_PASSWORD})).data.data.session_token;assert.ok(admin);
+ const existing=await api('/login',{username:'existing',password:'old-password'});assert.equal(existing.status,200);
+ const created=await api('/admin/users',{username:'alice',password:'long-password',fullname:'Alice'},admin);assert.equal(created.status,200);
+ const user=(await api('/login',{username:'alice',password:'long-password'})).data.data.session_token;assert.ok(user);
+ const res=await fetch('http://127.0.0.1:'+server.address().port+'/api/ai-stream',{method:'POST',headers:{'content-type':'application/json','x-session-token':user},body:JSON.stringify({model:'mistral-large-latest',messages:[{role:'user',content:'Mon CV'}]})});assert.equal(res.status,200);assert.match(await res.text(),/Bonjour/);assert.equal(sent.url,'https://api.groq.com/openai/v1/chat/completions');assert.equal(sent.options.headers.Authorization,'Bearer test-server-secret');assert.equal(sent.body.model,'openai/gpt-oss-120b');assert.match(sent.body.messages[0].content,/ne jamais inventer/);
+ assert.equal((await api('/live-time',{},user)).status,200);
+ assert.equal((await api('/generate-image',{prompt:'chat'},user)).status,501);
+ await api('/admin/users/'+created.data.data.id,{op:'pause'},admin,'PATCH');assert.equal((await api('/live-time',{},user)).status,401);
+ await api('/logout',{},existing.data.data.session_token);assert.equal((await api('/live-time',{},existing.data.data.session_token)).status,401);
+ const users=await api('/admin/users',{},admin,'GET');assert.equal(users.data.data.users.length,2);assert.ok(users.data.data.users.every(u=>!u.password));
 });
-test('parcours comptes, générations, contrôle des accès et persistance',async()=>{
- const dir=await mkdtemp(path.join(os.tmpdir(),'myf-test-'));const env={APP_SECRET:'a'.repeat(64),ADMIN_PASSWORD:'admin-long-password',DATA_DIR:dir,GROQ_API_KEY:'mock',DAILY_GENERATION_LIMIT:'2'};
- let app=await createApplication(env,mock);await new Promise(r=>app.server.listen(0,'127.0.0.1',r));let base=`http://127.0.0.1:${app.server.address().port}`;
- async function request(route,method='GET',data,cookie,headers={}){const response=await fetch(base+route,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{}),...headers},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,body:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};}
- try{
- assert.equal((await request('/api/health')).status,200);assert.equal((await request('/api/me')).status,401);
- assert.equal((await request('/api/login','POST',{username:'admin',password:'any-valid-groq-key'})).status,401);
- const admin=await request('/api/login','POST',{username:'admin',password:env.ADMIN_PASSWORD});assert.equal(admin.status,200);const adminCookie=admin.cookie;
- assert.equal((await request('/api/admin/users','POST',{username:'alice',password:'alice-password-strong',fullname:'Alice Martin'},adminCookie)).status,201);
- const login=await request('/api/login','POST',{username:'alice',password:'alice-password-strong'});const cookie=login.cookie;assert.equal(login.status,200);
- assert.equal((await request('/api/admin/users','GET',undefined,cookie)).status,403);
- assert.equal((await request('/api/generate','POST',input,cookie,{Origin:'https://evil.example'})).status,403);
- assert.equal((await request('/api/generate','POST',{...input,cv:'court'},cookie)).status,400);
- assert.equal((await request('/api/generate','POST',{...input,cv:'a'.repeat(110000)},cookie)).status,413);
- const generation=await request('/api/generate','POST',input,cookie);assert.equal(generation.status,200);assert.equal(generation.body.result.cv,input.cv);
- assert.equal((await request('/api/generate','POST',input,cookie)).status,200);assert.equal((await request('/api/generate','POST',input,cookie)).status,429);
- const users=(await request('/api/admin/users','GET',undefined,adminCookie)).body.users;const alice=users.find(u=>u.username==='alice');assert(!JSON.stringify(users).includes('password'));
- assert.equal((await request('/api/admin/users/'+alice.id,'PATCH',{op:'pause'},adminCookie)).status,200);assert.equal((await request('/api/me','GET',undefined,cookie)).status,401);
- await request('/api/admin/users/'+alice.id,'PATCH',{op:'resume'},adminCookie);await request('/api/admin/users/'+alice.id,'PATCH',{op:'password',password:'new-password-long'},adminCookie);
- assert.equal((await request('/api/login','POST',{username:'alice',password:'alice-password-strong'})).status,401);
- assert.equal((await request('/api/login','POST',{username:'alice',password:'new-password-long'})).status,200);
- assert.equal((await request('/api/admin/users/'+alice.id,'PATCH',{op:'expiry',date:'2026-02-30'},adminCookie)).status,400);
- await request('/api/admin/users/'+alice.id,'PATCH',{op:'expiry',date:'2020-01-01'},adminCookie);assert.equal((await request('/api/login','POST',{username:'alice',password:'new-password-long'})).status,401);
- await request('/api/admin/users/'+alice.id,'PATCH',{op:'expiry',date:''},adminCookie);
- await app.close();app=await createApplication(env,mock);await new Promise(r=>app.server.listen(0,'127.0.0.1',r));base=`http://127.0.0.1:${app.server.address().port}`;
- const persisted=await request('/api/login','POST',{username:'alice',password:'new-password-long'});assert.equal(persisted.status,200);assert.equal((await request('/api/generate','POST',input,persisted.cookie)).status,429);
- await request('/api/logout','POST',{},persisted.cookie);assert.equal((await request('/api/me','GET',undefined,persisted.cookie)).status,401);
- const adminAgain=await request('/api/login','POST',{username:'admin',password:env.ADMIN_PASSWORD});await request('/api/admin/users/'+alice.id,'DELETE',{},adminAgain.cookie);assert.equal((await request('/api/login','POST',{username:'alice',password:'new-password-long'})).status,401);
- }finally{await app.close();await rm(dir,{recursive:true,force:true});}
+test('private web addresses rejected',()=>{const {publicAddress}=require('../lib/public-fetch');for(const ip of ['127.0.0.1','169.254.169.254','10.0.0.1','192.168.0.1','::1','100.64.0.1'])assert.equal(publicAddress(ip),false);assert.equal(publicAddress('8.8.8.8'),true);});
+test('every inline script parses',()=>{const vm=require('node:vm');const html=fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8');for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new vm.Script(m[1]);new vm.Script(fs.readFileSync(path.join(__dirname,'../public/app_v18.js'),'utf8'));});
+test('truncated AI output is rejected by the original frontend adapter',async()=>{
+ const vm=require('node:vm');const html=fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8');const start=html.indexOf('async function secureGroqStream(');const end=html.indexOf('// Génération CV/LM/recruteur',start);const source=html.slice(start,end);
+ for(const reason of ['length',null,'stop']){
+  const payload='data: '+JSON.stringify({choices:[{delta:{content:'Texte'},finish_reason:reason}]})+'\n\n';
+  const context=vm.createContext({BASE:'',secureAuthHeaders:()=>({}),TextDecoder,fetch:async()=>new Response(payload),Response});vm.runInContext(source,context);
+  if(reason==='stop')assert.equal(await context.secureGroqStream({}), 'Texte');else await assert.rejects(context.secureGroqStream({}),/incompl|interrompue/);
+ }
 });
-test('une génération par utilisateur et annulation libérant la place',async()=>{
- const dir=await mkdtemp(path.join(os.tmpdir(),'myf-concurrency-'));
- let calls=0;const delayed=async(_url,options)=>{calls++;await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,300);options.signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new Error('aborted'));},{once:true});});return mock();};
- const app=await createApplication({APP_SECRET:'b'.repeat(64),ADMIN_PASSWORD:'admin-long-password',DATA_DIR:dir,GROQ_API_KEY:'mock'},delayed);await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${app.server.address().port}`;
- try{const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'admin',password:'admin-long-password'})});const headers={'Content-Type':'application/json',Cookie:login.headers.get('set-cookie').split(';')[0]};const first=fetch(base+'/api/generate',{method:'POST',headers,body:JSON.stringify(input)});await new Promise(r=>setTimeout(r,60));const second=await fetch(base+'/api/generate',{method:'POST',headers,body:JSON.stringify(input)});assert.equal(second.status,429);assert.equal((await first).status,200);assert.equal(calls,1);
- const abort=new AbortController();const pending=fetch(base+'/api/generate',{method:'POST',headers,body:JSON.stringify(input),signal:abort.signal}).catch(()=>null);await new Promise(r=>setTimeout(r,60));abort.abort();await pending;await new Promise(r=>setTimeout(r,60));const next=await fetch(base+'/api/generate',{method:'POST',headers,body:JSON.stringify(input)});assert.equal(next.status,200);
- }finally{await app.close();await rm(dir,{recursive:true,force:true});}
+test('migration marker prevents re-creating previously deleted accounts',()=>{
+ db.prepare("DELETE FROM users WHERE id='old-user'").run();assert.equal(require('../lib/migrate')(db,dir),0);assert.equal(db.prepare("SELECT id FROM users WHERE id='old-user'").get(),undefined);
 });
-test('Render refuse SQLite éphémère et ne démarre pas sans secrets',async()=>{
- await assert.rejects(createApplication({}),/APP_SECRET/);
- await assert.rejects(createApplication({APP_SECRET:'c'.repeat(64),ADMIN_PASSWORD:'admin-long-password',RENDER:'true'}),/DATABASE_URL/);
-});
-
-
