@@ -423,6 +423,15 @@ async function generateImage() {
  const err=new Error("La génération d’images n’est pas disponible avec cette API Groq. Le chat et les documents restent disponibles.");err.status=501;throw err;
 }
 
+function htmlDecode(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 function stripHtml(html, max = 9000) {
   let text = String(html || "")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")

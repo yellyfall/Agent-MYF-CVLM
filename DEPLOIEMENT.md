@@ -83,7 +83,7 @@ Caddy demande automatiquement un certificat HTTPS. La réponse health doit conte
 
 ## 5. Remettre le frontend original sur Render
 
-Mettre à jour le dépôt connecté à Render avec le contenu du dossier livraison-render-hetzner-groq de cette archive, notamment public/index.html, public/app_v18.js et render.yaml. Ne pas envoyer .env.
+Mettre à jour le dépôt connecté à Render avec le contenu du dossier livraison-render-hetzner-groq de cette archive, notamment tout le dossier public (index.html, interface-1.js, interface-2.js, interface-events.js, app_v18.js, vendor/) et render.yaml. Ne remplacer que index.html est insuffisant. Ne pas envoyer .env.
 
 Dans votre service myf-candidature-frontend, garder le type Static Site. Les chemins ci-dessous supposent que package.json et public sont à la racine du dépôt ; sinon renseigner Root Directory avec le dossier qui les contient.
 

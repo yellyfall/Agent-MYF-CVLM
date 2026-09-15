@@ -1,12 +1,12 @@
 # MYF — interface originale, Groq, Render + Hetzner
 
-Cette livraison repart du fichier « CV & LM.rar » fourni. Elle conserve la structure HTML, les feuilles de style, les menus, les cinq thèmes, les écrans de connexion, les espaces candidat/recruteur/chat, la gestion des utilisateurs et les exports d’origine. Seuls les noms du fournisseur et des modèles changent dans l’interface.
+Cette livraison repart du fichier « CV & LM.rar » fourni. Elle conserve la structure HTML, les feuilles de style, les menus, les cinq thèmes, les écrans de connexion, les espaces candidat/recruteur/chat, la gestion des utilisateurs et les exports d’origine. Les libellés fournisseur/modèles sont adaptés et le bouton de génération d’images est retiré. Les scripts et événements sont externalisés pour la sécurité Render, sans refonte graphique.
 
 Le frontend reste un site statique Render. L’API Node.js et SQLite tournent sur Hetzner. La clé Groq reste sur Hetzner. Le serveur diffuse les réponses progressivement et limite la concurrence, la taille des requêtes et la durée des générations. Node 24 utilise SQLite intégré : pas de compilation de better-sqlite3 ni de navigateur installé dans le backend.
 
 ## Déploiement
 
-Suivre DEPLOIEMENT.md. Les adresses sont déjà renseignées pour votre installation :
+Pour corriger le site déjà installé, suivre DIAGNOSTIC-CONNEXION-MENUS.md : mise à jour du frontend pour les clics, et du backend pour la lecture Web. Pour une première installation, suivre DEPLOIEMENT.md. Les adresses sont déjà renseignées pour votre installation :
 - Frontend : https://myf-candidature-frontend.onrender.com
 - Backend prévu : https://46-224-141-132.sslip.io
 
@@ -30,7 +30,7 @@ Node.js 24 requis : npm ci puis npm test. Pour tester l’application complète 
 
 Tests effectués : contrat API original, création/connexion/suspension des comptes, migration du mot de passe scrypt, révocation des sessions, acheminement du flux Groq simulé, rejet des adresses privées pour la recherche Web, analyse syntaxique des scripts. Comparaison des styles et du HTML hors scripts avec l’archive originale ; seules les étiquettes fournisseur/modèles diffèrent. Six vues ouvertes dans Chrome sans erreur JavaScript et cinq thèmes vérifiés.
 
-Pas de déploiement distant ni de génération réelle facturée effectués lors de cette livraison. La mémoire est plafonnée par Docker, sans mesure de charge sur votre serveur. Les polices et bibliothèques CDN d’origine sont conservées.
+Pas de déploiement distant ni de génération réelle facturée effectués lors de cette livraison. La mémoire est plafonnée par Docker, sans mesure de charge sur votre serveur. Les polices et bibliothèques d’origine sont désormais servies localement depuis public/vendor pour fonctionner avec la CSP stricte de Render.
 
 Documentation vérifiée le 15 septembre 2026 :
 - https://render.com/docs/redirects-rewrites
