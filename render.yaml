@@ -1,28 +1,14 @@
-# Frontend uniquement : Static Site Render.
-# Remplacer api.votre-domaine.fr par le domaine HTTPS du backend Hetzner.
 services:
   - type: web
     name: myf-candidature-frontend
     runtime: static
-    buildCommand: npm ci --include=dev && npm run build
+    buildCommand: "node -e \"console.log('Frontend original prêt')\""
     staticPublishPath: ./public
-    envVars:
-      - key: NODE_VERSION
-        value: 24.15.0
     routes:
       - type: rewrite
         source: /api/*
         destination: https://46-224-141-132.sslip.io/api/*
     headers:
-      - path: /api/*
-        name: Cache-Control
-        value: no-store
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
-      - path: /*
-        name: Referrer-Policy
-        value: same-origin
-      - path: /*
-        name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"

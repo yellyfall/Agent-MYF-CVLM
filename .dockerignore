@@ -1,8 +1,5 @@
 node_modules
-.git
 .env
-.env.*
+.git
 data
-tmp
-qa
-test
+*.zip
