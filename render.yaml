@@ -12,7 +12,7 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://api.votre-domaine.fr/api/*
+        destination: https://46-224-141-132.sslip.io/api/*
     headers:
       - path: /api/*
         name: Cache-Control
