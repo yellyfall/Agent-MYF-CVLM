@@ -1,0 +1,41 @@
+# À lancer uniquement sur Hetzner.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      API_ONLY: "true"
+      APP_ORIGIN: ${APP_ORIGIN:?Renseigner l'URL HTTPS exacte du frontend Render dans .env}
+      DATA_DIR: /app/data
+    volumes:
+      - app-data:/app/data
+    expose:
+      - "3000"
+    mem_limit: 384m
+    cpus: 1
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Renseigner le domaine du backend Hetzner dans .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 128m
+    depends_on:
+      - app
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

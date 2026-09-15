@@ -1,0 +1,9 @@
+{$DOMAIN} {
+  encode zstd gzip
+  handle /api/* {
+    reverse_proxy app:3000
+  }
+  handle {
+    respond "Backend MYF Candidature. Ouvrez le frontend sur Render." 404
+  }
+}
