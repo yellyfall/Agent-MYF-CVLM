@@ -589,6 +589,8 @@ function normalizeGeneratedLetter(lmRaw, lmJson) {
   return normalizeLetterDate(parsed || {});
 }
 
+// Keep a completed letter while its CV is retried, only for this open session.
+var MYF_CANDIDATE_JOB=null;
 // GENERATE
 async function generateAll(){
   var cvText=getCVText(); var ofText=getOfText();
@@ -602,6 +604,13 @@ async function generateAll(){
   var extra=document.getElementById("extra").value.trim();
   var model=document.getElementById("model").value;
 
+  var signature=JSON.stringify([SESSION_TOKEN,cvText,ofText,lang,llen,ptype,tones,extra]);
+  var resume=!!(MYF_CANDIDATE_JOB&&MYF_CANDIDATE_JOB.signature===signature&&MYF_CANDIDATE_JOB.letterComplete&&!MYF_CANDIDATE_JOB.cvComplete);
+  var job=resume?MYF_CANDIDATE_JOB:{signature:signature,letterComplete:false,cvComplete:false,retryAt:0};
+  if(resume&&job.retryModel===model&&job.retryAt>Date.now()){
+    showErr('Votre lettre est conservée. Groq demande encore '+Math.ceil((job.retryAt-Date.now())/1000)+' secondes d’attente avant de relancer le CV.');return;
+  }
+  MYF_CANDIDATE_JOB=job;
   var langLabel = {
     "français":"français","anglais":"English","espagnol":"español",
     "allemand":"Deutsch","italien":"italiano","russe":"русский",
@@ -612,8 +621,9 @@ async function generateAll(){
   btn.classList.add("loading");btn.disabled=true;
   btn.querySelector(".btn-text").textContent="Génération en cours...";
   document.getElementById("errMsg").classList.remove("show");
-  document.getElementById("resSection").classList.remove("show");
   document.getElementById("prgSteps").classList.add("show");
+  if(!resume){
+  document.getElementById("resSection").classList.remove("show");
   document.getElementById("lmOut").textContent="";
   document.getElementById("lmOut").style.display="none";
   document.getElementById("cvOut").textContent="";
@@ -629,7 +639,9 @@ async function generateAll(){
   if (lvRaw) lvRaw.classList.remove("active");
   ["pi1","pi2","pi3"].forEach(function(id){document.getElementById(id).className="pi";});
 
+  }else{document.getElementById("resSection").classList.add("show");}
   try{
+    if(!resume){
     // ── LETTRE (JSON structuré) ──────────────────────────────────────────────
     document.getElementById("pi1").className="pi act";
     document.getElementById("pi1").innerHTML='<div class="pispin"></div>Génération de la lettre de motivation...';
@@ -727,6 +739,8 @@ async function generateAll(){
     document.getElementById("pi2").className="pi done";
     document.getElementById("pi2").innerHTML='<span class="piicon">✓</span> Lettre terminée';
 
+    job.letterComplete=true;
+    }
     // ── CV (structure-aware) ─────────────────────────────────────────────────
     document.getElementById("pi3").className="pi act";
     document.getElementById("pi3").innerHTML='<div class="pispin"></div>Optimisation du CV pour +90% de correspondance...';
@@ -768,6 +782,7 @@ async function generateAll(){
     });
     document.getElementById("cvOut").textContent=cvResult;
     renderCV(cvResult);
+    job.cvComplete=true;job.retryAt=0;
 
     document.getElementById("st4").classList.add("active","done");
     document.getElementById("pi3").className="pi done";
@@ -778,11 +793,20 @@ async function generateAll(){
 
   }catch(err){
     document.getElementById("prgSteps").classList.remove("show");
-    document.getElementById("resSection").classList.remove("show");
-    showErr("Erreur : "+(err.message||"Inconnue")+"\n\nConseils :\n- Vérifiez votre quota sur console.groq.com\n- Essayez GPT-OSS 20B");
+    if(job.letterComplete){
+      document.getElementById("resSection").classList.add("show");
+      document.getElementById("cvOut").textContent="";
+      document.getElementById("cvRender").classList.remove("show");
+      switchRTab('lm');
+      job.retryAt=err.retryAfterSeconds?Date.now()+err.retryAfterSeconds*1000:0;job.retryModel=model;
+      showErr('Votre lettre est terminée et reste consultable et téléchargeable. Le CV n’a pas pu être terminé.\n\n'+(err.message||'Erreur inconnue.')+'\n\nRelancez avec le bouton ci-dessus : seule l’optimisation du CV sera réessayée tant que les textes et paramètres restent identiques.');
+    }else{
+      document.getElementById("resSection").classList.remove("show");
+      showErr('La lettre n’a pas pu être terminée. '+(err.message||'Erreur inconnue.'));
+    }
   }finally{
     btn.classList.remove("loading");btn.disabled=false;
-    btn.querySelector(".btn-text").textContent="Générez votre lettre de motivation et optimisez votre CV";
+    btn.querySelector(".btn-text").textContent=job.letterComplete&&!job.cvComplete?'Réessayer l’optimisation du CV':'Générez votre lettre de motivation et optimisez votre CV';
   }
 }
 
@@ -3771,6 +3795,7 @@ async function loginAdmin() {
 }
 
 function logout() {
+  MYF_CANDIDATE_JOB=null;
   if(SESSION_TOKEN)fetch(BASE+'/api/logout',{method:'POST',headers:secureAuthHeaders(),body:'{}'}).catch(function(){});
   API_KEY = "";
   ADMIN_KEY = "";
@@ -3790,7 +3815,7 @@ function logout() {
 
 async function secureGroqStream(payload,onDelta){
   var res=await fetch(BASE+'/api/ai-stream',{method:'POST',headers:secureAuthHeaders(),body:JSON.stringify(payload)});
-  if(!res.ok){var data=await res.json().catch(function(){return {};});throw new Error(data.message||'Erreur IA '+res.status);}
+  if(!res.ok){var data=await res.json().catch(function(){return {};});var error=new Error(data.message||'Erreur IA '+res.status);error.status=res.status;var retry=Number(data.data&&data.data.retry_after_seconds);error.retryAfterSeconds=Number.isFinite(retry)&&retry>0?retry:null;throw error;}
   var reader=res.body.getReader(),decoder=new TextDecoder(),buffer='',full='',finished=false;
   function consume(line){
     if(!line.startsWith('data:'))return;
@@ -8432,6 +8457,11 @@ function myf40Short(text, max) {
 }
 
 function myf40ResetGeneratedOutputs(reason) {
+  // A different model may finish the missing CV without discarding the completed letter.
+  if(reason==='model'&&MYF_CANDIDATE_JOB&&MYF_CANDIDATE_JOB.letterComplete&&!MYF_CANDIDATE_JOB.cvComplete)return;
+  MYF_CANDIDATE_JOB=null;
+  var generationButton=document.querySelector('#genBtn .btn-text');
+  if(generationButton)generationButton.textContent='Générez votre lettre de motivation et optimisez votre CV';
   MYF_GENERATION_DIRTY = true;
 
   try { LAST_LETTER_JSON = null; } catch(e) {}
