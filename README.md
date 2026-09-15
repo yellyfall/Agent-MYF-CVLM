@@ -1,5 +1,7 @@
 # MYF — interface originale, Groq, Render + Hetzner
 
+Dernier correctif : voir CORRECTIF-QUOTA.md (lettre conservée après échec du CV, reprise du CV seul et gestion des limites Groq).
+
 Cette livraison repart du fichier « CV & LM.rar » fourni. Elle conserve la structure HTML, les feuilles de style, les menus, les cinq thèmes, les écrans de connexion, les espaces candidat/recruteur/chat, la gestion des utilisateurs et les exports d’origine. Les libellés fournisseur/modèles sont adaptés et le bouton de génération d’images est retiré. Les scripts et événements sont externalisés pour la sécurité Render, sans refonte graphique.
 
 Le frontend reste un site statique Render. L’API Node.js et SQLite tournent sur Hetzner. La clé Groq reste sur Hetzner. Le serveur diffuse les réponses progressivement et limite la concurrence, la taille des requêtes et la durée des générations. Node 24 utilise SQLite intégré : pas de compilation de better-sqlite3 ni de navigateur installé dans le backend.
