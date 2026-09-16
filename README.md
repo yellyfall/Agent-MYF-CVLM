@@ -1,6 +1,8 @@
 # MYF — interface originale, Groq, Render + Hetzner
 
-Dernier correctif : voir CORRECTIF-QUOTA.md (lettre conservée après échec du CV, reprise du CV seul et gestion des limites Groq).
+Dernier correctif PDF : voir CORRECTIF-LETTRE-PDF.md (police Unicode intégrée, mise en page et pagination).
+
+Correctif quota inclus : voir CORRECTIF-QUOTA.md (lettre conservée après échec du CV, reprise du CV seul et gestion des limites Groq).
 
 Cette livraison repart du fichier « CV & LM.rar » fourni. Elle conserve la structure HTML, les feuilles de style, les menus, les cinq thèmes, les écrans de connexion, les espaces candidat/recruteur/chat, la gestion des utilisateurs et les exports d’origine. Les libellés fournisseur/modèles sont adaptés et le bouton de génération d’images est retiré. Les scripts et événements sont externalisés pour la sécurité Render, sans refonte graphique.
 
