@@ -1,45 +1,35 @@
-# Correction de la lettre PDF
+# Correctif 3.0.3 — Lettre PDF justifiée
 
-Le PDF fourni présentait des mots étirés ou superposés, des caractères mal encodés et une deuxième page contenant seulement la formule de politesse et la signature.
+## Diagnostic du 21 septembre 2026
+Le fichier letter-pdf.js récupéré sur le site Render utilisait Inter et des blocs alignés à gauche, alors que l'aperçu utilisait Georgia, des paragraphes justifiés et des blocs destinataire/signature à droite. Le PDF fourni contient bien InterLetter : il ne s'agit donc pas simplement d'un cache navigateur. Le correctif précédent ne respectait pas la présentation demandée.
 
-Le nouvel export utilise Inter intégrée au PDF : corps 11 points, expéditeur 12 points, coordonnées 9,5 à 10 points, objet et signature en gras. Marges A4 de 20 mm, alignement à gauche, interlignage régulier, suppression de la justification manuelle mot par mot. Les espaces insécables et tirets Unicode sont normalisés. La formule de politesse est regroupée avec la signature et, lors d'une pagination, avec la fin du dernier paragraphe.
+## Correction
+- Même police serif embarquée pour la lettre à l'écran et le PDF : Gelasio, proche de Georgia. Les polices de l'interface et les menus restent inchangés.
+- Corps justifié ; dernière ligne de chaque paragraphe à gauche.
+- Paragraphes séparés par des lignes vides, retours explicites conservés.
+- Destinataire, date et signature à droite ; expéditeur à gauche.
+- Objet en italique, libellé en gras, trait séparateur.
+- Taille de corps 11 points ; interligne 6 mm ; espacement entre paragraphes 7 mm ; marges latérales 20 mm.
+- Pagination A4 sans réduction automatique de police. Les paragraphes ordinaires restent groupés ; les paragraphes plus hauts qu'une page peuvent se poursuivre sur la suivante.
+- Texte sélectionnable et accents conservés ; aucune capture d'écran dans le PDF, aucun appel Groq pendant le téléchargement.
 
-La lettre fournie a été corrigée sans réécriture de son contenu ; les espaces abîmés par l'ancien export ont été rétablis et la date du document a été conservée. Elle tient sur une page. Les longs courriers peuvent toujours occuper plusieurs pages, avec un corps de 11 points plutôt qu'une réduction illisible de la police.
+La lettre de Massy est longue : elle occupe deux pages. Les retours de ligne exacts peuvent différer d'un aperçu continu à l'écran, notamment à cause du format A4 et de la césure automatique du navigateur.
 
-## Render : installation de la correction PDF
+## Installation sur Render seulement
+1. Extraire l'archive et ouvrir livraison-render-hetzner-groq.
+2. Remplacer le dossier public dans le dépôt connecté à votre site Render par le dossier public fourni, puis enregistrer les changements dans Git et les envoyer au dépôt distant.
+3. Dans Render, ouvrir myf-candidature-frontend puis lancer Manual Deploy > Deploy latest commit (ou laisser le déploiement automatique se terminer).
+4. Recharger le site avec Ctrl+F5. Générer une lettre et télécharger à nouveau son PDF. Un ancien PDF téléchargé ne sera pas modifié automatiquement.
 
-1. Extraire CV-LM-Correctif-Lettre-PDF.zip.
-2. Dans le dépôt connecté à Render, remplacer TOUT le dossier public de l'application par celui de l'archive. Inclure notamment le nouveau fichier letter-pdf.js, index.html et vendor/. L'export précédent dans interface-2.js est remplacé à l'exécution par le nouveau module externe.
-3. Enregistrer le commit puis lancer Manual Deploy → Deploy latest commit dans Render.
-4. Actualiser le site avec Ctrl+F5, générer une lettre et télécharger le PDF.
+Le dossier public doit être complet : index.html, letter-pdf.js, nouveau letter-layout.css et les trois fichiers vendor/letter-*.ttf, avec leur licence. Le dossier à publier reste public. Conserver la configuration CSP et la réécriture /api/* existantes.
 
-Aucun changement CSS des menus ou des écrans de connexion. Aucune modification de la clé Groq nécessaire.
+Sur Hetzner : aucune commande ni reconstruction Docker n'est nécessaire pour ce correctif d'export. Ne pas modifier .env, la clé Groq ou la base des utilisateurs.
 
-## Hetzner : seulement si le correctif quota précédent n'est pas encore installé
+## Validation locale
+- Lettre réelle de Massy : cinq paragraphes inchangés, texte intégral, deux pages A4 ; inspection visuelle des deux pages.
+- 36 lignes contrôlées avec les deux bords alignés ; accents et limites de page vérifiés.
+- Cas long de cinq pages, cas Unicode, police commune de l'aperçu et export par la fonction de téléchargement réelle.
+- 9 tests serveur, 17 scénarios d'interface et 8 scénarios de quota réussis.
+- Aucun déploiement sur les comptes Render/Hetzner n'a été effectué depuis cette session.
 
-La correction PDF seule ne nécessite pas de mise à jour Hetzner. Cette archive inclut néanmoins le correctif quota précédent (backend 3.0.1-quota). Pour le mettre à jour si ce n'est pas déjà fait :
-
-Dans PowerShell sur le PC :
-
-```powershell
-scp -i "$env:USERPROFILE\.ssh\hetzner_cv_lm" "$env:USERPROFILE\Downloads\Codes HTML\VF\CV-LM-Correctif-Lettre-PDF.zip" root@46.224.141.132:/root/
-ssh -i "$env:USERPROFILE\.ssh\hetzner_cv_lm" root@46.224.141.132
-```
-
-Puis sur Hetzner :
-
-```bash
-cd /opt/cv-lm/livraison-render-hetzner-groq
-cp -a server.js "server.js.avant-pdf-$(date +%Y%m%d-%H%M%S)"
-unzip -o /root/CV-LM-Correctif-Lettre-PDF.zip -d /opt/cv-lm
-docker compose up -d --build
-curl -f https://46-224-141-132.sslip.io/api/health
-```
-
-Le contrôle doit annoncer 3.0.1-quota. Aucun .env ni fichier de base de données n'est inclus dans l'archive. Les volumes restent conservés.
-
-## Vérifications
-
-PDF corrigé rendu en image et inspecté : une page, aucun débordement, aucun caractère CID indéchiffrable, texte sélectionnable. Scénarios supplémentaires : texte long sur trois pages et texte avec accents, ligatures, espaces insécables et tirets non sécables. Export du site testé sous la CSP stricte de Render. Les tests API et les parcours connexion, thèmes, candidat, recruteur, chat et téléchargements passent également.
-
-Le module est prévu pour les caractères latins, français notamment, couverts par Inter. Il ne garantit pas la prise en charge des écritures arabe ou CJK. Aucun déploiement distant effectué automatiquement.
+Police : https://github.com/google/fonts/tree/main/ofl/gelasio — SIL Open Font License, copie incluse dans public/vendor/letter-font-OFL.txt. Instances statiques 400, 700 et italique 400 issues des polices variables officielles.

@@ -1,6 +1,6 @@
 {
   "name": "agent-ia-myf",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Agent IA de MYF - Lettre de motivation + CV optimise",
   "main": "server.js",
   "scripts": {
