@@ -1,0 +1,6 @@
+/* Shared embedded serif: preview and downloadable letter. */
+@font-face{font-family:MYFLetter;src:url('/vendor/letter-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:MYFLetter;src:url('/vendor/letter-Bold.ttf') format('truetype');font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:MYFLetter;src:url('/vendor/letter-Italic.ttf') format('truetype');font-weight:400;font-style:italic;font-display:swap}
+#letterRender .letter-page{font-family:MYFLetter,Georgia,serif!important}
+#letterRender .letter-body,#letterRender .letter-body p{text-align:justify;text-align-last:left}
