@@ -700,10 +700,10 @@ async function generateAll(){
     document.getElementById("lmOut").style.display = "block";
     document.getElementById("letterRender").classList.remove("show");
 
-    var lmRaw = await streamCall(sysLM, userLM, model, function(t){
+    var lmRaw = await myfGenerateLetter(sysLM, userLM, model, function(t){
       // Pendant le streaming, afficher dans le texte brut
       document.getElementById("lmOut").textContent = t;
-    });
+    }, llen, tones);
 
     // Parser le JSON avec extraction robuste, même si l'IA ajoute un bloc ```json
     var lmJson = normalizeGeneratedLetter(lmRaw, extractJsonObject(lmRaw));
