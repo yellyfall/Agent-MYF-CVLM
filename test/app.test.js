@@ -10,7 +10,7 @@ test('Original accounts, admin controls, Groq proxy, revocation and migration',a
  const existing=await api('/login',{username:'existing',password:'old-password'});assert.equal(existing.status,200);
  const created=await api('/admin/users',{username:'alice',password:'long-password',fullname:'Alice'},admin);assert.equal(created.status,200);
  const user=(await api('/login',{username:'alice',password:'long-password'})).data.data.session_token;assert.ok(user);
- const res=await fetch('http://127.0.0.1:'+server.address().port+'/api/ai-stream',{method:'POST',headers:{'content-type':'application/json','x-session-token':user},body:JSON.stringify({model:'mistral-large-latest',messages:[{role:'user',content:'Mon CV'}]})});assert.equal(res.status,200);assert.match(await res.text(),/Bonjour/);assert.equal(sent.url,'https://api.groq.com/openai/v1/chat/completions');assert.equal(sent.options.headers.Authorization,'Bearer test-server-secret');assert.equal(sent.body.model,'openai/gpt-oss-120b');assert.match(sent.body.messages[0].content,/ne jamais inventer/);
+ const res=await fetch('http://127.0.0.1:'+server.address().port+'/api/ai-stream',{method:'POST',headers:{'content-type':'application/json','x-session-token':user},body:JSON.stringify({model:'groq-default',messages:[{role:'user',content:'Mon CV'}]})});assert.equal(res.status,200);assert.match(await res.text(),/Bonjour/);assert.equal(sent.url,'https://api.groq.com/openai/v1/chat/completions');assert.equal(sent.options.headers.Authorization,'Bearer test-server-secret');assert.equal(sent.body.model,'openai/gpt-oss-120b');assert.match(sent.body.messages[0].content,/ne jamais inventer/);
  assert.equal((await api('/live-time',{},user)).status,200);
  assert.equal((await api('/generate-image',{prompt:'chat'},user)).status,501);
  await api('/admin/users/'+created.data.data.id,{op:'pause'},admin,'PATCH');assert.equal((await api('/live-time',{},user)).status,401);
@@ -34,3 +34,19 @@ test('migration marker prevents re-creating previously deleted accounts',()=>{
 test('URL reading decodes entities without losing the web helper',async()=>{const admin=(await api('/admin/login',{key:process.env.ADMIN_PASSWORD})).data.data.session_token;const result=await api('/read-url',{url:'https://example.com/demo'},admin);assert.equal(result.status,200);assert.equal(result.data.data.title,'Test & lecture');assert.match(result.data.data.text,/Contenu "lisible"/);});
 
 test('upstream 429 returns retry metadata without rotating keys; token request is respected',async()=>{process.env.GROQ_API_KEYS='second-test-key,third-test-key';const token=(await api('/admin/login',{key:process.env.ADMIN_PASSWORD})).data.data.session_token;const r=await api('/ai-stream',{max_tokens:1234,messages:[{role:'user',content:'[RATE_LIMIT]'}]},token);assert.equal(r.status,429);assert.equal(r.data.data.retry_after_seconds,7);assert.equal(quotaCalls,1);assert.equal(sent.body.max_completion_tokens,1234);assert.ok(!JSON.stringify(r.data).includes('private_org'));delete process.env.GROQ_API_KEYS;});
+
+test('Mistral and Groq route to separate endpoints and keys, including Mistral-only setup',async()=>{
+ const token=(await api('/admin/login',{key:process.env.ADMIN_PASSWORD})).data.data.session_token;
+ const request=async(model)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/ai-stream',{method:'POST',headers:{'content-type':'application/json','x-session-token':token},body:JSON.stringify({model,max_tokens:2345,messages:[{role:'user',content:'Mon CV'}]})});assert.equal(r.status,200);assert.match(await r.text(),/Bonjour/);};
+ process.env.MISTRAL_API_KEY='mistral-test-secret';
+ try{
+  await request('mistral/mistral-large-latest');assert.equal(sent.url,'https://api.mistral.ai/v1/chat/completions');assert.equal(sent.options.headers.Authorization,'Bearer mistral-test-secret');assert.equal(sent.body.model,'mistral-large-latest');assert.equal(sent.body.max_tokens,2345);assert.equal(sent.body.max_completion_tokens,undefined);assert.equal(sent.body.reasoning_effort,undefined);
+  await request('openai/gpt-oss-20b');assert.equal(sent.url,'https://api.groq.com/openai/v1/chat/completions');assert.equal(sent.options.headers.Authorization,'Bearer test-server-secret');assert.equal(sent.body.max_completion_tokens,2345);
+  delete process.env.GROQ_API_KEY;await request('mistral/default');assert.equal(sent.body.model,'mistral-small-latest');
+  const unavailable=await api('/ai-stream',{model:'groq-default',messages:[{role:'user',content:'Test'}]},token);assert.equal(unavailable.status,503);assert.match(unavailable.data.message,/GROQ_API_KEY/);
+  const health=(await api('/health',{},null,'GET')).data;assert.equal(health.data.mistral_keys_available,1);assert.ok(!JSON.stringify(health).includes('mistral-test-secret'));
+  const before=quotaCalls;const rate=await api('/ai-stream',{model:'mistral/default',messages:[{role:'user',content:'[RATE_LIMIT]'}]},token);assert.equal(rate.status,429);assert.equal(quotaCalls,before+1);assert.equal(rate.data.data.error_code,'mistral_rate_limit');assert.equal(rate.data.data.retry_after_seconds,7);assert.match(rate.data.message,/Mistral/);assert.ok(!JSON.stringify(rate.data).includes('private_org'));
+  const invalid=await api('/ai-stream',{model:'mistral/unknown',messages:[{role:'user',content:'Test'}]},token);assert.equal(invalid.status,400);
+ }finally{delete process.env.MISTRAL_API_KEY;process.env.GROQ_API_KEY='test-server-secret';}
+ const missing=await api('/ai-stream',{model:'mistral/default',messages:[{role:'user',content:'Test'}]},token);assert.equal(missing.status,503);assert.match(missing.data.message,/MISTRAL_API_KEY/);
+});
