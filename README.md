@@ -1,3 +1,5 @@
+Version 3.1.0 : Groq et Mistral sont disponibles. Voir [AJOUT-MISTRAL.md](AJOUT-MISTRAL.md) pour installer la mise à jour sur Hetzner et Render.
+
 # MYF — interface originale, Groq, Render + Hetzner
 
 Dernier correctif PDF : voir CORRECTIF-LETTRE-PDF.md (police Unicode intégrée, mise en page et pagination).
