@@ -608,7 +608,7 @@ async function generateAll(){
   var resume=!!(MYF_CANDIDATE_JOB&&MYF_CANDIDATE_JOB.signature===signature&&MYF_CANDIDATE_JOB.letterComplete&&!MYF_CANDIDATE_JOB.cvComplete);
   var job=resume?MYF_CANDIDATE_JOB:{signature:signature,letterComplete:false,cvComplete:false,retryAt:0};
   if(resume&&job.retryModel===model&&job.retryAt>Date.now()){
-    showErr('Votre lettre est conservée. Groq demande encore '+Math.ceil((job.retryAt-Date.now())/1000)+' secondes d’attente avant de relancer le CV.');return;
+    showErr('Votre lettre est conservée. Le fournisseur IA demande encore '+Math.ceil((job.retryAt-Date.now())/1000)+' secondes d’attente avant de relancer le CV.');return;
   }
   MYF_CANDIDATE_JOB=job;
   var langLabel = {
@@ -2652,6 +2652,9 @@ async function sendChat() {
 }
 
 function modelDescription(value){
+  if(value==='mistral/default')return '<strong>Mistral</strong> : utilise MISTRAL_MODEL configuré sur Hetzner (Mistral Small par défaut). Nécessite une clé Mistral.';
+  if(value==='mistral/mistral-small-latest')return '<strong>Mistral Small</strong> : utilise votre clé Mistral configurée sur Hetzner.';
+  if(value==='mistral/mistral-large-latest')return '<strong>Mistral Large</strong> : utilise votre clé Mistral configurée sur Hetzner.';
   var m={
     "openai/gpt-oss-120b":"<strong>GPT-OSS 120B</strong> : meilleur choix pour les tâches complexes, les lettres/CV exigeants, l’analyse détaillée et le raisonnement avancé. Plus qualitatif, mais potentiellement plus lent.",
     "groq-default":"<strong>Groq (défaut)</strong> : choix recommandé par défaut. Très bon équilibre entre qualité, rapidité et coût pour lettres, CV, chat, synthèse et code courant.",
@@ -3821,7 +3824,7 @@ async function secureGroqStream(payload,onDelta){
     if(!line.startsWith('data:'))return;
     var raw=line.slice(5).trim();if(raw==='[DONE]')return;
     var item;try{item=JSON.parse(raw);}catch(e){return;}
-    if(item.error)throw new Error(typeof item.error==='string'?item.error:(item.error.message||'Erreur Groq.'));
+    if(item.error)throw new Error(typeof item.error==='string'?item.error:(item.error.message||'Erreur IA.'));
     var choice=item.choices&&item.choices[0];if(!choice)return;
     if(choice.finish_reason && choice.finish_reason!=='stop')throw new Error('Réponse IA incomplète. Réduisez le texte et réessayez.');
     if(choice.finish_reason==='stop')finished=true;

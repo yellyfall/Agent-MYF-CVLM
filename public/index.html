@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MYF’s AI</title>
-<meta name="myf-build" content="3.0.4-letter-length-tones-word">
+<meta name="myf-build" content="3.1.0-groq-mistral">
 <script defer src="/vendor/pdf.min.js"></script>
 <script defer src="/vendor/html2pdf.bundle.min.js"></script>
 <script defer src="/vendor/xlsx.full.min.js"></script>
@@ -1466,8 +1466,8 @@ select:focus{border-color:var(--accent)}
           <select id="llen"><option value="concise (3 paragraphes)">Concise</option><option value="standard (4-5 paragraphes)" selected>Standard</option><option value="détaillée (5-6 paragraphes)">Détaillée</option></select></div>
         <div class="og"><div class="ol">Type de contrat</div>
           <select id="ptype"><option value="">Automatique</option><option value="stage">Stage</option><option value="alternance">Alternance</option><option value="CDI">CDI</option><option value="CDD">CDD</option><option value="thèse / doctorat">Thèse / Doctorat</option><option value="post-doctorat">Post-doctorat</option><option value="ingénieur de recherche">Ingénieur de recherche</option><option value="VIE">VIE</option></select></div>
-        <div class="og"><div class="ol">Modèle Groq</div>
-          <select id="model" data-myf-change="updateModelHelp('model','modelHelp')"><option value="openai/gpt-oss-120b">GPT-OSS 120B</option><option value="groq-default" selected>Groq (défaut)</option><option value="openai/gpt-oss-20b">GPT-OSS 20B</option><option value="qwen/qwen3.8-27b">qwen/qwen3.8-27b</option></select><div class="model-help" id="modelHelp"></div></div>
+        <div class="og"><div class="ol">Modèle IA · Groq / Mistral</div>
+          <select id="model" data-myf-change="updateModelHelp('model','modelHelp')"><optgroup label="Groq"><option value="openai/gpt-oss-120b">GPT-OSS 120B</option><option value="groq-default" selected>Groq (défaut)</option><option value="openai/gpt-oss-20b">GPT-OSS 20B</option><option value="qwen/qwen3.8-27b">qwen/qwen3.8-27b</option></optgroup><optgroup label="Mistral"><option value="mistral/default">Mistral (défaut serveur)</option><option value="mistral/mistral-small-latest">Mistral Small</option><option value="mistral/mistral-large-latest">Mistral Large</option></optgroup></select><div class="model-help" id="modelHelp"></div></div>
       </div>
       <div><div class="ol" style="margin-bottom:7px">Ton de la lettre</div>
         <div class="chips">
@@ -1607,12 +1607,12 @@ select:focus{border-color:var(--accent)}
       <div class="chat-model-bar">
         <div class="ol">Modèle :</div>
         <div class="chat-model-select-wrap">
-          <select id="chatModel" data-myf-change="updateModelHelp('chatModel','chatModelHelp')">
+          <select id="chatModel" data-myf-change="updateModelHelp('chatModel','chatModelHelp')"><optgroup label="Groq">
             <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
             <option value="groq-default" selected>Groq (défaut)</option>
             <option value="openai/gpt-oss-20b">GPT-OSS 20B</option>
             <option value="qwen/qwen3.8-27b">qwen/qwen3.8-27b</option>
-          </select>
+          </optgroup><optgroup label="Mistral"><option value="mistral/default">Mistral (défaut serveur)</option><option value="mistral/mistral-small-latest">Mistral Small</option><option value="mistral/mistral-large-latest">Mistral Large</option></optgroup></select>
           <div class="model-help" id="chatModelHelp"></div>
         </div>
         <button class="chat-web-toggle" id="webToggle" data-myf-click="toggleWeb()" title="Activer la recherche web">🌐 Web</button>
@@ -1719,11 +1719,11 @@ select:focus{border-color:var(--accent)}
       <label for="recThreshold">Seuil de contact</label>
       <input id="recThreshold" type="range" min="40" max="95" value="70" data-myf-input="document.getElementById('recThresholdVal').textContent=this.value+'%'; updateRecContactPanel();">
       <span class="threshold-val" id="recThresholdVal">70%</span>
-      <select id="recModel" style="max-width:210px">
+      <select id="recModel" style="max-width:210px"><optgroup label="Groq">
         <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
         <option value="groq-default" selected>Groq (défaut)</option>
         <option value="openai/gpt-oss-20b">GPT-OSS 20B</option>
-      </select>
+      </optgroup><optgroup label="Mistral"><option value="mistral/default">Mistral (défaut serveur)</option><option value="mistral/mistral-small-latest">Mistral Small</option><option value="mistral/mistral-large-latest">Mistral Large</option></optgroup></select>
     </div>
 
     <button class="rec-generate-btn" id="recAnalyzeBtn" data-myf-click="analyzeRecruiterMatch()">
@@ -1766,7 +1766,7 @@ select:focus{border-color:var(--accent)}
 
 <script src="/interface-1.js"></script>
 
-<script src="/interface-2.js?v=3.0.4"></script>
+<script src="/interface-2.js?v=3.1.0"></script>
 <script src="/interface-events.js"></script>
 <script src="/letter-generation.js?v=3.0.4"></script>
 <script src="/letter-word.js?v=3.0.4"></script>
